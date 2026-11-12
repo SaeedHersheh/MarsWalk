@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marswalk · Mars</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: full-bleed instrument view of Mars; a floating control column on the right, readout and place card bottom-left, one committed dark world (space is black in any theme). */
+:root {
+  --space: #05060A;
+  --panel: rgba(12, 13, 17, 0.86);
+  --line: #272930;
+  --ink: #EDE7DF;
+  --dim: #9C968F;
+  --faint: #615C58;
+  --dust: #DDB78F;   /* Mars daytime sky */
+  --dusk: #93B7E6;   /* Mars sunsets are blue */
+  --f-display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--space); color: var(--ink); font-family: var(--f-body); font-size: 14px; overflow: hidden; }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+
+#stage { position: fixed; inset: 0; }
+#stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#mapCanvas { cursor: grab; }
+#mapCanvas.dragging { cursor: grabbing; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+/* header */
+.head {
+  position: fixed; z-index: 5;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  max-width: calc(100% - 340px);
+}
+.brand { display: grid; gap: 0; line-height: 1; }
+.brand b { font-family: var(--f-display); font-weight: 700; font-size: 1.55rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.brand span { font-family: var(--f-mono); font-size: 0.68rem; color: var(--dim); letter-spacing: 0.08em; margin-top: 4px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); overflow: hidden; backdrop-filter: blur(8px); }
+.seg button { border: 0; background: transparent; padding: 6px 14px; cursor: pointer; font-family: var(--f-display); font-weight: 600; font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--space); }
+#panelBtn { display: none; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: var(--f-display); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.95rem; }
+
+/* side panel */
+.panel {
+  position: fixed; z-index: 6;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: 300px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  backdrop-filter: blur(10px);
+  padding: 14px 14px 12px; display: grid; gap: 16px; align-content: start;
+}
+.sec { display: grid; gap: 8px; }
+.sec h2 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 11px; cursor: pointer; font-size: 0.86rem; color: var(--ink); }
+.chip[aria-pressed="true"] { border-color: var(--dust); color: var(--dust); background: rgba(221, 183, 143, 0.1); }
+.chip:disabled { opacity: 0.35; cursor: default; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 0.86rem; }
+.row input[type=range] { width: 100%; accent-color: var(--dust); }
+.row output { font-family: var(--f-mono); font-size: 0.8rem; color: var(--dust); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+.legend { display: grid; gap: 4px; }
+.legend .bar { height: 10px; border-radius: 2px; }
+.legend .ticks { position: relative; height: 14px; font-family: var(--f-mono); font-size: 0.66rem; color: var(--dim); }
+.legend .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.legend .unit { font-size: 0.72rem; color: var(--faint); }
+.places { display: grid; gap: 2px; }
+.places h3 { margin: 6px 0 2px; font-size: 0.72rem; font-weight: 500; color: var(--faint); letter-spacing: 0.04em; }
+.place { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; align-items: center; text-align: left; border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 5px 6px; cursor: pointer; }
+.place:hover { border-color: var(--line); }
+.place[aria-current="true"] { border-color: var(--dust); }
+.place i { width: 8px; height: 8px; border-radius: 50%; background: var(--dusk); }
+.place.feature i { background: transparent; border: 1px solid var(--ink); }
+.place .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; }
+.place .yr { font-family: var(--f-mono); font-size: 0.72rem; color: var(--dim); }
+.credits { font-size: 0.72rem; line-height: 1.5; color: var(--faint); border-top: 1px solid var(--line); padding-top: 10px; }
+
+/* bottom-left: card + readout */
+.dock {
+  position: fixed; z-index: 4;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 8px; width: min(360px, calc(100% - 352px));
+}
+.readout {
+  display: flex; flex-wrap: wrap; gap: 4px 16px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px;
+  font-family: var(--f-mono); font-size: 0.78rem; font-variant-numeric: tabular-nums; backdrop-filter: blur(8px);
+}
+.readout span { color: var(--faint); margin-right: 6px; letter-spacing: 0.08em; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(10px);
+  display: grid; gap: 6px;
+}
+.card .kind { font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dusk); }
+.card h4 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 1.6rem; line-height: 1; letter-spacing: 0.03em; }
+.card .coords { font-family: var(--f-mono); font-size: 0.8rem; color: var(--dust); font-variant-numeric: tabular-nums; }
+.card p { margin: 0; font-size: 0.88rem; line-height: 1.45; color: var(--dim); }
+.card .acts { display: flex; gap: 6px; margin-top: 2px; }
+
+/* globe labels */
+.mk { position: absolute; left: 0; top: 0; pointer-events: auto; border: 0; background: transparent; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; transition: opacity 0.2s; }
+.mk i { width: 9px; height: 9px; border-radius: 50%; background: var(--dusk); box-shadow: 0 0 0 2px rgba(5, 6, 10, 0.75); flex: none; }
+.mk b { font-weight: 500; font-size: 0.78rem; color: var(--ink); text-shadow: 0 1px 3px #000, 0 0 8px #000; }
+.mk.feature i { display: none; }
+.mk.feature b { font-family: var(--f-display); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.82rem; color: var(--dust); }
+.mk.sel i { background: var(--dust); box-shadow: 0 0 0 3px rgba(221, 183, 143, 0.35); }
+.mk.sel b { color: var(--dust); }
+
+.loader { position: fixed; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--f-mono); font-size: 0.8rem; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+.err { position: fixed; z-index: 9; left: 50%; top: 40%; transform: translate(-50%, -50%); max-width: 420px; text-align: center; color: var(--ink); }
+
+@media (max-width: 760px) {
+  .head { max-width: calc(100% - 32px); }
+  #panelBtn { display: inline-block; }
+  .panel { top: auto; left: max(16px, env(safe-area-inset-left, 0px)); width: auto; max-height: 62%; }
+  .panel.closed { display: none; }
+  .dock { width: calc(100% - 32px); }
+  .brand span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .mk { transition: none; } }
+[hidden] { display: none !important; }
+a.place { color: inherit; text-decoration: none; }
+.chip.go { border-color: var(--dust); background: var(--dust); color: #1a120b; font-weight: 600; }
+.busy { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(5, 6, 10, 0.78); backdrop-filter: blur(4px); }
+.busy[hidden] { display: none; }
+.busy div { max-width: 420px; text-align: center; display: grid; gap: 12px; }
+.busy b { font-family: var(--f-display); font-size: 1.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dust); }
+.busy span { font-size: 0.92rem; line-height: 1.5; color: var(--dim); }
+.busy i { height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--dust), transparent); background-size: 200% 100%; animation: slide 1.4s linear infinite; }
+@keyframes slide { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <canvas id="globeCanvas" aria-label="3D globe of Mars. Drag to rotate, scroll or pinch to zoom."></canvas>
+  <canvas id="mapCanvas" hidden aria-label="Flat map of Mars. Drag to pan, scroll or pinch to zoom."></canvas>
+  <div id="labels"></div>
+</div>
+<div class="loader" id="loader">Loading Mars…</div>
+<div class="busy" id="busy" hidden><div><b>Building site</b><span id="busyTxt"></span><i></i></div></div>
+
+<header class="head">
+  <div class="brand"><b>Marswalk</b><span>MARS · CLICK ANYWHERE, THEN PLAN A WALK THERE</span></div>
+  <div class="seg" role="group" aria-label="View">
+    <button type="button" id="v-globe" aria-pressed="true">Globe</button>
+    <button type="button" id="v-map" aria-pressed="false">Map</button>
+  </div>
+  <button type="button" id="panelBtn" aria-expanded="false" aria-controls="panel">Layers</button>
+</header>
+
+<aside class="panel closed" id="panel" aria-label="Layers and places">
+  <section class="sec">
+    <h2>Base map</h2>
+    <div class="chips" role="group" aria-label="Base map">
+      <button type="button" class="chip" id="b-natural" aria-pressed="true">Natural color</button>
+      <button type="button" class="chip" id="b-elevation" aria-pressed="false">Elevation</button>
+      <button type="button" class="chip" id="b-radiation" aria-pressed="false">Radiation</button>
+    </div>
+    <div class="legend" id="legend" hidden>
+      <div class="bar" id="legendBar"></div>
+      <div class="ticks" id="legendTicks"></div>
+      <div class="unit" id="legendUnit">km above the areoid (Mars "sea level")</div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>Overlays</h2>
+    <div class="chips">
+      <button type="button" class="chip" id="o-missions" aria-pressed="true">Landing sites</button>
+      <button type="button" class="chip" id="o-features" aria-pressed="true">Landmarks</button>
+      <button type="button" class="chip" id="o-grid" aria-pressed="false">Lat/lon grid</button>
+      <button type="button" class="chip" id="o-relief" aria-pressed="true">Relief shading</button>
+    </div>
+  </section>
+
+  <section class="sec" id="globeOpts">
+    <h2>Globe</h2>
+    <div class="chips">
+      <button type="button" class="chip" id="g-sun" aria-pressed="true">Sunlight</button>
+      <button type="button" class="chip" id="g-spin" aria-pressed="true">Spin</button>
+      <button type="button" class="chip" id="g-atmo" aria-pressed="true">Atmosphere</button>
+    </div>
+    <label class="row" for="exag">Relief exaggeration <output id="exagVal">×6</output></label>
+    <div class="row"><input type="range" id="exag" min="1" max="20" step="1" value="6" aria-label="Relief exaggeration"></div>
+  </section>
+
+  <section class="sec">
+    <h2>Planning sites</h2>
+    <div class="places" id="sites"></div>
+  </section>
+
+  <section class="sec">
+    <h2>Places</h2>
+    <div class="places" id="places"></div>
+  </section>
+
+  <p class="credits">Radiation map: Curiosity measured 0.67 mSv/day at Gale; other places are scaled by the air above them (elevation + assumed scale height). Click the globe or map, then "Plan a walk here": the planner builds that area from MOLA 463 m elevation and real orbiter passes. Jezero opens in full detail (20 m). Globe elevation: MOLA-based shape model MarsTopo719, referenced to the GMM-3 areoid (SHTOOLS). Color: Celestia Mars mosaic. Heights on the globe are exaggerated; readouts are true values.</p>
+</aside>
+
+<div class="dock">
+  <div class="card" id="card" hidden>
+    <span class="kind" id="cKind"></span>
+    <h4 id="cName"></h4>
+    <span class="coords" id="cCoords"></span>
+    <p id="cBlurb"></p>
+    <div class="acts">
+      <button type="button" class="chip go" id="cPlan">Plan a walk here</button>
+      <button type="button" class="chip" id="cSwitch">Show on map</button>
+      <button type="button" class="chip" id="cClose">Close</button>
+    </div>
+  </div>
+  <div class="readout" aria-live="off">
+    <div><span>LAT</span><b id="rLat">—</b></div>
+    <div><span>LON</span><b id="rLon">—</b></div>
+    <div><span>ELEV</span><b id="rEl">—</b></div>
+    <div><span>DOSE</span><b id="rRad">—</b></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+  const D2R = Math.PI / 180;
+  const $ = id => document.getElementById(id);
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const KM_PER_DEG = 2 * Math.PI * 3389.5 / 360;          // 59.16 km per degree of latitude
+
+  /* ---------------- places (lat, lon east-positive) ---------------- */
+  const PLACES = [
+    { name: "Perseverance", kind: "mission", year: 2021, lat: 18.4447, lon: 77.4508, where: "Jezero crater", blurb: "NASA rover, landed February 2021 in Jezero crater, an ancient lake with a river delta. It collects rock cores for a future return to Earth." },
+    { name: "Curiosity", kind: "mission", year: 2012, lat: -4.5895, lon: 137.4417, where: "Gale crater", blurb: "NASA rover, landed August 2012 in Gale crater and has been climbing the layered rock of Mount Sharp ever since." },
+    { name: "Zhurong", kind: "mission", year: 2021, lat: 25.066, lon: 109.925, where: "Utopia Planitia", blurb: "China's first Mars rover, landed May 2021 in southern Utopia Planitia." },
+    { name: "InSight", kind: "mission", year: 2018, lat: 4.502, lon: 135.623, where: "Elysium Planitia", blurb: "NASA lander (2018–2022) that listened for marsquakes to map the planet's interior." },
+    { name: "Opportunity", kind: "mission", year: 2004, lat: -1.9462, lon: -5.5272, where: "Meridiani Planum", blurb: "NASA rover, landed January 2004 and drove more than 45 km before its last contact in 2018." },
+    { name: "Spirit", kind: "mission", year: 2004, lat: -14.5684, lon: 175.4726, where: "Gusev crater", blurb: "NASA rover, landed January 2004. In the Columbia Hills it found silica deposits that point to ancient hot springs." },
+    { name: "Phoenix", kind: "mission", year: 2008, lat: 68.2188, lon: -125.7492, where: "Vastitas Borealis", blurb: "NASA lander that dug into the northern plains in 2008 and touched water ice just below the soil." },
+    { name: "Pathfinder", kind: "mission", year: 1997, lat: 19.13, lon: -33.22, where: "Ares Vallis", blurb: "NASA lander that carried Sojourner, the first rover on Mars, in July 1997." },
+    { name: "Viking 1", kind: "mission", year: 1976, lat: 22.27, lon: -47.95, where: "Chryse Planitia", blurb: "First successful US Mars lander, July 1976. It sent back the first photos from the surface." },
+    { name: "Viking 2", kind: "mission", year: 1976, lat: 48.269, lon: 134.01, where: "Utopia Planitia", blurb: "Landed September 1976 and photographed frost forming on the ground in winter." },
+    { name: "Olympus Mons", kind: "feature", lat: 18.65, lon: -133.8, blurb: "The largest volcano in the solar system, about 600 km wide. Its summit stands about 21 km above the areoid." },
+    { name: "Valles Marineris", kind: "feature", lat: -13.9, lon: -59.2, blurb: "A canyon system about 4,000 km long and up to 7 km deep." },
+    { name: "Hellas Planitia", kind: "feature", lat: -42.4, lon: 70.5, blurb: "Impact basin about 2,300 km across. Its floor holds the lowest ground on Mars, about 8.2 km below the areoid." },
+    { name: "Argyre Planitia", kind: "feature", lat: -49.7, lon: -43.4, blurb: "Impact basin about 1,800 km across in the southern highlands." },
+    { name: "Isidis Planitia", kind: "feature", lat: 12.9, lon: 87.0, blurb: "Impact basin. Jezero crater sits on its northwest rim." },
+    { name: "Utopia Planitia", kind: "feature", lat: 46.7, lon: 117.5, blurb: "A vast plain that fills one of the largest impact basins on Mars, about 3,300 km across." },
+    { name: "Elysium Mons", kind: "feature", lat: 25.02, lon: 147.21, blurb: "Main volcano of the Elysium region, rising about 12.6 km above the surrounding plains." },
+    { name: "Arsia Mons", kind: "feature", lat: -8.26, lon: -120.09, blurb: "Southernmost of the three Tharsis Montes volcanoes." },
+    { name: "Pavonis Mons", kind: "feature", lat: 1.48, lon: -112.96, blurb: "Middle Tharsis Montes volcano, sitting almost on the equator." },
+    { name: "Ascraeus Mons", kind: "feature", lat: 11.92, lon: -104.08, blurb: "Northernmost of the three Tharsis Montes volcanoes." },
+    { name: "Alba Mons", kind: "feature", lat: 40.47, lon: -109.6, blurb: "A very broad, low volcano more than 1,000 km across." },
+    { name: "Syrtis Major", kind: "feature", lat: 8.4, lon: 69.5, blurb: "Dark volcanic plain, the first surface feature ever drawn on Mars (Huygens, 1659)." },
+    { name: "Planum Boreum", kind: "feature", lat: 87.0, lon: 15.0, blurb: "North polar ice cap: a stack of water-ice layers about 3 km thick." },
+    { name: "Planum Australe", kind: "feature", lat: -84.0, lon: 160.0, blurb: "South polar cap. Water ice topped by a thin layer of frozen CO₂." }
+  ];
+
+  /* ---------------- state ---------------- */
+  const S = {
+    view: "globe", base: "natural",
+    missions: true, features: true, grid: false, relief: true,
+    sun: true, spin: !reduce, atmo: true, exag: 6,
+    sel: null
+  };
+
+  /* ---------------- formatting + elevation lookup ---------------- */
+  const fmtLat = v => `${Math.abs(v).toFixed(2)}° ${v >= 0 ? "N" : "S"}`;
+  const fmtLon = v => `${Math.abs(v).toFixed(2)}° ${v >= 0 ? "E" : "W"}`;
+  const fmtEl = v => v == null ? "—" : `${v < 0 ? "−" : "+"}${Math.abs(Math.round(v)).toLocaleString("en-US")} m`;
+  const wrapLon = l => ((l + 180) % 360 + 360) % 360 - 180;
+  let ELEV = null;
+  const EW = 1440, EH = 720;
+  function elevAt(lat, lon) {
+    if (!ELEV) return null;
+    const r = Math.min(EH - 1, Math.max(0, Math.floor((90 - lat) / 180 * EH)));
+    const c = ((Math.floor((wrapLon(lon) + 180) / 360 * EW)) % EW + EW) % EW;
+    return ELEV[r * EW + c];
+  }
+  function setReadout(lat, lon) {
+    if (lat == null) { $("rLat").textContent = $("rLon").textContent = $("rEl").textContent = $("rRad").textContent = "—"; return; }
+    const e = elevAt(lat, lon);
+    $("rLat").textContent = fmtLat(lat); $("rLon").textContent = fmtLon(lon); $("rEl").textContent = fmtEl(e);
+    $("rRad").textContent = e == null ? "—" : radDose(e).toFixed(2) + " mSv/d";
+  }
+
+  /* ---------------- elevation legend (same stops as the texture) ---------------- */
+  const STOPS = [[-8200,[38,24,96]],[-5500,[36,70,170]],[-3500,[32,150,200]],[-1500,[70,190,120]],[500,[200,220,90]],[2500,[240,180,60]],[5000,[225,110,45]],[9000,[170,70,50]],[14000,[150,110,100]],[21300,[250,250,250]]];
+  const LO = -8200, HI = 21300, pct = v => (v - LO) / (HI - LO) * 100;
+  $("legendBar").style.background = `linear-gradient(90deg, ${STOPS.map(([v, c]) => `rgb(${c}) ${pct(v).toFixed(1)}%`).join(", ")})`;
+  $("legendTicks").innerHTML = [-8, -4, 0, 4, 8, 12, 16, 20].map(k => `<span style="left:${pct(k * 1000).toFixed(1)}%">${k}</span>`).join("");
+
+  /* ---------------- radiation: dose from elevation ----------------
+     Anchor: Curiosity RAD measured 0.67 mSv/day at Gale (~22 g/cm2 of air above, -4.4 km).
+     Sensitivity: about 10-20 % dose change per 10 g/cm2 (published), i.e. e-folding column ~60 g/cm2.
+     Assumed: 11.1 km scale height to turn elevation into column depth. Open sky only: terrain shielding is added in the planner. */
+  const RB = { base: 0.67, col: 22, lam: 60, H: 11100, z0: -4400, lo: 0.55, hi: 0.95 };
+  const radDose = z => RB.base * Math.exp(-(RB.col * Math.exp(-(z - RB.z0) / RB.H) - RB.col) / RB.lam);
+  const RSTOPS = [[0, [40, 120, 220]], [0.35, [110, 60, 170]], [0.7, [220, 80, 110]], [1, [255, 200, 90]]];
+  const rampRGB = t => { t = Math.min(1, Math.max(0, t)); let i = 1; while (i < RSTOPS.length - 1 && RSTOPS[i][0] < t) i++; const [a, ca] = RSTOPS[i - 1], [b, cb] = RSTOPS[i], k = (t - a) / (b - a); return ca.map((v, j) => v + (cb[j] - v) * k); };
+  let radCanvas = null;
+  function buildRad() {
+    if (radCanvas || !ELEV) return radCanvas;
+    const c = document.createElement("canvas"); c.width = EW; c.height = EH;
+    const x = c.getContext("2d"), im = x.createImageData(EW, EH);
+    for (let i = 0; i < EW * EH; i++) { const [r, g, b] = rampRGB((radDose(ELEV[i]) - RB.lo) / (RB.hi - RB.lo)); im.data[i * 4] = r; im.data[i * 4 + 1] = g; im.data[i * 4 + 2] = b; im.data[i * 4 + 3] = 255; }
+    x.putImageData(im, 0, 0); radCanvas = c; return c;
+  }
+  const RGRAD = `linear-gradient(90deg, ${RSTOPS.map(([t, c]) => `rgb(${c.map(Math.round)}) ${t * 100}%`).join(", ")})`;
+
+  /* ---------------- assets ---------------- */
+  let pending = 6;
+  const done = () => { pending--; $("loader").textContent = pending > 0 ? `Loading Mars… ${6 - pending}/6` : ""; if (pending <= 0) $("loader").hidden = true; };
+  // elevation grid stored as Terrain-RGB: meters = -10000 + (R*65536 + G*256 + B) * 0.1
+  (() => {
+    const im = new Image();
+    im.onload = () => {
+      const c = document.createElement("canvas"); c.width = EW; c.height = EH;
+      const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(im, 0, 0);
+      const d = x.getImageData(0, 0, EW, EH).data, out = new Float32Array(EW * EH);
+      for (let i = 0; i < out.length; i++) out[i] = -10000 + (d[i * 4] * 65536 + d[i * 4 + 1] * 256 + d[i * 4 + 2]) * 0.1;
+      ELEV = out; done(); refreshCard();
+      if (S.base === "radiation") { applyTextures(); if (S.view === "map") map.draw(); }
+    };
+    im.onerror = () => done();
+    im.src = "atlas/mars_elev_rgb.png";
+  })();
+  const imgs = {};
+  ["color", "elevation", "relief"].forEach(k => {
+    const im = new Image(); im.decoding = "async";
+    im.onload = () => { imgs[k] = im; if (S.view === "map") map.draw(); };
+    im.src = `atlas/mars_${k}.jpg`;
+  });
+
+  if (!window.THREE) { $("loader").hidden = true; document.body.insertAdjacentHTML("beforeend", '<p class="err">The 3D library did not load. Check your connection and reload the page.</p>'); return; }
+
+  /* ================= GLOBE ================= */
+  const gCanvas = $("globeCanvas");
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas: gCanvas, antialias: true }); }
+  catch (e) { $("loader").hidden = true; document.body.insertAdjacentHTML("beforeend", '<p class="err">This browser could not start 3D graphics (WebGL). The flat map still works: switch to Map.</p>'); }
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 200);
+  camera.position.set(0, 0.45, 3.3);
+  let controls = null;
+  if (renderer) {
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    controls = new THREE.OrbitControls(camera, gCanvas);
+    controls.enableDamping = true; controls.dampingFactor = 0.07; controls.enablePan = false;
+    controls.minDistance = 1.15; controls.maxDistance = 7; controls.zoomSpeed = 0.7;
+  }
+
+  // stars
+  (() => {
+    const n = 5000, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u), r = 80;
+      pos.set([r * s * Math.cos(a), r * s * Math.sin(a), r * u], i * 3);
+      const t = Math.random(), b = 0.45 + Math.random() * 0.55;
+      col.set([b * (t < 0.2 ? 1 : 0.85), b * 0.9, b * (t > 0.8 ? 1 : 0.85)], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    scene.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 1.3, sizeAttenuation: false, vertexColors: true })));
+  })();
+
+  const tilt = new THREE.Group(); tilt.rotation.z = 25.19 * D2R; scene.add(tilt);
+  const spin = new THREE.Group(); tilt.add(spin);
+
+  const mat = new THREE.MeshStandardMaterial({ color: 0xa86a48, roughness: 0.96, metalness: 0 });
+  const mars = new THREE.Mesh(new THREE.SphereGeometry(1, 384, 192), mat);
+  spin.add(mars);
+
+  const sun = new THREE.DirectionalLight(0xfff1e2, 2.7);
+  const SUN_DIR = new THREE.Vector3(-1, 0.35, 0.75).normalize();
+  sun.position.copy(SUN_DIR).multiplyScalar(10);
+  scene.add(sun);
+  const amb = new THREE.AmbientLight(0x707688, 0.05);
+  scene.add(amb);
+
+  // atmosphere rim
+  const atmoMat = new THREE.ShaderMaterial({
+    uniforms: { uSun: { value: SUN_DIR.clone() }, uColor: { value: new THREE.Color(0xe0a27a) } },
+    vertexShader: `varying vec3 vN; varying vec3 vWN;
+      void main(){ vN = normalize(normalMatrix * normal); vWN = normalize(mat3(modelMatrix) * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uSun; uniform vec3 uColor; varying vec3 vN; varying vec3 vWN;
+      void main(){ float i = pow(clamp(0.74 - dot(vN, vec3(0.0, 0.0, 1.0)), 0.0, 1.0), 3.2);
+      float l = smoothstep(-0.45, 0.55, dot(vWN, uSun));
+      gl_FragColor = vec4(uColor * i * (0.08 + 0.92 * l) * 1.6, 1.0); }`,
+    side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false
+  });
+  const atmo = new THREE.Mesh(new THREE.SphereGeometry(1.075, 96, 48), atmoMat);
+  scene.add(atmo);
+
+  // lat/lon grid
+  const latLonVec = (lat, lon, r = 1) => {
+    const phi = (lon + 180) * D2R, th = (90 - lat) * D2R;
+    return new THREE.Vector3(-r * Math.cos(phi) * Math.sin(th), r * Math.cos(th), r * Math.sin(phi) * Math.sin(th));
+  };
+  const grid = (() => {
+    const pts = [];
+    for (let la = -60; la <= 60; la += 30) for (let k = 0; k < 180; k++) { pts.push(latLonVec(la, -180 + k * 2), latLonVec(la, -180 + (k + 1) * 2)); }
+    for (let lo = -180; lo < 180; lo += 30) for (let k = 0; k < 90; k++) { pts.push(latLonVec(-90 + k * 2, lo), latLonVec(-90 + (k + 1) * 2, lo)); }
+    const g = new THREE.BufferGeometry().setFromPoints(pts);
+    const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xddb78f, transparent: true, opacity: 0.3 }));
+    l.visible = false; spin.add(l); return l;
+  })();
+
+  // textures
+  const TEX = {};
+  if (renderer) {
+    const loader = new THREE.TextureLoader();
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    const load = (k, file, srgb) => loader.load(file, t => {
+      if (srgb) t.encoding = THREE.sRGBEncoding;
+      t.anisotropy = maxAniso; TEX[k] = t; applyTextures(); done();
+    }, undefined, () => done());
+    load("color", "atlas/mars_color.jpg", true);
+    load("elevation", "atlas/mars_elevation.jpg", true);
+    load("normal", "atlas/mars_normal.jpg", false);
+    load("height", "atlas/mars_height.jpg", false);
+    load("relief", "atlas/mars_relief.jpg", false);
+  } else { pending -= 5; done(); }
+
+  function radTexture() {
+    const c = buildRad(); if (!c) return null;
+    if (!TEX.radiation) { TEX.radiation = new THREE.CanvasTexture(c); TEX.radiation.encoding = THREE.sRGBEncoding; }
+    return TEX.radiation;
+  }
+  function applyTextures() {
+    const base = S.base === "elevation" ? TEX.elevation : S.base === "radiation" ? (radTexture() || TEX.color) : TEX.color;
+    if (base) { mat.map = base; mat.color.set(0xffffff); }
+    if (TEX.normal) mat.normalMap = TEX.normal;
+    if (TEX.height) mat.displacementMap = TEX.height;
+    applyRelief();
+    mat.needsUpdate = true;
+  }
+  const H0 = 0.278;                                        // where 0 m sits in the 8-bit height map
+  let dispScale = 0;
+  function applyRelief() {
+    dispScale = TEX.height ? 0.0087 * S.exag : 0;          // real relief is 0.87% of the radius
+    mat.displacementScale = dispScale; mat.displacementBias = -dispScale * H0;
+    const ns = Math.min(1.8, 0.08 * S.exag + 0.2);
+    mat.normalScale.set(ns, ns);
+    grid.scale.setScalar(1 + dispScale * 0.45 + 0.003);
+    $("exagVal").textContent = `×${S.exag}`;
+  }
+
+  // labels (HTML)
+  const labelsEl = $("labels");
+  PLACES.forEach((p, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = `mk ${p.kind}`; b.innerHTML = `<i></i><b></b>`; b.querySelector("b").textContent = p.name;
+    b.setAttribute("aria-label", `${p.name}, ${fmtLat(p.lat)} ${fmtLon(p.lon)}`);
+    b.addEventListener("click", ev => { ev.stopPropagation(); select(p, true); });
+    labelsEl.appendChild(b);
+    p.el = b; p.anchor = new THREE.Object3D(); p.anchor.position.copy(latLonVec(p.lat, p.lon)); spin.add(p.anchor);
+  });
+  const tmp = new THREE.Vector3(), camDir = new THREE.Vector3(), nrm = new THREE.Vector3();
+  function surfR(lat, lon) { const e = elevAt(lat, lon); return e == null ? 1 : 1 + dispScale * ((e - LO) / (HI - LO) - H0); }
+  function placeGlobeLabels() {
+    const W = gCanvas.clientWidth, H = gCanvas.clientHeight;
+    for (const p of PLACES) {
+      const show = S.view === "globe" && (p.kind === "mission" ? S.missions : S.features);
+      if (!show) { p.el.hidden = true; continue; }
+      p.anchor.getWorldPosition(tmp);
+      tmp.multiplyScalar(surfR(p.lat, p.lon) + 0.004);
+      nrm.copy(tmp).normalize();
+      camDir.copy(camera.position).sub(tmp).normalize();
+      const facing = nrm.dot(camDir);
+      if (facing < 0.08) { p.el.hidden = true; continue; }
+      tmp.project(camera);
+      p.el.hidden = false;
+      p.el.style.opacity = Math.min(1, (facing - 0.08) * 4).toFixed(2);
+      const x = (tmp.x + 1) / 2 * W, y = (1 - tmp.y) / 2 * H;
+      p.el.style.transform = p.kind === "mission" ? `translate(${x - 4.5}px, ${y - 4.5}px)` : `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+    }
+  }
+
+  // hover + click on surface
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let hoverPending = null, downAt = null;
+  gCanvas.addEventListener("pointermove", e => { hoverPending = e; });
+  gCanvas.addEventListener("pointerleave", () => { hoverPending = null; setReadout(null); });
+  gCanvas.addEventListener("pointerdown", e => { downAt = [e.clientX, e.clientY]; });
+  gCanvas.addEventListener("pointerup", e => {
+    if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return;
+    const hit = pick(e); if (hit) select({ name: "Selected point", kind: "point", lat: hit.lat, lon: hit.lon }, false);
+  });
+  function pick(e) {
+    const r = gCanvas.getBoundingClientRect();
+    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const h = ray.intersectObject(mars)[0];
+    if (!h || !h.uv) return null;
+    return { lon: h.uv.x * 360 - 180, lat: h.uv.y * 180 - 90 };
+  }
+
+  // fly-to
+  let fly = null;
+  function flyTo(lat, lon) {
+    scene.updateMatrixWorld();
+    const end = latLonVec(lat, lon).applyMatrix4(spin.matrixWorld).normalize();
+    const start = camera.position.clone().normalize();
+    const d0 = camera.position.length(), d1 = Math.min(d0, 2.2);
+    const q = new THREE.Quaternion().setFromUnitVectors(start, end);
+    if (reduce) { camera.position.copy(end).multiplyScalar(d1); controls && controls.update(); return; }
+    fly = { start, q, d0, d1, t0: performance.now(), dur: 1300 };
+  }
+
+  function resizeGlobe() {
+    if (!renderer) return;
+    const W = gCanvas.clientWidth, H = gCanvas.clientHeight;
+    renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix();
+    if (!resizeGlobe.once && W > 0) { resizeGlobe.once = true; if (camera.aspect < 1) camera.position.multiplyScalar(Math.min(2.1, 0.9 / camera.aspect)); }
+  }
+  new ResizeObserver(() => { resizeGlobe(); if (S.view === "map") map.draw(); }).observe($("stage"));
+
+  let last = performance.now();
+  const qI = new THREE.Quaternion(), qT = new THREE.Quaternion();
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (S.view !== "globe" || !renderer) { last = now; return; }
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (S.spin && !fly) spin.rotation.y += dt * 0.05;
+    if (fly) {
+      const t = Math.min(1, (now - fly.t0) / fly.dur), k = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      qT.copy(qI).slerp(fly.q, k);
+      camera.position.copy(fly.start).applyQuaternion(qT).multiplyScalar(fly.d0 + (fly.d1 - fly.d0) * k);
+      if (t >= 1) fly = null;
+    }
+    if (controls) {
+      const d = camera.position.length();
+      controls.rotateSpeed = Math.min(0.9, 0.12 + (d - 1) * 0.35);
+      controls.update();
+    }
+    if (S.sun) { sun.position.copy(SUN_DIR).multiplyScalar(10); sun.intensity = 2.7; amb.intensity = 0.05; atmoMat.uniforms.uSun.value.copy(SUN_DIR); }
+    else { sun.position.copy(camera.position).multiplyScalar(10); sun.intensity = 1.9; amb.intensity = 0.22; atmoMat.uniforms.uSun.value.copy(camera.position).normalize(); }
+    atmo.visible = S.atmo;
+    grid.visible = S.grid;
+    if (hoverPending) { const h = pick(hoverPending); h ? setReadout(h.lat, h.lon) : setReadout(null); hoverPending = null; }
+    renderer.render(scene, camera);
+    placeGlobeLabels();
+  }
+  resizeGlobe();
+  requestAnimationFrame(frame);
+
+  /* ================= MAP ================= */
+  const mCanvas = $("mapCanvas"), ctx = mCanvas.getContext("2d");
+  const map = { cx: 0, cy: 0, z: 0, fit: true, anim: null };
+  function mapSize() { return [mCanvas.clientWidth, mCanvas.clientHeight]; }
+  function minZ() { const [W, H] = mapSize(); return Math.min(W / 360, H / 180); }
+  function clampMap() {
+    const [, H] = mapSize();
+    map.z = Math.max(minZ(), Math.min(60, map.z));
+    const half = H / 2 / map.z;
+    map.cy = half >= 90 ? 0 : Math.max(-90 + half, Math.min(90 - half, map.cy));
+    map.cx = wrapLon(map.cx);
+  }
+  const toX = lon => mCanvas.clientWidth / 2 + (lon - map.cx) * map.z;
+  const toY = lat => mCanvas.clientHeight / 2 - (lat - map.cy) * map.z;
+  const fromXY = (x, y) => ({ lon: wrapLon(map.cx + (x - mCanvas.clientWidth / 2) / map.z), lat: map.cy - (y - mCanvas.clientHeight / 2) / map.z });
+  function nearestCopyX(lon) { let x = toX(lon); const w = 360 * map.z, W = mCanvas.clientWidth; while (x < -w / 2) x += w; while (x > W + w / 2) x -= w; if (x < 0 && x + w <= W) x += w; return x; }
+
+  map.draw = function () {
+    const dpr = Math.min(devicePixelRatio || 1, 2), [W, H] = mapSize();
+    if (mCanvas.width !== Math.round(W * dpr) || mCanvas.height !== Math.round(H * dpr)) { mCanvas.width = Math.round(W * dpr); mCanvas.height = Math.round(H * dpr); }
+    if (map.fit || !map.z) { map.z = minZ(); map.fit = false; }
+    clampMap();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#05060A"; ctx.fillRect(0, 0, W, H);
+    const w = 360 * map.z, h = 180 * map.z, x0 = toX(-180), y0 = toY(90);
+    const kmin = Math.floor(-x0 / w) - 1, kmax = Math.ceil((W - x0) / w);
+    const base = S.base === "elevation" ? imgs.elevation : S.base === "radiation" ? buildRad() : imgs.color;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
+    for (let k = kmin; k <= kmax; k++) {
+      const x = x0 + k * w;
+      if (base) ctx.drawImage(base, x, y0, w, h);
+      if (S.relief && (S.base === "natural" || S.base === "radiation") && imgs.relief) {
+        ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = 0.85;
+        ctx.drawImage(imgs.relief, x, y0, w, h);
+        ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+      }
+    }
+    if (!base) { ctx.fillStyle = "#9C968F"; ctx.font = "12px 'IBM Plex Mono', monospace"; ctx.fillText("Loading map…", 20, H / 2); }
+
+    // grid
+    if (S.grid) {
+      const step = map.z > 22 ? 5 : map.z > 9 ? 10 : 30;
+      ctx.strokeStyle = "rgba(221,183,143,0.35)"; ctx.lineWidth = 1;
+      ctx.font = "10px 'IBM Plex Mono', monospace"; ctx.fillStyle = "rgba(237,231,223,0.75)";
+      ctx.beginPath();
+      for (let la = -90 + step; la < 90; la += step) { const y = toY(la); ctx.moveTo(0, y); ctx.lineTo(W, y); }
+      const lon0 = Math.floor((map.cx - W / 2 / map.z) / step) * step;
+      for (let lo = lon0; lo <= map.cx + W / 2 / map.z; lo += step) { const x = toX(lo); ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+      ctx.stroke();
+      for (let la = -90 + step; la < 90; la += step) ctx.fillText(fmtLat(la).replace(".00", ""), 6, toY(la) - 4);
+      for (let lo = lon0; lo <= map.cx + W / 2 / map.z; lo += step) ctx.fillText(fmtLon(wrapLon(lo)).replace(".00", ""), toX(lo) + 4, H - 64);
+    }
+
+    // places
+    map.hits = [];
+    for (const p of PLACES) {
+      if (p.kind === "mission" ? !S.missions : !S.features) continue;
+      const x = nearestCopyX(p.lon), y = toY(p.lat);
+      if (x < -60 || x > W + 60 || y < -20 || y > H + 20) continue;
+      const sel = S.sel === p;
+      if (p.kind === "mission") {
+        ctx.beginPath(); ctx.arc(x, y, sel ? 6 : 4.5, 0, 7);
+        ctx.fillStyle = sel ? "#DDB78F" : "#93B7E6"; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = "rgba(5,6,10,0.8)"; ctx.stroke();
+        ctx.font = "500 12px 'IBM Plex Sans', sans-serif"; ctx.textAlign = "left";
+        halo(p.name, x + 9, y + 4, sel ? "#DDB78F" : "#EDE7DF");
+      } else {
+        ctx.font = "600 12px 'Saira Condensed', sans-serif"; ctx.textAlign = "center";
+        halo(p.name.toUpperCase().split("").join(String.fromCharCode(8202)), x, y + 4, sel ? "#FFFFFF" : "#DDB78F");
+        ctx.textAlign = "left";
+      }
+      map.hits.push({ p, x, y });
+    }
+    if (S.sel && S.sel.kind === "point") {
+      const x = nearestCopyX(S.sel.lon), y = toY(S.sel.lat);
+      ctx.strokeStyle = "#DDB78F"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke();
+    }
+
+    // scale bar (north–south distance)
+    const kmPerPx = KM_PER_DEG / map.z, target = kmPerPx * 120;
+    const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(v => v >= target * 0.5) || 5000;
+    const px = nice / kmPerPx, sx = W - (window.innerWidth > 760 ? 340 : 16) - px, sy = H - 62;
+    ctx.fillStyle = "rgba(12,13,17,0.75)"; ctx.fillRect(sx - 8, sy - 18, px + 16, 28);
+    ctx.fillStyle = "#EDE7DF"; ctx.fillRect(sx, sy, px, 3);
+    ctx.font = "11px 'IBM Plex Mono', monospace"; ctx.fillText(`${nice.toLocaleString("en-US")} km`, sx, sy - 5);
+  };
+  function halo(t, x, y, color) {
+    ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(5,6,10,0.85)"; ctx.lineJoin = "round"; ctx.strokeText(t, x, y);
+    ctx.fillStyle = color; ctx.fillText(t, x, y);
+  }
+
+  // map interaction
+  const ptrs = new Map(); let pinch = null, mDown = null;
+  mCanvas.addEventListener("pointerdown", e => {
+    mCanvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    mDown = [e.clientX, e.clientY]; mCanvas.classList.add("dragging"); map.anim = null;
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: map.z }; }
+  });
+  mCanvas.addEventListener("pointermove", e => {
+    const r = mCanvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    if (ptrs.has(e.pointerId)) {
+      const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+      if (ptrs.size === 2 && pinch) {
+        const [a, b] = [...ptrs.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        zoomAt((a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top, pinch.z * d / pinch.d / map.z);
+      } else if (ptrs.size === 1) {
+        map.cx -= (e.clientX - prev[0]) / map.z; map.cy += (e.clientY - prev[1]) / map.z; map.draw();
+      }
+    }
+    const g = fromXY(x, y); g.lat >= -90 && g.lat <= 90 ? setReadout(g.lat, g.lon) : setReadout(null);
+  });
+  const endPtr = e => {
+    ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
+    if (!ptrs.size) mCanvas.classList.remove("dragging");
+    if (mDown && e.type === "pointerup" && Math.hypot(e.clientX - mDown[0], e.clientY - mDown[1]) < 5) {
+      const r = mCanvas.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      const hit = (map.hits || []).find(h => Math.hypot(h.x - x, h.y - y) < 14);
+      if (hit) select(hit.p, true);
+      else { const g = fromXY(x, y); if (g.lat > -90 && g.lat < 90) select({ name: "Selected point", kind: "point", lat: g.lat, lon: g.lon }, false); }
+    }
+    mDown = null;
+  };
+  mCanvas.addEventListener("pointerup", endPtr); mCanvas.addEventListener("pointercancel", endPtr);
+  mCanvas.addEventListener("pointerleave", () => setReadout(null));
+  mCanvas.addEventListener("wheel", e => {
+    e.preventDefault(); const r = mCanvas.getBoundingClientRect();
+    zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+  }, { passive: false });
+  mCanvas.addEventListener("dblclick", e => { const r = mCanvas.getBoundingClientRect(); zoomAt(e.clientX - r.left, e.clientY - r.top, 2); });
+  function zoomAt(x, y, f) {
+    const g = fromXY(x, y);
+    map.z = Math.max(minZ(), Math.min(60, map.z * f));
+    map.cx = g.lon - (x - mCanvas.clientWidth / 2) / map.z;
+    map.cy = g.lat + (y - mCanvas.clientHeight / 2) / map.z;
+    map.draw();
+  }
+  function mapFlyTo(lat, lon) {
+    const z1 = Math.max(map.z, 9), from = { cx: map.cx, cy: map.cy, z: map.z };
+    let dl = wrapLon(lon - from.cx);
+    if (reduce) { map.cx = lon; map.cy = lat; map.z = z1; map.draw(); return; }
+    const t0 = performance.now();
+    const step = now => {
+      const t = Math.min(1, (now - t0) / 700), k = 1 - Math.pow(1 - t, 3);
+      map.cx = from.cx + dl * k; map.cy = from.cy + (lat - from.cy) * k; map.z = from.z + (z1 - from.z) * k; map.draw();
+      if (t < 1 && map.anim === step) requestAnimationFrame(step);
+    };
+    map.anim = step; requestAnimationFrame(step);
+  }
+
+  /* ================= UI ================= */
+  function select(p, fly) {
+    S.sel = p;
+    PLACES.forEach(q => { q.el.classList.toggle("sel", q === p); });
+    document.querySelectorAll(".place").forEach(b => b.setAttribute("aria-current", b.dataset.name === p.name ? "true" : "false"));
+    refreshCard();
+    if (fly) {
+      if (S.spin) setToggle("spin", false);
+      S.view === "globe" ? flyTo(p.lat, p.lon) : mapFlyTo(p.lat, p.lon);
+    }
+    if (S.view === "map") map.draw();
+  }
+  function refreshCard() {
+    const p = S.sel; if (!p) { $("card").hidden = true; return; }
+    $("card").hidden = false;
+    $("cKind").textContent = p.kind === "mission" ? `Landing site · ${p.year} · ${p.where}` : p.kind === "feature" ? "Landmark" : "Point on the surface";
+    $("cName").textContent = p.name;
+    const pe = elevAt(p.lat, p.lon);
+    $("cCoords").textContent = `${fmtLat(p.lat)}  ${fmtLon(p.lon)}  ·  ${fmtEl(pe)}` + (pe == null ? "" : `  ·  ${radDose(pe).toFixed(2)} mSv/day`);
+    $("cBlurb").textContent = p.blurb || "Elevation is measured from the areoid, the Mars equivalent of sea level.";
+    $("cBlurb").hidden = false;
+    $("cSwitch").textContent = S.view === "globe" ? "Show on map" : "Show on globe";
+  }
+  $("cClose").addEventListener("click", () => { S.sel = null; PLACES.forEach(q => q.el.classList.remove("sel")); document.querySelectorAll(".place").forEach(b => b.setAttribute("aria-current", "false")); refreshCard(); if (S.view === "map") map.draw(); });
+  $("cSwitch").addEventListener("click", () => { setView(S.view === "globe" ? "map" : "globe"); if (S.sel) S.view === "globe" ? flyTo(S.sel.lat, S.sel.lon) : mapFlyTo(S.sel.lat, S.sel.lon); });
+
+  // place list
+  const list = $("places");
+  const addGroup = (title, items) => {
+    const h = document.createElement("h3"); h.textContent = title; list.appendChild(h);
+    items.forEach(p => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = `place ${p.kind}`; b.dataset.name = p.name; b.setAttribute("aria-current", "false");
+      b.innerHTML = `<i></i><span class="nm"></span><span class="yr"></span>`;
+      b.querySelector(".nm").textContent = p.name; b.querySelector(".yr").textContent = p.year || "";
+      b.addEventListener("click", () => { select(p, true); if (innerWidth <= 760) setPanel(false); });
+      list.appendChild(b);
+    });
+  };
+  addGroup("Landing sites", PLACES.filter(p => p.kind === "mission"));
+  addGroup("Landmarks", PLACES.filter(p => p.kind === "feature"));
+
+  // toggles
+  const TOG = { missions: "o-missions", features: "o-features", grid: "o-grid", relief: "o-relief", sun: "g-sun", spin: "g-spin", atmo: "g-atmo" };
+  function setToggle(k, v) { S[k] = v; $(TOG[k]).setAttribute("aria-pressed", v ? "true" : "false"); if (S.view === "map") map.draw(); }
+  Object.entries(TOG).forEach(([k, id]) => { $(id).setAttribute("aria-pressed", S[k] ? "true" : "false"); $(id).addEventListener("click", () => setToggle(k, !S[k])); });
+  function setBase(b) {
+    S.base = b;
+    $("b-natural").setAttribute("aria-pressed", b === "natural"); $("b-elevation").setAttribute("aria-pressed", b === "elevation"); $("b-radiation").setAttribute("aria-pressed", b === "radiation");
+    $("legend").hidden = b === "natural";
+    if (b === "radiation") {
+      $("legendBar").style.background = RGRAD;
+      $("legendTicks").innerHTML = [0.6, 0.7, 0.8, 0.9].map(d => `<span style="left:${((d - RB.lo) / (RB.hi - RB.lo) * 100).toFixed(1)}%">${d}</span>`).join("");
+      $("legendUnit").textContent = "mSv/day on open ground. High ground has thinner air above it, so it gets more. Lowest: Hellas floor. Highest: Olympus Mons.";
+    } else if (b === "elevation") {
+      $("legendBar").style.background = `linear-gradient(90deg, ${STOPS.map(([v, c]) => `rgb(${c}) ${pct(v).toFixed(1)}%`).join(", ")})`;
+      $("legendTicks").innerHTML = [-8, -4, 0, 4, 8, 12, 16, 20].map(k => `<span style="left:${pct(k * 1000).toFixed(1)}%">${k}</span>`).join("");
+      $("legendUnit").textContent = 'km above the areoid (Mars "sea level")';
+    }
+    $("o-relief").disabled = b === "elevation";
+    $("o-relief").title = b === "elevation" ? "Shading is already built into the elevation map" : "";
+    applyTextures(); if (S.view === "map") map.draw();
+  }
+  $("b-natural").addEventListener("click", () => setBase("natural"));
+  $("b-elevation").addEventListener("click", () => setBase("elevation"));
+  $("b-radiation").addEventListener("click", () => setBase("radiation"));
+  $("exag").addEventListener("input", e => { S.exag = +e.target.value; applyRelief(); });
+
+  function setView(v) {
+    S.view = v;
+    $("v-globe").setAttribute("aria-pressed", v === "globe"); $("v-map").setAttribute("aria-pressed", v === "map");
+    gCanvas.hidden = v !== "globe"; mCanvas.hidden = v !== "map";
+    $("globeOpts").hidden = v !== "globe";
+    $("o-relief").hidden = v !== "map";
+    PLACES.forEach(p => { if (v !== "globe") p.el.hidden = true; });
+    if (v === "map") map.draw();
+    refreshCard();
+    if (location.hash !== "#" + v) history.replaceState(null, "", "#" + v);
+  }
+  $("v-globe").addEventListener("click", () => setView("globe"));
+  $("v-map").addEventListener("click", () => setView("map"));
+  addEventListener("hashchange", () => { const h = location.hash.slice(1); if (h === "globe" || h === "map") setView(h); });
+
+  function setPanel(open) { $("panel").classList.toggle("closed", !open); $("panelBtn").setAttribute("aria-expanded", open ? "true" : "false"); }
+  $("panelBtn").addEventListener("click", () => setPanel($("panel").classList.contains("closed")));
+  setPanel(innerWidth > 760);
+  addEventListener("resize", () => { if (innerWidth > 760) setPanel(true); });
+
+  /* ---------- plan anywhere ---------- */
+  $("cPlan").addEventListener("click", async () => {
+    const p = S.sel; if (!p) return;
+    $("busy").hidden = false;
+    $("busyTxt").textContent = `${fmtLat(p.lat)} ${fmtLon(p.lon)}: reading MOLA terrain, computing horizons, then asking JPL Horizons for the orbiter passes. About a minute.`;
+    try {
+      const r = await fetch("/api/sites", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: p.lat, lon: p.lon, name: p.kind === "point" ? null : (p.where || p.name) }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.detail || r.statusText);
+      location.href = "/?site=" + j.id;
+    } catch (e) { $("busyTxt").textContent = "Could not build the site: " + e.message; setTimeout(() => { $("busy").hidden = true; }, 5000); }
+  });
+  addEventListener("pageshow", () => { $("busy").hidden = true; });
+  fetch("/api/sites").then(r => r.json()).then(list => {
+    list.forEach(s => {
+      const a = document.createElement("a"); a.className = "place"; a.href = "/?site=" + s.id;
+      a.innerHTML = `<i></i><span class="nm"></span><span class="yr"></span>`;
+      a.querySelector(".nm").textContent = s.label; a.querySelector(".yr").textContent = s.cell_m + " m";
+      $("sites").appendChild(a);
+    });
+  }).catch(() => {});
+
+  applyRelief();
+  const h = location.hash.slice(1);
+  setView(h === "map" ? "map" : "globe");
+  if (document.fonts) document.fonts.ready.then(() => { if (S.view === "map") map.draw(); });
+})();
+</script>
+
+
+</body>
+</html>

@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+numpy
+scipy
+rasterio
+scikit-image
+psycopg[binary]
+requests
+pillow
