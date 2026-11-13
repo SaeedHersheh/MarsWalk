@@ -3,188 +3,255 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#05060A">
-<title>Marswalk · Jezero</title>
+<meta name="theme-color" content="#0d1216">
+<link rel="icon" type="image/png" href="img/brand/logo-64.png">
+<title>Marswalk · EVA traverse planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794506358">
+<link rel="stylesheet" href="style.css?v=1794534438">
 </head>
 <body>
 <div id="map"></div>
 <canvas id="view3d" hidden></canvas>
-<div class="loader" id="loader">Loading Jezero…</div>
+<div class="loader" id="loader">Loading terrain data…</div>
 
-<header class="head">
-  <a class="back" href="globe.html" title="Whole map of Mars" aria-label="Back to Mars"><span class="bk">◀</span><span class="lbl"> Mars</span></a>
-  <div class="brand"><b>Marswalk</b><span>JEZERO CRATER · 18.44°N 77.45°E · CTX 20 m</span></div>
-  <div class="seg" role="group" aria-label="View">
-    <button type="button" id="v-2d" aria-pressed="true">Map</button>
-    <button type="button" id="v-3d" aria-pressed="false">3D</button>
+<header class="appbar">
+  <a class="back" href="globe.html" title="All of Mars" aria-label="Back to the Mars globe"><span class="bk">‹</span><span class="lbl">Globe</span></a>
+  <img class="logo" src="img/brand/logo-96.png" alt="AirAwareNetwork" width="30" height="30">
+  <nav class="crumbs" aria-label="Location">
+    <b>Marswalk</b><i>›</i><span id="siteName">Jezero crater</span><small id="siteRes"></small><i class="tailsep">›</i><span class="tail">EVA traverse</span>
+  </nav>
+  <div class="viewbar">
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" id="v-2d" aria-pressed="true">Map</button>
+      <button type="button" id="v-3d" aria-pressed="false">3D</button>
+    </div>
   </div>
-  <div class="clock"><b id="clock">—</b><span id="clockSub">—</span></div>
 </header>
 
-<!-- first-visit guide -->
-<div class="coach" id="coach" hidden>
-  <b>Plan a safe walk in 3 steps</b>
-  <ol>
-    <li><i>1</i><span><b>Tap the map</b> to drop science stops. Drag a stop to move it.</span></li>
-    <li><i>2</i><span><b>Pick a route style.</b> Safest keeps to flat green ground, even if it is longer.</span></li>
-    <li><i>3</i><span><b>Press Start walk</b> and watch the relay orbiters fix your position.</span></li>
-  </ol>
-  <button type="button" class="go" id="coachOk">Got it</button>
+<div class="sidebar" id="sidebar">
+  <nav class="tabs" id="tabs" aria-label="Panels">
+    <button type="button" data-p="mission" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c4 0 3-6 7-6s3-8 7-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></svg><span>Plan</span></button>
+    <button type="button" data-p="layers" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 9l9 5 9-5-9-5Z M3 14l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Layers</span></button>
+    <button type="button" data-p="relay" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="2" fill="currentColor"/><path d="M7.5 8.5a6.5 6.5 0 0 0 0 9 M16.5 8.5a6.5 6.5 0 0 1 0 9 M4.5 5.5a10.5 10.5 0 0 0 0 15 M19.5 5.5a10.5 10.5 0 0 1 0 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Radio</span></button>
+    <button type="button" class="collapse" id="collapse" aria-label="Hide panel" title="Hide panel">‹</button>
+  </nav>
+
+  <!-- PLAN -->
+  <aside class="panel" id="mission" aria-label="Plan a traverse">
+    <div class="grab" data-close aria-hidden="true"><i></i></div>
+
+    <section class="sec">
+      <h2><b>1</b>Waypoints <em id="planState"></em></h2>
+      <div class="stops" id="stops"></div>
+      <p class="hint" id="stopHint">Select a point on the map to add a waypoint. Drag a marker to move it.</p>
+      <div class="actions">
+        <button type="button" class="chip" id="roundTrip" aria-pressed="true">Return to habitat</button>
+        <button type="button" class="chip" id="clearStops">Clear waypoints</button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2><b>2</b>Route policy</h2>
+      <div class="styles" id="styles" role="group" aria-label="Route policy">
+        <button type="button" class="style" data-s="safe" aria-pressed="true"><i class="sw safe"></i><b>Conservative</b><span>Minimise slope exposure</span></button>
+        <button type="button" class="style" data-s="balanced" aria-pressed="false"><i class="sw bal"></i><b>Balanced</b><span>Trade slope for time</span></button>
+        <button type="button" class="style" data-s="fast" aria-pressed="false"><i class="sw fast"></i><b>Direct</b><span>Shortest path</span></button>
+      </div>
+      <p class="hint" id="styleHint"></p>
+      <details class="more">
+        <summary>Cost weights and constraints</summary>
+        <label class="slider">Slope penalty <output id="o-slope"></output><input type="range" id="w-slope" min="0" max="1" step="0.05" value="1"></label>
+        <label class="slider">Radiation penalty <output id="o-radiation"></output><input type="range" id="w-radiation" min="0" max="1" step="0.05" value="0.3"></label>
+        <label class="slider">Radio coverage <output id="o-comms"></output><input type="range" id="w-comms" min="0" max="1" step="0.05" value="0.3"></label>
+        <label class="slider">Solar illumination <output id="o-shadow"></output><input type="range" id="w-shadow" min="0" max="1" step="0.05" value="0.2"></label>
+        <label class="slider">Ground temperature <output id="o-cold"></output><input type="range" id="w-cold" min="0" max="1" step="0.05" value="0.2"></label>
+        <label class="slider">Maximum slope <output id="o-maxslope"></output><input type="range" id="maxslope" min="12" max="35" step="1" value="18"></label>
+      </details>
+    </section>
+
+    <section class="sec phone-only">
+      <h2><b>3</b>Departure</h2>
+      <label class="slider"><span id="departTxt">Departure: now</span> <output id="o-depart"></output><input type="range" id="depart" min="0" max="1440" step="5" value="0"></label>
+      <div class="actions">
+        <button type="button" class="chip" id="departNow">Now</button>
+        <button type="button" class="chip" id="departBest">Optimal window</button>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2><b class="n3">3</b>Review the traverse</h2>
+      <div class="verdict" id="verdict"></div>
+      <div class="stats" id="stats"></div>
+      <div class="mix" id="mix"></div>
+      <div class="warns" id="warns"></div>
+      <div class="box" id="boxProfile"><h3>Elevation profile <em id="profSub"></em></h3><canvas id="profile"></canvas></div>
+      <details class="more">
+        <summary>Additional parameters</summary>
+        <div class="stats" id="moreStats"></div>
+        <div class="contacts" id="contacts"></div>
+      </details>
+      <p class="hint nextstep">Then press <b>play</b> in the time bar to simulate the walk.</p>
+    </section>
+  </aside>
+
+  <!-- LAYERS and RADIO share one panel; the tab decides which half shows -->
+  <aside class="panel" id="layers" aria-label="Layers and radio">
+    <div class="grab" data-close aria-hidden="true"><i></i></div>
+
+    <section class="sec lay-sec">
+      <h2>Base map</h2>
+      <div class="seg wide" role="group" aria-label="Base map">
+        <button type="button" class="base" data-b="ortho" aria-pressed="true">Orbital imagery</button>
+        <button type="button" class="base" data-b="elevation" aria-pressed="false">Elevation</button>
+      </div>
+    </section>
+
+    <section class="sec lay-sec">
+      <h2>Data layers</h2>
+      <div class="layerlist" id="layerChips">
+        <button type="button" class="lay" data-l="slope" aria-pressed="false"><i class="sw g-slope"></i><span><b>Slope</b><small>Surface gradient, degrees</small></span></button>
+        <button type="button" class="lay" data-l="radiation" aria-pressed="false"><i class="sw g-rad"></i><span><b>Radiation dose</b><small>GCR dose equivalent, mSv/day</small></span></button>
+        <button type="button" class="lay" data-l="heat" aria-pressed="false"><i class="sw g-heat"></i><span><b>Ground temperature</b><small>Modelled, at the clock time</small></span></button>
+        <button type="button" class="lay" data-l="sun" aria-pressed="false"><i class="sw g-sun"></i><span><b>Illumination</b><small>Sun and terrain shadow</small></span></button>
+        <button type="button" class="lay" data-l="comms" aria-pressed="false"><i class="sw g-comms"></i><span><b>Relay obstruction</b><small>Line of sight to orbiters</small></span></button>
+        <button type="button" class="lay" data-l="cost" aria-pressed="false"><i class="sw g-cost"></i><span><b>Traversal cost</b><small>Planner cost surface</small></span></button>
+      </div>
+      <label class="slider">Opacity <output id="o-op"></output><input type="range" id="opacity" min="0.2" max="1" step="0.05" value="0.8"></label>
+      <div class="legend" id="legend"></div>
+      <p class="hint" id="layerNote"></p>
+    </section>
+
+    <section class="sec relay-sec">
+      <h2>Relay orbiters</h2>
+      <div class="next" id="nextPass"></div>
+      <div class="passes" id="passList"></div>
+    </section>
+
+    <section class="sec relay-sec" id="radio">
+      <h2>Voice and text relay</h2>
+      <div class="linkbar closed" id="linkBar"></div>
+      <div class="seg wide" role="group" aria-label="Destination">
+        <button type="button" class="dest" data-d="earth" aria-pressed="true">Earth</button>
+        <button type="button" class="dest" data-d="pod" aria-pressed="false">Habitat</button>
+      </div>
+      <p class="hint" id="delayNote"></p>
+      <button type="button" class="talk" id="talkBtn" disabled aria-label="Push to talk"><b id="talkMain">Link closed</b><small id="talkSub">Waiting for a relay orbiter</small></button>
+      <p class="hint" id="micNote" hidden></p>
+      <div class="actions"><button type="button" class="chip" id="recBtn">Record, send on next pass</button></div>
+      <div class="actions" id="quick"></div>
+      <div class="typed"><input id="msgText" type="text" maxlength="300" placeholder="Message" autocomplete="off"><button type="button" class="chip" id="msgSend">Send</button></div>
+      <div class="msgs" id="msgs"></div>
+      <div class="actions">
+        <button type="button" class="chip" id="practice" aria-pressed="false">Simulate relay link (test mode)</button>
+      </div>
+      <p class="hint" id="practiceNote" hidden>Test mode: the relay link is held open so messages send and replies arrive immediately.</p>
+      <details class="more">
+        <summary>Relay settings</summary>
+        <div class="actions">
+          <button type="button" class="chip" id="delayDemo" aria-pressed="false">Use 7 min Earth delay</button>
+          <a class="chip" href="control.html" target="_blank" rel="noopener">Open mission control</a>
+        </div>
+      </details>
+    </section>
+
+    <section class="sec relay-sec">
+      <details class="more">
+        <summary>Alerts and audio</summary>
+        <div class="actions">
+          <button type="button" class="chip" id="sound" aria-pressed="false">Pass alert tones</button>
+          <button type="button" class="chip" id="doppler" aria-pressed="false">Doppler tone</button>
+          <button type="button" class="chip" id="notify" aria-pressed="false">Device notifications</button>
+          <button type="button" class="chip" id="truth" aria-pressed="true">Show true position</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="sec about">
+      <details class="more">
+        <summary>Data sources and assumptions</summary>
+        <p class="credits">Terrain: USGS Astrogeology Mars 2020 CTX DTM 20 m and orthomosaic 6 m; slope hazard from HiRISE DTM 1 m where it exists. Orbiters and Sun: JPL Horizons. Ground temperature: THEMIS night IR, TES albedo and the Horizons Sun through a ground heat model. Radiation: Curiosity RAD measured 0.67 mSv/day at Gale (22 g/cm² of air above); scaled here by each spot's air column (MOLA elevation, scale height assumed) and by how much sky the terrain leaves open. Suit speed (half Tobler) and drift (2 % of distance) are assumptions.</p>
+      </details>
+    </section>
+  </aside>
+</div>
+<button type="button" class="expand" id="expand" aria-label="Show panel" title="Show panel" hidden>›</button>
+
+<!-- zoom tools (desktop) -->
+<div class="rtools" id="rtools">
+  <button type="button" id="zin" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 20 20"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
+  <button type="button" id="zout" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 20 20"><path d="M4 10h12" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
+  <button type="button" id="zhome" aria-label="Reset view" title="Reset view"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 2v4M10 14v4M2 10h4M14 10h4" stroke="currentColor" stroke-width="2"/></svg></button>
 </div>
 
-<!-- left: the plan -->
-<aside class="panel left" id="mission" aria-label="Route planner">
-  <div class="grab" data-close aria-hidden="true"><i></i></div>
+<div class="tools3d" id="tools3d" hidden>
+  <button type="button" class="chip" id="t3follow" aria-pressed="false">Follow astronaut</button>
+  <button type="button" class="chip" id="t3sat" hidden>Find satellite</button>
+  <button type="button" class="chip" id="t3top">Plan view</button>
+  <button type="button" class="chip" id="t3reset">Reset view</button>
+  <button type="button" class="chip" id="t3lite" aria-pressed="false" title="Reflections, shadows and boulders. Turn off if the scene looks washed out or runs slowly.">High quality</button>
+</div>
 
-  <section class="sec">
-    <h2>Your stops <em id="planState"></em></h2>
-    <div class="stops" id="stops"></div>
-    <p class="hint" id="stopHint">Tap the map to add a science stop. Drag a stop to move it.</p>
-    <div class="chips">
-      <button type="button" class="chip" id="roundTrip" aria-pressed="true">Return to habitat</button>
-      <button type="button" class="chip" id="clearStops">Clear stops</button>
-    </div>
-  </section>
+<div class="coach" id="coach" hidden><button type="button" id="coachOk">OK</button></div>
 
-  <section class="sec">
-    <h2>Route style</h2>
-    <div class="styles" id="styles" role="group" aria-label="Route style">
-      <button type="button" class="style" data-s="safe" aria-pressed="true"><i class="sw safe"></i><b>Safest</b><span>Flat ground first</span></button>
-      <button type="button" class="style" data-s="balanced" aria-pressed="false"><i class="sw bal"></i><b>Balanced</b><span>Some slope to save time</span></button>
-      <button type="button" class="style" data-s="fast" aria-pressed="false"><i class="sw fast"></i><b>Fastest</b><span>Shortest, slopes allowed</span></button>
-    </div>
-    <p class="hint" id="styleHint"></p>
-    <details class="tune">
-      <summary>Fine-tune what matters</summary>
-      <label class="row">Avoid slopes <output id="o-slope"></output><input type="range" id="w-slope" min="0" max="1" step="0.05" value="1"></label>
-      <label class="row">Avoid radiation <output id="o-radiation"></output><input type="range" id="w-radiation" min="0" max="1" step="0.05" value="0.3"></label>
-      <label class="row">Stay in radio contact <output id="o-comms"></output><input type="range" id="w-comms" min="0" max="1" step="0.05" value="0.3"></label>
-      <label class="row">Stay in sunlight <output id="o-shadow"></output><input type="range" id="w-shadow" min="0" max="1" step="0.05" value="0.2"></label>
-      <label class="row">Prefer warm ground <output id="o-cold"></output><input type="range" id="w-cold" min="0" max="1" step="0.05" value="0.2"></label>
-      <label class="row">Never steeper than <output id="o-maxslope"></output><input type="range" id="maxslope" min="12" max="35" step="1" value="18"></label>
-    </details>
-  </section>
-
-  <section class="sec">
-    <h2>When to leave</h2>
-    <label class="row"><span id="departTxt">now</span><output id="o-depart"></output><input type="range" id="depart" min="0" max="1440" step="5" value="0"></label>
-    <div class="chips">
-      <button type="button" class="chip" id="departNow">Now</button>
-      <button type="button" class="chip" id="departBest">Best window</button>
-    </div>
-    <div id="slotTimeline"></div>
-  </section>
-
-  <section class="sec">
-    <h2>Your route</h2>
-    <div class="verdict" id="verdict"></div>
-    <div class="mix" id="mix"></div>
-    <div class="stats" id="stats"></div>
-    <div class="warns" id="warns"></div>
-    <div class="contacts" id="contacts"></div>
-    <div id="slotProfile"></div>
-  </section>
-
-  <section class="sec walkbar">
-    <button type="button" class="go" id="walkBtn">▶ Start walk</button>
-    <div class="chips">
-      <span class="lbl">Speed</span>
-      <button type="button" class="chip spd" data-s="30">×30</button>
-      <button type="button" class="chip spd" data-s="120" aria-pressed="true">×120</button>
-      <button type="button" class="chip spd" data-s="600">×600</button>
-      <button type="button" class="chip" id="homeBtn" disabled>Return to habitat</button>
-    </div>
-  </section>
-</aside>
-
-<!-- right: layers + relay -->
-<aside class="panel right" id="layers" aria-label="Layers and relay network">
-  <div class="grab" data-close aria-hidden="true"><i></i></div>
-  <section class="sec lay-sec">
-    <h2>Base map</h2>
-    <div class="chips">
-      <button type="button" class="chip base" data-b="ortho" aria-pressed="true">Orbital image</button>
-      <button type="button" class="chip base" data-b="elevation">Elevation</button>
-    </div>
-  </section>
-  <section class="sec lay-sec">
-    <h2>What to show on the map</h2>
-    <div class="chips" id="layerChips">
-      <button type="button" class="chip lay" data-l="slope">Slope hazard</button>
-      <button type="button" class="chip lay" data-l="radiation">Radiation</button>
-      <button type="button" class="chip lay" data-l="comms">Relay blind spots</button>
-      <button type="button" class="chip lay" data-l="sun">Sun &amp; shadow</button>
-      <button type="button" class="chip lay" data-l="heat">Ground temp</button>
-      <button type="button" class="chip lay" data-l="cost">Planner cost</button>
-      <button type="button" class="chip" disabled title="Not built yet">Dust storms</button>
-    </div>
-    <label class="row">See-through <output id="o-op"></output><input type="range" id="opacity" min="0.2" max="1" step="0.05" value="0.8"></label>
-    <div class="legend" id="legend"></div>
-    <p class="hint" id="layerNote"></p>
-  </section>
-  <section class="sec relay-sec">
-    <h2>Relay orbiters <em>JPL Horizons</em></h2>
-    <div class="next" id="nextPass"></div>
-    <div class="passes" id="passList"></div>
-    <div class="chips">
-      <button type="button" class="chip" id="sound" aria-pressed="false">Pass alerts sound</button>
-      <button type="button" class="chip" id="doppler" aria-pressed="false">Doppler tone</button>
-      <button type="button" class="chip" id="notify" aria-pressed="false">Phone alerts</button>
-      <button type="button" class="chip" id="truth" aria-pressed="true">Show true position</button>
-    </div>
-  </section>
-  <p class="credits">Terrain: USGS Astrogeology Mars 2020 CTX DTM 20 m and orthomosaic 6 m; slope hazard from HiRISE DTM 1 m where it exists. Orbiters and Sun: JPL Horizons. Ground temperature: THEMIS night IR, TES albedo and the Horizons Sun through a ground heat model. Radiation: Curiosity RAD measured 0.67 mSv/day at Gale (22 g/cm² of air above); scaled here by each spot's air column (MOLA elevation, scale height assumed) and by how much sky the terrain leaves open. Suit speed (half Tobler) and drift (2 % of distance) are assumptions.</p>
-</aside>
-
-<!-- walk HUD -->
+<!-- simulation telemetry -->
 <div class="hud" id="hud" hidden>
   <div class="arrow" id="arrow">➤</div>
   <div class="hudmain"><b id="hudNext">—</b><span id="hudSub">—</span></div>
   <div class="hudcols">
-    <div class="hudcol"><span>Position</span><b id="hudPos">±3 m</b></div>
-    <div class="hudcol"><span>Link</span><b id="hudLink">none</b></div>
+    <div class="hudcol"><span>Position error</span><b id="hudPos">±3 m</b></div>
+    <div class="hudcol"><span>Relay</span><b id="hudLink">none</b></div>
     <div class="hudcol"><span>Dose</span><b id="hudDose">0</b></div>
     <div class="hudcol"><span>Ground</span><b id="hudGround">—</b></div>
   </div>
 </div>
 <div class="toasts" id="toasts"></div>
 <div class="maplegend" id="mapLegend" hidden></div>
+<div class="readout"><div><span>Lat</span><b id="rLat">—</b></div><div><span>Lon</span><b id="rLon">—</b></div><div><span>Elev</span><b id="rEl">—</b></div><div><span>Slope</span><b id="rSl">—</b></div></div>
 
-<!-- Doppler demo: one pass as the astronaut's radio hears it -->
+<!-- Doppler: one pass as the surface radio sees it -->
 <div class="dop" id="dopPanel" hidden>
-  <div class="dophead"><b id="dopTitle">—</b><span id="dopWhen"></span><button type="button" class="chip" id="dopPlay">▶ Play pass</button><button type="button" class="chip" id="dopClose">Close</button></div>
+  <div class="dophead"><b id="dopTitle">—</b><span id="dopWhen"></span><button type="button" class="chip" id="dopPlay">Play pass</button><button type="button" class="chip" id="dopClose">Close</button></div>
   <div class="dopbody">
-    <div><h3>Radio pitch during the pass <em id="dopBand"></em></h3><canvas id="dopCurve"></canvas></div>
+    <div><h3>Doppler shift during the pass <em id="dopBand"></em></h3><canvas id="dopCurve"></canvas></div>
     <div><h3>Sky from here <em>grey = terrain</em></h3><canvas id="dopSky"></canvas></div>
   </div>
   <p class="dopfacts" id="dopFacts"></p>
 </div>
 
-<!-- bottom dock (desktop). On phones the two boxes move into the Route sheet. -->
-<div class="dock">
-  <div class="readout"><div><span>LAT</span><b id="rLat">—</b></div><div><span>LON</span><b id="rLon">—</b></div><div><span>ELEV</span><b id="rEl">—</b></div><div><span>SLOPE</span><b id="rSl">—</b></div></div>
-  <div class="strip" id="strip">
-    <div class="box" id="boxTimeline"><h3>Next 24 h · relay passes and daylight <em>tap to set departure</em></h3><canvas id="timeline"></canvas></div>
-    <div class="box" id="boxProfile"><h3>Route profile <em id="profSub"></em></h3><canvas id="profile"></canvas></div>
+<!-- time controller (modelled on NASA Eyes): play, clock, timeline, rate -->
+<div class="timebar" id="timebar">
+  <button type="button" class="play" id="walkBtn" aria-label="Start simulation" title="Start simulation"></button>
+  <div class="tclock">
+    <span class="tstate" id="simState">LIVE</span>
+    <b id="clock">—</b>
+    <span id="clockSub">—</span>
+  </div>
+  <div class="tline" id="boxTimeline">
+    <canvas id="timeline"></canvas>
+    <span class="tcap">Daylight and relay passes, next 24 h. Select a time to set the departure.</span>
+  </div>
+  <div class="tctl">
+    <div class="seg small" role="group" aria-label="Time scale">
+      <button type="button" class="spd" data-s="30">×30</button>
+      <button type="button" class="spd" data-s="120" aria-pressed="true">×120</button>
+      <button type="button" class="spd" data-s="600">×600</button>
+    </div>
+    <div class="tbtns">
+      <button type="button" class="chip" id="tbNow">Now</button>
+      <button type="button" class="chip" id="tbBest">Best window</button>
+      <button type="button" class="chip" id="homeBtn" disabled>Abort to habitat</button>
+    </div>
   </div>
 </div>
 
-<!-- phone controls -->
-<button type="button" class="fab go" id="fab" hidden>▶ Start walk</button>
-<nav class="tabs" id="tabs" aria-label="Panels">
-  <button type="button" data-p="mission" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c4 0 3-6 7-6s3-8 7-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="5" r="2" fill="currentColor"/></svg><span>Route</span></button>
-  <button type="button" data-p="layers" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 9l9 5 9-5-9-5Z M3 14l9 5 9-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Layers</span></button>
-  <button type="button" data-p="relay" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="2" fill="currentColor"/><path d="M7.5 8.5a6.5 6.5 0 0 0 0 9 M16.5 8.5a6.5 6.5 0 0 1 0 9 M4.5 5.5a10.5 10.5 0 0 0 0 15 M19.5 5.5a10.5 10.5 0 0 1 0 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Relay</span></button>
-</nav>
+<button type="button" class="fab go" id="fab" hidden>Start simulation</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="app.js?v=1794506358"></script>
+<script src="app.js?v=1794534403"></script>
 </body>
 </html>

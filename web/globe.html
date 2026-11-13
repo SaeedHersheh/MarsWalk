@@ -2,26 +2,29 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" type="image/png" href="img/brand/logo-64.png">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Marswalk · Mars</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <style>
 /* Layout: full-bleed instrument view of Mars; a floating control column on the right, readout and place card bottom-left, one committed dark world (space is black in any theme). */
 :root {
-  --space: #05060A;
-  --panel: rgba(12, 13, 17, 0.86);
-  --line: #272930;
-  --ink: #EDE7DF;
-  --dim: #9C968F;
-  --faint: #615C58;
-  --dust: #DDB78F;   /* Mars daytime sky */
-  --dusk: #93B7E6;   /* Mars sunsets are blue */
-  --f-display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
-  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --space: #0c1217;
+  --panel: rgba(17, 26, 33, 0.94);
+  --line: rgba(168, 201, 215, 0.16);
+  --ink: #FFFFFF;
+  --dim: #a8c3d1;
+  --faint: #6f8a9a;
+  --dust: #a8c9d7;
+  --dusk: #a8c9d7;
+  --nasa-blue: rgba(168, 201, 215, 0.2);
+  --red: #f2674f;
+  --f-display: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -45,11 +48,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--dusk); outl
   max-width: calc(100% - 340px);
 }
 .brand { display: grid; gap: 0; line-height: 1; }
-.brand b { font-family: var(--f-display); font-weight: 700; font-size: 1.55rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.brand b { font-family: var(--f-display); font-weight: 800; font-size: 1.45rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.logo { width: 42px; height: 42px; border-radius: 50%; box-shadow: 0 0 0 2px var(--line); }
+.brandrow { display: flex; align-items: center; gap: 12px; }
 .brand span { font-family: var(--f-mono); font-size: 0.68rem; color: var(--dim); letter-spacing: 0.08em; margin-top: 4px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); overflow: hidden; backdrop-filter: blur(8px); }
 .seg button { border: 0; background: transparent; padding: 6px 14px; cursor: pointer; font-family: var(--f-display); font-weight: 600; font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--space); }
+.seg button[aria-pressed="true"] { background: var(--dust); color: #0c1217; }
 #panelBtn { display: none; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: var(--f-display); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.95rem; }
 
 /* side panel */
@@ -67,7 +72,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--dusk); outl
 .sec h2 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 11px; cursor: pointer; font-size: 0.86rem; color: var(--ink); }
-.chip[aria-pressed="true"] { border-color: var(--dust); color: var(--dust); background: rgba(221, 183, 143, 0.1); }
+.chip[aria-pressed="true"] { border-color: var(--dust); color: var(--dust); background: rgba(168, 201, 215, 0.16); }
 .chip:disabled { opacity: 0.35; cursor: default; }
 .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 0.86rem; }
 .row input[type=range] { width: 100%; accent-color: var(--dust); }
@@ -134,7 +139,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--dusk); outl
 @media (prefers-reduced-motion: reduce) { .mk { transition: none; } }
 [hidden] { display: none !important; }
 a.place { color: inherit; text-decoration: none; }
-.chip.go { border-color: var(--dust); background: var(--dust); color: #1a120b; font-weight: 600; }
+.chip.go { border-color: var(--dust); background: var(--dust); color: #0c1217; font-weight: 700; }
 .busy { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(5, 6, 10, 0.78); backdrop-filter: blur(4px); }
 .busy[hidden] { display: none; }
 .busy div { max-width: 420px; text-align: center; display: grid; gap: 12px; }
@@ -142,6 +147,16 @@ a.place { color: inherit; text-decoration: none; }
 .busy span { font-size: 0.92rem; line-height: 1.5; color: var(--dim); }
 .busy i { height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--dust), transparent); background-size: 200% 100%; animation: slide 1.4s linear infinite; }
 @keyframes slide { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* flat, instrument-style overrides */
+.chip, .seg, .seg button, .card, .panel, .readout, .place { border-radius: 4px; }
+.seg { overflow: hidden; }
+.panel, .card, .readout { box-shadow: none; }
+.brand b { font-size: 1.05rem; letter-spacing: 0.09em; }
+.sec h2 { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.09em; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.logo { width: 34px; height: 34px; box-shadow: none; }
+.chip[aria-pressed="true"] { background: rgba(168, 201, 215, 0.14); border-color: var(--dust); color: #fff; }
+.seg button[aria-pressed="true"] { background: var(--dust); color: #0b1116; }
 </style>
 </head>
 <body>
@@ -155,7 +170,7 @@ a.place { color: inherit; text-decoration: none; }
 <div class="busy" id="busy" hidden><div><b>Building site</b><span id="busyTxt"></span><i></i></div></div>
 
 <header class="head">
-  <div class="brand"><b>Marswalk</b><span>MARS · CLICK ANYWHERE, THEN PLAN A WALK THERE</span></div>
+  <div class="brandrow"><img class="logo" src="img/brand/logo-96.png" alt="AirAwareNetwork" width="42" height="42"><div class="brand"><b>Marswalk</b><span>AirAwareNetwork · click anywhere on Mars</span></div></div>
   <div class="seg" role="group" aria-label="View">
     <button type="button" id="v-globe" aria-pressed="true">Globe</button>
     <button type="button" id="v-map" aria-pressed="false">Map</button>
@@ -420,7 +435,7 @@ a.place { color: inherit; text-decoration: none; }
     for (let la = -60; la <= 60; la += 30) for (let k = 0; k < 180; k++) { pts.push(latLonVec(la, -180 + k * 2), latLonVec(la, -180 + (k + 1) * 2)); }
     for (let lo = -180; lo < 180; lo += 30) for (let k = 0; k < 90; k++) { pts.push(latLonVec(-90 + k * 2, lo), latLonVec(-90 + (k + 1) * 2, lo)); }
     const g = new THREE.BufferGeometry().setFromPoints(pts);
-    const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xddb78f, transparent: true, opacity: 0.3 }));
+    const l = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x78aeff, transparent: true, opacity: 0.3 }));
     l.visible = false; spin.add(l); return l;
   })();
 
@@ -605,7 +620,7 @@ a.place { color: inherit; text-decoration: none; }
     // grid
     if (S.grid) {
       const step = map.z > 22 ? 5 : map.z > 9 ? 10 : 30;
-      ctx.strokeStyle = "rgba(221,183,143,0.35)"; ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(168,201,215,0.35)"; ctx.lineWidth = 1;
       ctx.font = "10px 'IBM Plex Mono', monospace"; ctx.fillStyle = "rgba(237,231,223,0.75)";
       ctx.beginPath();
       for (let la = -90 + step; la < 90; la += step) { const y = toY(la); ctx.moveTo(0, y); ctx.lineTo(W, y); }
@@ -625,20 +640,20 @@ a.place { color: inherit; text-decoration: none; }
       const sel = S.sel === p;
       if (p.kind === "mission") {
         ctx.beginPath(); ctx.arc(x, y, sel ? 6 : 4.5, 0, 7);
-        ctx.fillStyle = sel ? "#DDB78F" : "#93B7E6"; ctx.fill();
+        ctx.fillStyle = sel ? "#a8c9d7" : "#93B7E6"; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = "rgba(5,6,10,0.8)"; ctx.stroke();
         ctx.font = "500 12px 'IBM Plex Sans', sans-serif"; ctx.textAlign = "left";
-        halo(p.name, x + 9, y + 4, sel ? "#DDB78F" : "#EDE7DF");
+        halo(p.name, x + 9, y + 4, sel ? "#a8c9d7" : "#EDE7DF");
       } else {
         ctx.font = "600 12px 'Saira Condensed', sans-serif"; ctx.textAlign = "center";
-        halo(p.name.toUpperCase().split("").join(String.fromCharCode(8202)), x, y + 4, sel ? "#FFFFFF" : "#DDB78F");
+        halo(p.name.toUpperCase().split("").join(String.fromCharCode(8202)), x, y + 4, sel ? "#FFFFFF" : "#a8c9d7");
         ctx.textAlign = "left";
       }
       map.hits.push({ p, x, y });
     }
     if (S.sel && S.sel.kind === "point") {
       const x = nearestCopyX(S.sel.lon), y = toY(S.sel.lat);
-      ctx.strokeStyle = "#DDB78F"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke();
+      ctx.strokeStyle = "#a8c9d7"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke();
     }
 
     // scale bar (north–south distance)

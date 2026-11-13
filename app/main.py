@@ -22,6 +22,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "pipeline"))
 import fetch_passes  # noqa: E402
 import build_site    # noqa: E402
+from . import comms    # noqa: E402
 
 D = os.path.join(ROOT, "data")
 MIN_EL = fetch_passes.MIN_EL
@@ -390,6 +391,7 @@ class SiteReq(BaseModel):
 
 
 app = FastAPI(title="Marswalk")
+app.include_router(comms.router)
 
 
 def _scheduler():

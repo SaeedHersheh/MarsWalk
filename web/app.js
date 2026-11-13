@@ -20,7 +20,7 @@
   const HAB = M.habitat;
   {
     const [la, lo] = [M.site.lat, M.site.lon_e];
-    document.querySelector(".brand span").textContent = `${M.label.toUpperCase()} · ${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"} · ${M.kind === "region" ? "MOLA " + Math.round(M.DY) + " m (coarse)" : "CTX 20 m"}`;
+    $("siteName").textContent = M.label; $("siteRes").textContent = `${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"} · ${M.kind === "region" ? "MOLA " + Math.round(M.DY) + " m" : "CTX 20 m"}`;
     document.title = "Marswalk · " + M.label;
     if (M.kind === "region") document.querySelector(".credits").textContent = `Terrain: ${M.source}. Orbiters and Sun: JPL Horizons. Radiation is a model on the Curiosity RAD average (0.67 mSv/day). Suit speed (half Tobler) and drift (2 % of distance) are assumptions. This is a coarse site: use it to compare places, not to place footsteps.`;
     if (!M.heat) { document.querySelector('[data-l="heat"]').hidden = true; document.getElementById("w-cold").closest("label").hidden = true; }
@@ -70,7 +70,6 @@
   /* ---------- map ---------- */
   const bounds = [[0, 0], [M.height_m, M.width_m]];
   const map = L.map("map", { crs: L.CRS.Simple, minZoom: -10, maxZoom: 1.5, zoomSnap: 0.25, zoomDelta: 0.5, attributionControl: false, zoomControl: false, maxBounds: [[-8000, -12000], [M.height_m + 8000, M.width_m + 12000]] });
-  L.control.zoom({ position: "bottomleft" }).addTo(map);
   L.control.scale({ imperial: false, position: "bottomleft", maxWidth: 160 }).addTo(map);
   const baseOrtho = L.imageOverlay(M.basemap, bounds).addTo(map);
   const baseElev = L.imageOverlay(Q("/api/layer/elevation.png"), bounds);
@@ -121,7 +120,7 @@
   const LNAME = { slope: "Slope", radiation: "Radiation", comms: "Relay blind spots", sun: "Sun & shadow", heat: "Ground temp", cost: "Planner cost", elevation: "Elevation" };
   async function drawLegend() {
     const act = [...S.layers].pop() || (S.base === "elevation" ? "elevation" : null);
-    const el = $("legend"); $("layerNote").textContent = act ? NOTE[act] : "Pick a layer to colour the map.";
+    const el = $("legend"); $("layerNote").textContent = act ? NOTE[act] : "Select a layer to display it on the map.";
     if (!act) { el.innerHTML = ""; $("mapLegend").hidden = true; return; }
     let [bar, lo, hi, unit] = LEG[act];
     if (["radiation", "comms", "elevation", "sun", "heat"].includes(act)) {
@@ -159,6 +158,7 @@
   }
   const icon = (cls, txt) => L.divIcon({ className: "", html: `<div class="${cls}">${txt}</div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
   function drawStops() {
+    T3.dirty = true;
     g.clearLayers();
     L.marker(ll(...HAB), { icon: icon("mk hab", "H"), interactive: true }).bindTooltip("Habitat · " + M.habitat_name).addTo(g);
     S.stops.forEach((s, i) => {
@@ -166,7 +166,7 @@
       m.on("dragend", () => { const p = m.getLatLng(); S.stops[i] = [p.lng, p.lat]; plan(); });
     });
     $("stops").innerHTML = `<div class="stop hab"><i>H</i><span>Habitat</span><small>${fmtLL(...HAB)}</small><span></span></div>` +
-      S.stops.map((s, i) => `<div class="stop"><i>${i + 1}</i><span>Science stop ${i + 1}</span><small>${Math.round(elevAt(...s) ?? 0)} m</small><button data-i="${i}" title="Remove">×</button></div>`).join("");
+      S.stops.map((s, i) => `<div class="stop"><i>${i + 1}</i><span>Waypoint ${i + 1}</span><small>${Math.round(elevAt(...s) ?? 0)} m</small><button data-i="${i}" title="Remove">×</button></div>`).join("");
     $("stops").querySelectorAll("button").forEach(b => b.onclick = () => { if (walk.on) return; S.stops.splice(+b.dataset.i, 1); plan(); });
   }
   const fmtLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${la.toFixed(3)}°N ${lo.toFixed(3)}°E`; };
@@ -211,7 +211,7 @@
     const r = S.route;
     if (r) paintRoute(r); else { routeCase.setLatLngs([]); routeLine.clearLayers(); }
     syncWalk();
-    if (!r) { $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
+    if (!r) { $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("moreStats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
     const mx = r.slope_mix || { green: 100, yellow: 0, steep: 0 }, f0 = v => Math.round(v);
     $("verdict").className = "verdict " + (mx.steep > 0.5 ? "bad" : mx.yellow > 3 ? "warn" : "ok");
     $("verdict").textContent = mx.steep > 0.5 ? `${f0(mx.steep)} % of this route is steep (over 15°). Steepest ${r.max_slope.toFixed(0)}°.`
@@ -221,13 +221,14 @@
       `<div class="key"><span><i style="background:#6EE7A8"></i>Flat under 8°</span><span><i style="background:#F5B85B"></i>Slope 8–15°</span><span><i style="background:#F0616B"></i>Steep over 15°</span></div>`;
     const st = (k, v, u, cls = "") => `<div class="stat ${cls}"><span>${k}</span><b>${v}<small>${u}</small></b></div>`;
     $("stats").innerHTML =
-      st("Distance", (r.distance_m / 1000).toFixed(2), "km") +
-      st("EVA time", (r.time_s / 3600).toFixed(1), "h", r.time_s > 8 * 3600 ? "bad" : "") +
+      st("Distance", (r.distance_m / 1000).toFixed(1), "km") +
+      st("Walking time", (r.time_s / 3600).toFixed(1), "h", r.time_s > 8 * 3600 ? "bad" : "") +
+      st("Radiation", (r.dose_msv * 1000).toFixed(0), "µSv") +
+      st("Radio contact", r.contact_min, "min", r.contact_min ? "ok" : "bad");
+    $("moreStats").innerHTML =
       st("Climb", Math.round(r.climb_m), "m") +
-      st("Dose", (r.dose_msv * 1000).toFixed(0), "µSv") +
       (r.ground_c ? st("Ground", `${Math.round(r.ground_min_c)}…${Math.round(r.ground_max_c)}`, "°C", r.ground_min_c < -80 ? "bad" : "") : "") +
-      st("Relay", r.contact_min, "min", r.contact_min ? "ok" : "bad") +
-      st("Silent", (r.longest_gap_s / 3600).toFixed(1), "h", r.longest_gap_s > 4 * 3600 ? "bad" : "");
+      st("Longest silence", (r.longest_gap_s / 3600).toFixed(1), "h", r.longest_gap_s > 4 * 3600 ? "bad" : "");
     $("warns").innerHTML = r.warnings.map(w => `<div class="warn">${w}</div>`).join("") +
       `<p class="note">Radiation on this walk: ${(r.dose_msv * 1000).toFixed(0)} µSv (${r.career_pct.toFixed(3)} % of the ${M.rad ? M.rad.career : 600} mSv career limit). Standing still in the open here costs about ${r.rad_day_avg.toFixed(2)} mSv a day.</p>`;
     $("contacts").innerHTML = r.contacts.map(c => `<div><i class="dot" style="background:${ORB[c.orbiter].c}"></i><span>${c.orbiter} ${c.start ? fUTC(c.start) + " UTC" : "blocked"}</span><span>${c.minutes} min · ${c.max_el}°${c.blocked_min ? ` · ${c.blocked_min} blocked` : ""}</span></div>`).join("");
@@ -276,7 +277,7 @@
   const DP = { p: null, k: -1, raf: 0, osc: null };
   function openDop(p) { DP.p = p; DP.k = -1; $("dopPanel").hidden = false; drawDop(); }
   function closeDop() { stopDop(); $("dopPanel").hidden = true; DP.p = null; }
-  function stopDop() { cancelAnimationFrame(DP.raf); if (DP.osc) { DP.osc.g.gain.setTargetAtTime(0, audio().currentTime, 0.03); const o = DP.osc.o; setTimeout(() => o.stop(), 200); DP.osc = null; } DP.k = -1; $("dopPlay").textContent = "▶ Play pass"; }
+  function stopDop() { cancelAnimationFrame(DP.raf); if (DP.osc) { DP.osc.g.gain.setTargetAtTime(0, audio().currentTime, 0.03); const o = DP.osc.o; setTimeout(() => o.stop(), 200); DP.osc = null; } DP.k = -1; $("dopPlay").textContent = "Play pass"; }
   function drawDop() {
     const p = DP.p; if (!p) return;
     const sm = p.samples, t0 = sm[0][0], t1 = sm.at(-1)[0], mx = p.doppler_max_hz || 1, col = ORB[p.orbiter].c;
@@ -289,10 +290,10 @@
     // curve
     let [c, w, h] = fit($("dopCurve"));
     const X = t => 40 + (t - t0) / (t1 - t0 || 1) * (w - 48), Y = f => h / 2 - f / mx * (h / 2 - 16);
-    c.font = "10px 'IBM Plex Mono', monospace";
+    c.font = "12px 'IBM Plex Mono', monospace";
     for (let i = 1; i < sm.length; i++) if (!sm[i][5]) { c.fillStyle = "rgba(255,255,255,0.05)"; c.fillRect(X(sm[i - 1][0]), 4, X(sm[i][0]) - X(sm[i - 1][0]), h - 18); }
     c.strokeStyle = "#272930"; c.beginPath(); c.moveTo(40, Y(0)); c.lineTo(w - 8, Y(0)); c.stroke();
-    c.fillStyle = "#615C58"; c.fillText(`+${(mx / 1000).toFixed(1)}k`, 2, Y(mx) + 4); c.fillText("0 Hz", 2, Y(0) + 3); c.fillText(`−${(mx / 1000).toFixed(1)}k`, 2, Y(-mx) + 4);
+    c.fillStyle = "#9AA8CC"; c.fillText(`+${(mx / 1000).toFixed(1)}k`, 2, Y(mx) + 4); c.fillText("0 Hz", 2, Y(0) + 3); c.fillText(`−${(mx / 1000).toFixed(1)}k`, 2, Y(-mx) + 4);
     c.fillText(fUTC(t0), 40, h - 3); c.fillText(fUTC(t1), w - 40, h - 3); c.fillText("coming", 44, 14); c.fillText("going", w - 44, h - 20);
     for (let i = 1; i < sm.length; i++) {
       c.strokeStyle = col; c.globalAlpha = sm[i][5] ? 1 : 0.3; c.lineWidth = sm[i][5] ? 2.4 : 1.4;
@@ -311,8 +312,8 @@
     for (let i = n; i >= 0; i--) { const [x, y] = P(i % n * 360 / n, NXT.horizon[i % n]); i === n ? c.moveTo(x, y) : c.lineTo(x, y); }
     c.fill("evenodd");
     c.strokeStyle = "#272930"; c.lineWidth = 1; for (const e of [30, 60]) { c.beginPath(); c.arc(cx, cy, (90 - e) / 90 * R, 0, 7); c.stroke(); }
-    c.setLineDash([3, 4]); c.strokeStyle = "#615C58"; c.beginPath(); c.arc(cx, cy, (90 - NXT.min_el) / 90 * R, 0, 7); c.stroke(); c.setLineDash([]);
-    c.fillStyle = "#615C58"; c.font = "10px 'IBM Plex Mono', monospace"; c.fillText("N", cx - 3, 9); c.fillText("E", w - 9, cy + 3); c.fillText("S", cx - 3, h - 2); c.fillText("W", 1, cy + 3);
+    c.setLineDash([3, 4]); c.strokeStyle = "#9AA8CC"; c.beginPath(); c.arc(cx, cy, (90 - NXT.min_el) / 90 * R, 0, 7); c.stroke(); c.setLineDash([]);
+    c.fillStyle = "#9AA8CC"; c.font = "12px 'IBM Plex Mono', monospace"; c.fillText("N", cx - 3, 9); c.fillText("E", w - 9, cy + 3); c.fillText("S", cx - 3, h - 2); c.fillText("W", 1, cy + 3);
     for (let i = 1; i < sm.length; i++) {
       const [x0, y0] = P(sm[i - 1][1], sm[i - 1][2]), [x1, y1] = P(sm[i][1], sm[i][2]);
       c.strokeStyle = col; c.globalAlpha = sm[i][5] ? 1 : 0.3; c.lineWidth = sm[i][5] ? 2.4 : 1.4; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
@@ -324,7 +325,7 @@
     if (DP.osc) return stopDop();
     const p = DP.p, a = audio(), n = p.samples.length, dur = Math.min(14, Math.max(7, n / 3)) * 1000, T0 = performance.now(); a.resume();
     DP.osc = { o: a.createOscillator(), g: a.createGain() }; DP.osc.o.type = "sine"; DP.osc.g.gain.value = 0; DP.osc.o.connect(DP.osc.g).connect(a.destination); DP.osc.o.start();
-    $("dopPlay").textContent = "■ Stop";
+    $("dopPlay").textContent = "Stop";
     const step = now => {
       const k = Math.max(0, (now - T0) / dur * (n - 1)); if (k >= n - 1 || !DP.osc) { stopDop(); drawDop(); return; }
       DP.k = k; const i = Math.floor(k), f = k - i, hz = p.samples[i][4] + (p.samples[i + 1][4] - p.samples[i][4]) * f;
@@ -339,46 +340,34 @@
 
   /* ---------- canvases ---------- */
   function fit(cv) { const r = cv.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2); cv.width = r.width * d; cv.height = r.height * d; const c = cv.getContext("2d"); c.setTransform(d, 0, 0, d, 0, 0); return [c, r.width, r.height]; }
-  const TL = { t0: 0, span: 26 * 3600, gut: 92 };
+  const TL = { t0: 0, span: 26 * 3600, gut: 112 };
   function drawTimeline() {
-    const [c, w, h] = fit($("timeline")); if (!w) return;
-    TL.t0 = Math.floor(S.now0 / 3600) * 3600 - 3600;
-    const X = t => TL.gut + (t - TL.t0) / TL.span * (w - TL.gut - 6);
+    const [c, w, h] = fit($("timeline")); if (!w || !h) return;
+    TL.gut = 4; TL.t0 = Math.floor(S.now0 / 3600) * 3600 - 3600;
+    const pw = w - TL.gut - 4, X = t => TL.gut + (t - TL.t0) / TL.span * pw;
+    const top = 4, band = 8, axis = 15, rows0 = top + band + 5, rowH = Math.max(5, (h - rows0 - axis) / ONAMES.length);
     c.clearRect(0, 0, w, h);
-    // daylight band
-    for (let px = TL.gut; px < w - 6; px += 2) {
-      const t = TL.t0 + (px - TL.gut) / (w - TL.gut - 6) * TL.span, el = sunAt(t).el;
-      const k = Math.max(0, Math.min(1, el / 40));
-      c.fillStyle = el <= 0 ? "#0b0f24" : `rgb(${40 + 215 * k},${32 + 160 * k},${40 + 80 * k})`;
-      c.fillRect(px, 2, 2, 9);
+    for (let px = TL.gut; px < w - 4; px += 2) {                                   // daylight band
+      const t = TL.t0 + (px - TL.gut) / pw * TL.span, el = sunAt(t).el, k = Math.max(0, Math.min(1, el / 40));
+      c.fillStyle = el <= 0 ? "#0b1220" : `rgb(${40 + 215 * k},${32 + 160 * k},${40 + 80 * k})`;
+      c.fillRect(px, top, 2, band);
     }
-    c.font = "10px 'IBM Plex Mono', monospace"; c.fillStyle = "#615C58"; c.fillText("SUN", 4, 10);
-    const rowH = (h - 34) / ONAMES.length;
-    ONAMES.forEach((n, i) => {
-      const y = 16 + i * rowH;
-      c.fillStyle = "rgba(255,255,255,0.03)"; c.fillRect(TL.gut, y, w - TL.gut - 6, rowH - 3);
-      c.fillStyle = ORB[n].c; c.fillText(n.toUpperCase(), 4, y + rowH / 2 + 2);
-      for (const p of DB.passes) if (p.orbiter === n) {
-        c.globalAlpha = 0.35 + 0.65 * Math.min(1, p.max_el / 60);
-        c.fillRect(X(p.start), y, Math.max(2, X(p.end) - X(p.start)), rowH - 3);
-      }
+    ONAMES.forEach((n, i) => {                                                      // one row per relay orbiter
+      const y = rows0 + i * rowH;
+      c.fillStyle = "rgba(255,255,255,0.045)"; c.fillRect(TL.gut, y, pw, rowH - 2);
+      c.fillStyle = ORB[n].c;
+      for (const p of DB.passes) if (p.orbiter === n) { c.globalAlpha = 0.4 + 0.6 * Math.min(1, p.max_el / 60); c.fillRect(X(p.start), y, Math.max(2, X(p.end) - X(p.start)), rowH - 2); }
       c.globalAlpha = 1;
     });
-    // hours
-    c.fillStyle = "#615C58";
-    for (let t = Math.ceil(TL.t0 / 7200) * 7200; t < TL.t0 + TL.span; t += 7200) {
-      c.fillRect(X(t), h - 16, 1, 4); c.fillText(fUTC(t).slice(0, 2), X(t) - 6, h - 3);
-    }
-    c.fillText("UTC", 4, h - 3);
-    // EVA window
-    const r = walk.on ? walk.route : S.route, a = walk.on ? walk.t0 : departT();
+    c.font = "11px 'IBM Plex Mono', monospace"; c.fillStyle = "#97adba";           // hour axis
+    for (let t = Math.ceil(TL.t0 / 7200) * 7200; t < TL.t0 + TL.span; t += 7200) { c.fillRect(X(t), h - axis + 1, 1, 4); c.fillText(fUTC(t).slice(0, 2), X(t) - 5, h - 2); }
+    const r = walk.on ? walk.route : S.route, a = walk.on ? walk.t0 : departT();    // the planned EVA window
     if (r) {
-      c.fillStyle = "rgba(221,183,143,0.13)"; c.strokeStyle = "#DDB78F"; c.lineWidth = 1;
-      c.fillRect(X(a), 13, X(a + r.time_s) - X(a), h - 30); c.strokeRect(X(a) + .5, 13.5, X(a + r.time_s) - X(a), h - 30);
-      c.fillStyle = "#6EE7A8";
-      for (const k of r.contacts) if (k.start) c.fillRect(X(k.start), h - 19, Math.max(2, X(k.end) - X(k.start)), 3);
+      const x0 = X(a), x1 = X(a + r.time_s);
+      c.fillStyle = "rgba(168,201,215,0.16)"; c.fillRect(x0, top - 1, x1 - x0, h - axis); c.strokeStyle = "#a8c9d7"; c.lineWidth = 1; c.strokeRect(x0 + 0.5, top - 0.5, x1 - x0, h - axis - 1);
+      c.fillStyle = "#6EE7A8"; for (const k of r.contacts) if (k.start) c.fillRect(X(k.start), h - axis - 3, Math.max(2, X(k.end) - X(k.start)), 3);
     }
-    const cx = X(clockT()); c.fillStyle = "#fff"; c.fillRect(cx, 0, 1.5, h - 14);
+    const cx = X(clockT()); c.fillStyle = "#fff"; c.fillRect(cx, 0, 1.5, h - axis + 2);   // now
   }
   $("timeline").addEventListener("click", e => {
     if (walk.on) return;
@@ -389,13 +378,13 @@
   function drawProfile() {
     const [c, w, h] = fit($("profile")); if (!w) return; c.clearRect(0, 0, w, h);
     const r = walk.on ? walk.route : S.route;
-    c.font = "10px 'IBM Plex Mono', monospace";
-    if (!r) { c.fillStyle = "#615C58"; c.fillText("No route yet", 8, h / 2); $("profSub").textContent = ""; return; }
+    c.font = "12px 'IBM Plex Mono', monospace";
+    if (!r) { c.fillStyle = "#9AA8CC"; c.fillText("No route yet", 8, h / 2); $("profSub").textContent = ""; return; }
     const lo = Math.min(...r.z) - 5, hi = Math.max(...r.z) + 5, D = r.distance_m || 1;
     const X = d => 34 + d / D * (w - 42), Y = z => h - 14 - (z - lo) / (hi - lo) * (h - 26);
     $("profSub").textContent = `${Math.round(lo + 5)} to ${Math.round(hi - 5)} m`;
     c.beginPath(); c.moveTo(X(0), h - 14); r.d.forEach((d, i) => c.lineTo(X(d), Y(r.z[i]))); c.lineTo(X(D), h - 14); c.closePath();
-    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "rgba(221,183,143,0.45)"); gr.addColorStop(1, "rgba(221,183,143,0.03)");
+    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "rgba(168,201,215,0.45)"); gr.addColorStop(1, "rgba(168,201,215,0.03)");
     c.fillStyle = gr; c.fill();
     for (let i = 1; i < r.d.length; i++) {
       const s = r.slope[i];
@@ -404,7 +393,7 @@
     }
     c.fillStyle = "#93B7E6";
     r.stop_idx.slice(1, -1).forEach((i, k) => { c.fillRect(X(r.d[i]), 4, 1, h - 18); c.fillText(String(k + 1), X(r.d[i]) + 3, 12); });
-    c.fillStyle = "#615C58"; c.fillText(Math.round(hi - 5), 2, 14); c.fillText(Math.round(lo + 5), 2, h - 16);
+    c.fillStyle = "#9AA8CC"; c.fillText(Math.round(hi - 5), 2, 14); c.fillText(Math.round(lo + 5), 2, h - 16);
     c.fillText("0", 34, h - 3); c.fillText(fKm(D), w - 50, h - 3);
     if (walk.on) { const d = walk.dAlong; c.fillStyle = "#fff"; c.beginPath(); c.arc(X(d), Y(walk.zNow), 4, 0, 7); c.fill(); }
   }
@@ -412,8 +401,8 @@
   /* ---------- sound ---------- */
   let AC = null, dop = null;
   const audio = () => AC || (AC = new (window.AudioContext || window.webkitAudioContext)());
-  function chime(name, twice) {
-    if (!S.sound) return;
+  function chime(name, twice, force) {
+    if (!S.sound && !force) return;
     const a = audio(), o = ORB[name]; let t = a.currentTime;
     for (let rep = 0; rep < (twice ? 2 : 1); rep++) for (const f of o.f) {
       const osc = a.createOscillator(), gn = a.createGain();
@@ -447,16 +436,18 @@
       drift: [0, 0], dAlong: 0, _i: 0, follow: true, busy: false, hzOn: false, zNow: S.route.z[0], inContact: false, alerted: new Set(), dose: 0, lastSun: 0, last: performance.now(), dwellSaid: -1 });
     me.addTo(map); unc.addTo(map); if (S.truth) ghost.addTo(map);
     walk._painted = -1;
+    if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
     $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet();
     $("depart").disabled = true; drawStops();
-    toast("EVA started", `Leaving habitat ${fUTC(walk.t0)} UTC. No GPS: dead reckoning until the next relay pass.`, "#DDB78F");
-    if (S.sound) audio().resume();
+    toast("EVA started", `Leaving habitat ${fUTC(walk.t0)} UTC. No GPS: dead reckoning until the next relay pass.`, "#a8c9d7");
+    audio().resume();                                  // the Start press is the tap browsers need before any beep
   }
+  const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" fill="currentColor"/></svg>', STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
   function syncWalk() {
     const on = !!walk.on, r = S.route, b = $("walkBtn"), f = $("fab");
-    b.textContent = on ? "■ End walk" : "▶ Start walk"; b.classList.toggle("halt", on); b.disabled = !r && !on;
+    b.innerHTML = on ? STOP_SVG : PLAY_SVG; b.setAttribute("aria-label", on ? "End simulation" : "Start simulation"); b.title = on ? "End simulation" : "Start simulation"; b.classList.toggle("halt", on); b.disabled = !r && !on;
     f.hidden = !(r || on); f.classList.toggle("halt", on);
-    f.innerHTML = on ? "■ End walk" : r ? `▶ Start walk<small>${(r.distance_m / 1000).toFixed(1)} km · ${(r.time_s / 3600).toFixed(1)} h</small>` : "";
+    f.innerHTML = on ? "End simulation" : r ? `Start simulation<small>${(r.distance_m / 1000).toFixed(1)} km · ${(r.time_s / 3600).toFixed(1)} h</small>` : "";
     document.body.classList.toggle("walking", on);
   }
   function endWalk(msg) {
@@ -508,7 +499,7 @@
         walk.odoFix = walk.odo; walk.drift = [0, 0];
       }
       if (con) walk.odoFix = walk.odo;
-      walk.inContact = !!con;
+      walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
       // pass alerts: T-10 min and at rise
       for (const q of DB.passes) {
         if (q.end < walk.simT || q.start > walk.simT + 620) continue;
@@ -529,7 +520,7 @@
       $("arrow").style.transform = `rotate(${brg - 90}deg)`;
       const dw = r.dwell.find(d => el >= d.t && el < d.t + d.min * 60);
       const home = last && r.stopsReq.at(-1) === HAB;
-      $("hudNext").textContent = dw ? "Science stop" : `${home ? "Habitat" : last ? "Last stop" : `Next stop (${total - k - (r.stopsReq.at(-1) === HAB ? 1 : 0)} left)`} · ${fKm(r.d[nxt] - p.d)}`;
+      $("hudNext").textContent = dw ? "Sampling" : `${home ? "Habitat" : last ? "Final waypoint" : `Next waypoint (${total - k - (r.stopsReq.at(-1) === HAB ? 1 : 0)} left)`} · ${fKm(r.d[nxt] - p.d)}`;
       $("hudSub").textContent = dw ? `${Math.ceil((dw.t + dw.min * 60 - el) / 60)} min of sampling left` : `${fDur(r.t[nxt] - el)} to go · home in ${fDur(r.time_s - el)}`;
       $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
       const np = DB.passes.find(q => q.start > walk.simT);
@@ -541,7 +532,7 @@
       let hz = 0; for (let i = p.i; i < r.x.length && r.d[i] - p.d < 150; i++) hz = Math.max(hz, r.slope[i]);
       if (hz >= 15 && !walk.hzOn) { walk.hzOn = true; toast("Steep ground ahead", `${hz.toFixed(0)}° within 150 m. Slow down.`, "#F0616B"); } else if (hz < 10) walk.hzOn = false;
       if (S.view === "2d" && walk.follow !== false && !map.getBounds().pad(-0.25).contains(ll(p.x, p.y))) map.panTo(ll(p.x, p.y), { animate: true, duration: 0.6 });
-      T3.walker = { x: p.x, y: p.y, z: p.z, rad, con, pass: con ? currentPass(walk.simT) : null };
+      T3.walker = { x: p.x, y: p.y, z: p.z, rad, con, pass: con ? currentPass(walk.simT) : null, hdx: r.x[j] - p.x, hdy: r.y[j] - p.y, d: p.d };
       if (el >= r.time_s) endWalk(`Back at the habitat after ${fDur(walk.simT - (S.route.depart))}. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`);
     }
     // 4 Hz UI refresh
@@ -549,8 +540,9 @@
       tick.n = now;
       const t = clockT(), s = sunAt(t);
       $("clock").innerHTML = `<span class="dt">${fDay(t)} </span>${fUTC(t)}:${pad(Math.floor(t) % 60)} UTC`;
+      { const st = $("simState"), mode = walk.on ? "SIMULATION" : S.departOff === 0 ? "LIVE" : "PLANNED"; st.textContent = mode; st.className = "tstate " + (walk.on ? "sim" : S.departOff === 0 ? "" : "plan"); }
       $("clockSub").textContent = (walk.on ? `EVA +${fCD(t - S.route.depart)} · ` : "") + (s.el > 0 ? `Sun ${s.el.toFixed(0)}° up` : "Night here");
-      drawRelay(); drawTimeline(); if (walk.on) drawProfile(); liveAlerts();
+      drawRelay(); drawTimeline(); if (walk.on) drawProfile(); liveAlerts(); commsTick();
       if ((S.layers.has("sun") || S.layers.has("heat")) && Math.floor(t / 600) !== walk.lastSun) { walk.lastSun = Math.floor(t / 600); syncLayers(); }
       T3.sun = s;
     }
@@ -560,13 +552,51 @@
   /* ---------- 3D terrain ---------- */
   const T3 = { dirty: true, ready: false, walker: null, sun: { az: 180, el: 45 } };
   T3.init = function () {
-    const cv = $("view3d"), EX = 2, K = M.width_m / 30276;      // K: everything sized for Jezero, scaled to this map
-    const rn = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); rn.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); rn.outputEncoding = THREE.sRGBEncoding;
-    const sc = new THREE.Scene(); sc.background = new THREE.Color(0x05060A); sc.fog = new THREE.Fog(0x1a120c, 22000 * K, 60000 * K);
-    const cam = new THREE.PerspectiveCamera(42, 1, 10 * K, 120000 * K);
-    const ctl = new THREE.OrbitControls(cam, cv); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.49; ctl.minDistance = 300 * K; ctl.maxDistance = 45000 * K;
+    const cv = $("view3d"), EX = 2, K = M.width_m / 30276;      // K: everything is sized for Jezero (30 km) and scaled to this map
+    const small = innerWidth < 900;
+    let lite = small; try { const v0 = localStorage.getItem("mw_lite"); if (v0 !== null) lite = v0 === "1"; } catch (e) { /* private mode */ }
+    T3.lite = lite; let rocksRef = null, envTex = null;
+    const rn = new THREE.WebGLRenderer({ canvas: cv, antialias: true }); rn.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    rn.outputEncoding = THREE.sRGBEncoding; rn.toneMapping = THREE.ACESFilmicToneMapping; rn.toneMappingExposure = 1.0;
+    rn.shadowMap.enabled = !lite; rn.shadowMap.type = THREE.PCFSoftShadowMap;
+    const sc = new THREE.Scene(); sc.fog = new THREE.Fog(0x9a7b5f, 14000 * K, 54000 * K);
+    const cam = new THREE.PerspectiveCamera(42, 1, 10 * K, 130000 * K); T3.cam = cam;
+    const ctl = new THREE.OrbitControls(cam, cv); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.49; ctl.minDistance = 120 * K; ctl.maxDistance = 45000 * K;
+    ctl.addEventListener("start", () => { T3.drag = true; }); ctl.addEventListener("end", () => { T3.drag = false; });
     const P = (x, y, z) => new THREE.Vector3(x - M.width_m / 2, (z - M.zmin) * EX, -(y - M.height_m / 2));
-    ctl.target.copy(P(HAB[0] - 1500 * K, HAB[1] + 800 * K, elevAt(...HAB))); cam.position.copy(P(HAB[0] + 3500 * K, HAB[1] - (K > 2 ? 9000 : 6500) * K, elevAt(...HAB) + (K > 2 ? 4500 : 1700) * K));   // big regions: start higher
+    const hz = elevAt(...HAB);
+    const homeCam = () => { ctl.target.copy(P(HAB[0] - 500 * K, HAB[1] + 700 * K, hz)); cam.position.copy(P(HAB[0] + 2200 * K, HAB[1] - 3600 * K, hz + 1300 * K)); };
+    homeCam();
+
+    // ---- sky: Mars butterscotch by day, blue halo round the sun at dusk, near-black at night ----
+    const SKY_FRAG = `precision highp float; varying vec3 vP; uniform vec3 sunDir; uniform float day;
+      void main(){ vec3 d = normalize(vP); float h = clamp(d.y, 0.0, 1.0);
+        vec3 hor = mix(vec3(0.020, 0.032, 0.050), vec3(0.80, 0.62, 0.45), day);
+        vec3 zen = mix(vec3(0.004, 0.008, 0.016), vec3(0.50, 0.40, 0.32), day);
+        vec3 col = mix(hor, zen, pow(h, 0.5));
+        float sd = max(dot(d, normalize(sunDir)), 0.0);
+        col += vec3(0.20, 0.34, 0.58) * pow(sd, 16.0) * (0.30 + 0.70 * (1.0 - day)) * step(-0.05, sunDir.y);
+        col += vec3(1.0, 0.92, 0.78) * pow(sd, 800.0) * 4.0 * step(0.0, sunDir.y);
+        if (d.y < 0.0) col = mix(col, hor * 0.7, clamp(-d.y * 4.0, 0.0, 1.0));
+        gl_FragColor = vec4(col, 1.0); }`;
+    const skyMat = (sunDir, day) => new THREE.ShaderMaterial({ uniforms: { sunDir: { value: sunDir }, day: { value: day } }, side: THREE.BackSide, depthWrite: false, fog: false,
+      vertexShader: "varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }", fragmentShader: SKY_FRAG });
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(95000 * K, 32, 16), skyMat(new THREE.Vector3(0, 1, 0), 1)); sky.renderOrder = -1; sc.add(sky);
+    const skyU = sky.material.uniforms;
+    {   // image-based lighting: reflect a daytime Mars sky in the metal and visor (skipped where float render targets are missing)
+      const okEnv = rn.capabilities.isWebGL2 ? !!(rn.extensions.get("EXT_color_buffer_float") || rn.extensions.get("EXT_color_buffer_half_float")) : !!rn.extensions.get("EXT_color_buffer_half_float");
+      if (okEnv) {
+        try {
+          const es = new THREE.Scene(); es.add(new THREE.Mesh(new THREE.SphereGeometry(10, 32, 16), skyMat(new THREE.Vector3(0.45, 0.7, 0.4), 1)));
+          const pm = new THREE.PMREMGenerator(rn); envTex = pm.fromScene(es, 0.02).texture; pm.dispose();
+        } catch (e) { envTex = null; }
+      }
+      sc.environment = lite ? null : envTex;
+    }
+    const envMats = [];
+    const pbr = o => { const m = new THREE.MeshStandardMaterial(o); m.userData.env0 = o.envMapIntensity == null ? 1 : o.envMapIntensity; envMats.push(m); return m; };
+
+    // ---- terrain ----
     const nx = 532, ny = 504, geo = new THREE.PlaneGeometry(M.width_m, M.height_m, nx, ny); geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     for (let iy = 0; iy <= ny; iy++) for (let ix = 0; ix <= nx; ix++) {
@@ -576,17 +606,178 @@
     geo.computeVertexNormals();
     const tc = document.createElement("canvas"); tc.width = 2660; tc.height = 2520;
     const tex = new THREE.CanvasTexture(tc); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = rn.capabilities.getMaxAnisotropy();
-    sc.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex })));
-    const sun = new THREE.DirectionalLight(0xffe2c4, 1.1), amb = new THREE.AmbientLight(0xb0a8a0, 0.55); sc.add(sun, amb);
+    const terrain = new THREE.Mesh(geo, pbr({ map: tex, color: 0xd0d0d0, roughness: 1, metalness: 0, envMapIntensity: 0.12 })); terrain.receiveShadow = true; terrain.castShadow = true; sc.add(terrain);
+    const sun = new THREE.DirectionalLight(0xffe4c4, 2.4);
+    sun.castShadow = !lite; sun.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
+    sun.shadow.camera.near = 10 * K; sun.shadow.camera.far = 16000 * K; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 3 * K;
+    const SH = 1700 * K; Object.assign(sun.shadow.camera, { left: -SH, right: SH, top: SH, bottom: -SH });
+    const hemi = new THREE.HemisphereLight(0xd9bb98, 0x6a5240, 0.45); sc.add(sun, sun.target, hemi);
     const baseImg = new Image(); baseImg.src = M.basemap_3d; baseImg.onload = () => T3.dirty = true;
     const imgs = {};
-    let tube = null;
-    const wk = new THREE.Group(); sc.add(wk); wk.visible = false;
-    const pin = new THREE.Mesh(new THREE.ConeGeometry(45 * K, 160 * K, 16), new THREE.MeshBasicMaterial({ color: 0xffffff })); pin.rotation.x = Math.PI; pin.position.y = 90 * K; wk.add(pin);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 64), new THREE.MeshBasicMaterial({ color: 0x93B7E6, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })); ring.rotation.x = -Math.PI / 2; ring.position.y = 12; wk.add(ring);
+
+    // ---- procedural surface detail for the models ----
+    const mkCanvas = (w, h, draw) => { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); return c; };
+    const toTex = (c, rep, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (rep) t.repeat.set(rep[0], rep[1]); if (srgb) t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; };
+    const NOISE = toTex(mkCanvas(256, 256, (x, w, h) => { const im = x.createImageData(w, h); for (let i = 0; i < w * h; i++) { const v = 100 + Math.random() * 110; im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; } x.putImageData(im, 0, 0); }));
+    const FOIL = toTex(mkCanvas(256, 256, (x, w, h) => { x.fillStyle = "#808080"; x.fillRect(0, 0, w, h); for (let i = 0; i < 1400; i++) { const v = 60 + Math.random() * 140; x.fillStyle = `rgba(${v},${v},${v},0.35)`; x.beginPath(); const a = Math.random() * w, b = Math.random() * h; x.moveTo(a, b); x.lineTo(a + Math.random() * 40 - 20, b + Math.random() * 40 - 20); x.lineTo(a + Math.random() * 40 - 20, b + Math.random() * 40 - 20); x.fill(); } }), [2, 2]);
+    const WEAVE = toTex(mkCanvas(64, 64, x => { x.fillStyle = "#909090"; x.fillRect(0, 0, 64, 64); x.lineWidth = 2; x.strokeStyle = "#c4c4c4"; for (let i = -64; i < 128; i += 8) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 64, 64); x.stroke(); } x.strokeStyle = "#5e5e5e"; for (let i = -64; i < 128; i += 8) { x.beginPath(); x.moveTo(i + 64, 0); x.lineTo(i, 64); x.stroke(); } }), [7, 7]);
+    const CELLS = toTex(mkCanvas(256, 128, (x, w, h) => {
+      x.fillStyle = "#1c3a63"; x.fillRect(0, 0, w, h);
+      for (let cx = 0; cx < 8; cx++) for (let cy = 0; cy < 4; cy++) { const g = x.createLinearGradient(0, cy * 32, 0, cy * 32 + 32); g.addColorStop(0, "#3a78c4"); g.addColorStop(1, "#1f4f8f"); x.fillStyle = g; x.fillRect(cx * 32 + 2, cy * 32 + 2, 28, 28); x.fillStyle = "rgba(190,205,225,0.5)"; x.fillRect(cx * 32 + 9, cy * 32 + 2, 1, 28); x.fillRect(cx * 32 + 21, cy * 32 + 2, 1, 28); }
+    }), null, true);
+    const DOMETEX = toTex(mkCanvas(512, 256, (x, w, h) => { x.fillStyle = "#f2f1ec"; x.fillRect(0, 0, w, h); x.strokeStyle = "rgba(60,64,70,0.55)"; x.lineWidth = 2; for (let i = 0; i <= w; i += 64) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); } for (let j = 0; j <= h; j += 51) { x.beginPath(); x.moveTo(0, j); x.lineTo(w, j); x.stroke(); } x.fillStyle = "rgba(60,64,70,0.45)"; for (let i = 0; i <= w; i += 64) for (let j = 0; j <= h; j += 17) x.fillRect(i - 1.5, j, 3, 3); }), null, true);
+
+    // ---- models ----
+    const mk = (parent, geom, mat, x, y, z) => { const o = new THREE.Mesh(geom, mat); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; parent.add(o); return o; };
+    function makeAstronaut() {
+      const g = new THREE.Group(), ud = g.userData;
+      const suit = pbr({ color: 0xeceff2, roughness: 0.74, bumpMap: WEAVE, bumpScale: 0.7, envMapIntensity: 0.55 });
+      const dusty = pbr({ color: 0xcfc3b4, roughness: 0.88, bumpMap: WEAVE, bumpScale: 0.7, envMapIntensity: 0.4 });
+      const metal = pbr({ color: 0xb4bcc3, roughness: 0.32, metalness: 0.9, envMapIntensity: 1.2 });
+      const rubber = pbr({ color: 0x1d2024, roughness: 0.92 });
+      const visorM = pbr({ color: 0xd9a63b, roughness: 0.04, metalness: 1.0, envMapIntensity: 1.8 });
+      const led = pbr({ color: 0x5fb3a8, roughness: 0.4, emissive: 0x1f5a53, emissiveIntensity: 0.9 });
+      // hard upper torso, waist bearing, shoulder dome
+      mk(g, new THREE.CylinderGeometry(0.30, 0.265, 0.60, 32), suit, 0, 1.45, 0);
+      const dome = mk(g, new THREE.SphereGeometry(0.30, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), suit, 0, 1.75, 0); dome.scale.set(1, 0.5, 0.9);
+      mk(g, new THREE.CylinderGeometry(0.255, 0.24, 0.17, 28), suit, 0, 1.04, 0);
+      mk(g, new THREE.TorusGeometry(0.255, 0.03, 10, 32), metal, 0, 1.14, 0).rotation.x = Math.PI / 2;
+      mk(g, new THREE.TorusGeometry(0.195, 0.032, 10, 28), metal, 0, 1.89, 0).rotation.x = Math.PI / 2;
+      // helmet: shell, gold visor, brow lamps, camera
+      mk(g, new THREE.SphereGeometry(0.265, 40, 28), suit, 0, 2.08, 0);
+      mk(g, new THREE.SphereGeometry(0.273, 40, 28, Math.PI / 2 - 0.95, 1.9, Math.PI * 0.30, Math.PI * 0.40), visorM, 0, 2.08, 0);
+      for (const sx of [-1, 1]) mk(g, new THREE.CylinderGeometry(0.03, 0.03, 0.05, 12), metal, sx * 0.17, 2.27, 0.15).rotation.x = Math.PI / 2.6;
+      mk(g, new THREE.BoxGeometry(0.06, 0.05, 0.07), rubber, 0.21, 2.2, 0.08);
+      // chest control unit and life-support backpack
+      mk(g, new THREE.BoxGeometry(0.25, 0.17, 0.07), metal, 0, 1.52, 0.30);
+      mk(g, new THREE.BoxGeometry(0.17, 0.04, 0.012), led, 0, 1.56, 0.337);
+      mk(g, new THREE.BoxGeometry(0.46, 0.64, 0.25), suit, 0, 1.50, -0.33);
+      mk(g, new THREE.BoxGeometry(0.40, 0.17, 0.05), metal, 0, 1.68, -0.47);
+      for (const sx of [-1, 1]) mk(g, new THREE.CylinderGeometry(0.06, 0.06, 0.42, 16), metal, sx * 0.13, 1.40, -0.49);
+      mk(g, new THREE.CylinderGeometry(0.008, 0.008, 0.46, 6), metal, 0.18, 1.98, -0.38);
+      // arms: shoulder -> upper arm -> elbow -> forearm -> glove
+      const arm = (sx, name) => {
+        const sh = new THREE.Group(); sh.position.set(sx * 0.37, 1.70, 0); g.add(sh);
+        mk(sh, new THREE.SphereGeometry(0.115, 18, 14), suit, 0, 0, 0);
+        mk(sh, new THREE.CylinderGeometry(0.097, 0.083, 0.30, 18), suit, 0, -0.17, 0);
+        const el = new THREE.Group(); el.position.y = -0.33; sh.add(el);
+        mk(el, new THREE.SphereGeometry(0.088, 16, 12), metal, 0, 0, 0);
+        mk(el, new THREE.CylinderGeometry(0.083, 0.072, 0.27, 18), suit, 0, -0.15, 0);
+        mk(el, new THREE.TorusGeometry(0.075, 0.017, 8, 18), metal, 0, -0.29, 0).rotation.x = Math.PI / 2;
+        mk(el, new THREE.BoxGeometry(0.11, 0.13, 0.08), rubber, 0, -0.38, 0);
+        ud["arm" + name] = sh; ud["elbow" + name] = el;
+      };
+      arm(-1, "L"); arm(1, "R");
+      // legs: hip -> thigh -> knee -> shin -> boot
+      const leg = (sx, name) => {
+        const hip = new THREE.Group(); hip.position.set(sx * 0.14, 0.96, 0); g.add(hip);
+        mk(hip, new THREE.CylinderGeometry(0.138, 0.112, 0.43, 20), suit, 0, -0.215, 0);
+        const kn = new THREE.Group(); kn.position.y = -0.43; hip.add(kn);
+        mk(kn, new THREE.SphereGeometry(0.108, 16, 12), metal, 0, 0, 0);
+        mk(kn, new THREE.CylinderGeometry(0.112, 0.097, 0.43, 20), dusty, 0, -0.215, 0);
+        mk(kn, new THREE.BoxGeometry(0.165, 0.115, 0.32), dusty, 0, -0.475, 0.06);
+        mk(kn, new THREE.BoxGeometry(0.17, 0.03, 0.33), rubber, 0, -0.53, 0.06);
+        ud["leg" + name] = hip; ud["knee" + name] = kn;
+      };
+      leg(-1, "L"); leg(1, "R");
+      return g;
+    }
+    function makeHab() {
+      const g = new THREE.Group();
+      const shell = pbr({ color: 0xffffff, map: DOMETEX, bumpMap: DOMETEX, bumpScale: 0.8, roughness: 0.6, envMapIntensity: 0.6 });
+      const metal = pbr({ color: 0x9ba6ae, roughness: 0.38, metalness: 0.85, envMapIntensity: 1.1 });
+      const dark = pbr({ color: 0x1d2227, roughness: 0.55, metalness: 0.3 });
+      const regolith = pbr({ color: 0x80654d, roughness: 1, bumpMap: NOISE, bumpScale: 3 });
+      const cells = pbr({ map: CELLS, roughness: 0.3, metalness: 0.5, side: THREE.DoubleSide, envMapIntensity: 1.4 });
+      mk(g, new THREE.SphereGeometry(1, 56, 28, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 0.1, 0);
+      mk(g, new THREE.CylinderGeometry(1.03, 1.08, 0.14, 56), metal, 0, 0.07, 0);
+      const berm = mk(g, new THREE.TorusGeometry(1.3, 0.24, 16, 56), regolith, 0, 0.12, 0); berm.rotation.x = Math.PI / 2; berm.scale.set(1, 1, 0.55);
+      const lock = mk(g, new THREE.CylinderGeometry(0.27, 0.27, 0.75, 28), shell, 0, 0.36, 1.18); lock.rotation.x = Math.PI / 2;
+      mk(g, new THREE.TorusGeometry(0.23, 0.035, 12, 28), metal, 0, 0.36, 1.56);
+      mk(g, new THREE.CircleGeometry(0.21, 28), dark, 0, 0.36, 1.562);
+      mk(g, new THREE.SphereGeometry(0.035, 10, 8), pbr({ color: 0xffd9a0, emissive: 0xffc070, emissiveIntensity: 1.2 }), 0, 0.72, 1.25);
+      for (const [i, a] of [[0, 0.5], [1, 2.2], [2, 3.7]]) { const r = mk(g, new THREE.BoxGeometry(0.34, 0.05, 0.22), metal, Math.sin(a) * 0.62, 0.84, Math.cos(a) * 0.62); r.rotation.y = a; }   // radiators
+      mk(g, new THREE.CylinderGeometry(0.018, 0.03, 1.5, 10), metal, 0.45, 1.15, -0.25);
+      const dish = mk(g, new THREE.SphereGeometry(0.27, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), metal, 0.45, 1.9, -0.25); dish.rotation.x = -0.65; dish.material.side = THREE.DoubleSide;
+      for (let i = 0; i < 3; i++) {                                                   // solar field
+        const x = -2.3 + i * 1.2;
+        mk(g, new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8), metal, x, 0.25, -2.0);
+        const p = mk(g, new THREE.BoxGeometry(1.0, 0.035, 0.62), cells, x, 0.56, -2.05); p.rotation.x = -0.6;
+      }
+      return g;
+    }
+    function makeSat(hex) {
+      const g = new THREE.Group();
+      const mli = pbr({ color: 0xc99d3d, roughness: 0.36, metalness: 0.85, bumpMap: FOIL, bumpScale: 2.4, envMapIntensity: 1.4 });
+      const silver = pbr({ color: 0xd0d7dd, roughness: 0.28, metalness: 0.92, envMapIntensity: 1.3 });
+      const white = pbr({ color: 0xeceeef, roughness: 0.46, metalness: 0.2, side: THREE.DoubleSide, envMapIntensity: 1.0 });
+      const black = pbr({ color: 0x14171a, roughness: 0.55, metalness: 0.35 });
+      const cells = pbr({ map: CELLS, roughness: 0.3, metalness: 0.5, side: THREE.DoubleSide, envMapIntensity: 1.5, emissive: 0x1a4a86, emissiveMap: CELLS, emissiveIntensity: 0.55 });
+      const decal = new THREE.MeshBasicMaterial({ color: hex });
+      mk(g, new THREE.BoxGeometry(1.1, 1.0, 1.7), mli, 0, 0, 0);
+      mk(g, new THREE.BoxGeometry(1.0, 0.04, 1.5), silver, 0, 0.52, 0);                          // radiator
+      mk(g, new THREE.BoxGeometry(0.34, 0.02, 0.55), decal, 0.2, 0.545, 0.3);                    // orbiter marking
+      for (const [x, z] of [[-0.45, 0.7], [0.45, 0.7], [-0.45, -0.7], [0.45, -0.7]]) mk(g, new THREE.CylinderGeometry(0.06, 0.09, 0.14, 12), black, x, -0.5, z);
+      mk(g, new THREE.BoxGeometry(0.5, 0.3, 0.6), black, 0, -0.62, -0.2);                        // instrument deck
+      for (const sx of [-1, 1]) {                                                                 // solar arrays on booms
+        mk(g, new THREE.CylinderGeometry(0.035, 0.035, 0.9, 8), silver, sx * 0.95, 0.1, 0).rotation.z = Math.PI / 2;
+        const arr = mk(g, new THREE.BoxGeometry(3.4, 0.035, 1.7), cells, sx * 2.55, 0.1, 0); arr.rotation.x = 0.12;
+        mk(g, new THREE.BoxGeometry(3.46, 0.02, 0.05), silver, sx * 2.55, 0.1, 0.87).rotation.x = 0.12;
+        mk(g, new THREE.BoxGeometry(3.46, 0.02, 0.05), silver, sx * 2.55, 0.1, -0.87).rotation.x = 0.12;
+      }
+      // high-gain antenna: parabolic dish on a boom, pointing at the planet, feed on three struts
+      const prof = []; for (let i = 0; i <= 16; i++) { const r = i / 16 * 0.95; prof.push(new THREE.Vector2(r, r * r / (4 * 0.55))); }
+      const dishG = new THREE.Group(); dishG.position.set(0, -1.05, 0); g.add(dishG);
+      const dish = mk(dishG, new THREE.LatheGeometry(prof, 48), white, 0, 0, 0); dish.rotation.x = Math.PI;
+      mk(g, new THREE.CylinderGeometry(0.03, 0.03, 0.55, 8), silver, 0, -0.78, 0);
+      mk(dishG, new THREE.CylinderGeometry(0.06, 0.04, 0.16, 12), black, 0, -0.55, 0);
+      for (let i = 0; i < 3; i++) { const a = i * 2.094, st = mk(dishG, new THREE.CylinderGeometry(0.008, 0.008, 0.78, 6), silver, Math.sin(a) * 0.4, -0.30, Math.cos(a) * 0.4); st.rotation.set(Math.cos(a) * 0.55, 0, -Math.sin(a) * 0.55); }
+      mk(g, new THREE.CylinderGeometry(0.012, 0.012, 0.9, 6), silver, 0.45, 0.95, -0.5);        // UHF whip
+      return g;
+    }
+    function labelSprite(text, color) {
+      const c = document.createElement("canvas"); c.width = 512; c.height = 112; const x = c.getContext("2d");
+      x.fillStyle = "rgba(11,17,22,0.9)"; x.fillRect(0, 0, 512, 112); x.strokeStyle = color; x.lineWidth = 3; x.strokeRect(2, 2, 508, 108); x.fillStyle = color; x.fillRect(0, 0, 8, 112);
+      x.fillStyle = "#f4f8fa"; x.font = "600 50px 'IBM Plex Sans', sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, 268, 58);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false })); sp.renderOrder = 10; sp.userData.text = text; return sp;
+    }
+    function numSprite(n) {
+      const c = document.createElement("canvas"); c.width = 128; c.height = 128; const x = c.getContext("2d");
+      x.fillStyle = "#a8c9d7"; x.fillRect(18, 18, 92, 92); x.lineWidth = 8; x.strokeStyle = "#0b1116"; x.strokeRect(14, 14, 100, 100);
+      x.fillStyle = "#0b1116"; x.font = "600 62px 'IBM Plex Mono', monospace"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(String(n), 64, 68);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false })); sp.renderOrder = 9; return sp;
+    }
+    const skyDir = (az, el) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)); };
+
+    const ASC = 95 * K, HSC = 150 * K, SSC = 1500 * K;
+    const astro = makeAstronaut(); astro.scale.setScalar(ASC); sc.add(astro);
+    const astroTag = labelSprite("Astronaut", "#a8c9d7"); astroTag.scale.set(0.17, 0.037, 1); astroTag.center.set(0.5, 0); sc.add(astroTag);
+    const hab = makeHab(); hab.scale.setScalar(HSC); hab.position.copy(P(HAB[0], HAB[1], hz)); sc.add(hab);
+    // scattered boulders, so the ground has scale and texture when you come in close
+    {
+      const N = 5200, rg = new THREE.IcosahedronGeometry(1, 1), rp = rg.attributes.position;
+      for (let i = 0; i < rp.count; i++) { const f = 0.78 + Math.random() * 0.4; rp.setXYZ(i, rp.getX(i) * f, rp.getY(i) * f * 0.62, rp.getZ(i) * f); }
+      rg.computeVertexNormals();
+      const rocks = new THREE.InstancedMesh(rg, pbr({ color: 0xffffff, roughness: 0.96, bumpMap: NOISE, bumpScale: 4, envMapIntensity: 0.2 }), N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), cl = new THREE.Color();
+      for (let i = 0; i < N; i++) {
+        const x = Math.random() * M.width_m, y = Math.random() * M.height_m, z = elevAt(x, y); if (z == null || Math.hypot(x - HAB[0], y - HAB[1]) < 190 * K) { m4.makeScale(0, 0, 0); rocks.setMatrixAt(i, m4); continue; }
+        const s = (2.5 + Math.pow(Math.random(), 3.2) * 34) * K, p = P(x, y, z); e.set(Math.random() * 0.5, Math.random() * 6.28, Math.random() * 0.5); q.setFromEuler(e);
+        m4.compose(p.setY(p.y + s * 0.2), q, new THREE.Vector3(s, s, s)); rocks.setMatrixAt(i, m4);
+        const t = 0.42 + Math.random() * 0.32; cl.setRGB(t * 0.92, t * 0.74, t * 0.60); rocks.setColorAt(i, cl);
+      }
+      rocks.receiveShadow = true; rocks.visible = !lite; rocksRef = rocks; sc.add(rocks);
+    }
+    const wk = new THREE.Group(); sc.add(wk); wk.visible = false;                         // uncertainty ring + beacon under the walker
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 72), new THREE.MeshBasicMaterial({ color: 0x93B7E6, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })); ring.rotation.x = -Math.PI / 2; ring.position.y = 12 * K; wk.add(ring);
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(5 * K, 5 * K, 700 * K, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xa8c9d7, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide })); beacon.position.y = 350 * K; wk.add(beacon);
     const beamG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]);
     const beam = new THREE.Line(beamG, new THREE.LineBasicMaterial({ color: 0x6EE7A8 })); sc.add(beam); beam.visible = false;
-    const sat = new THREE.Mesh(new THREE.SphereGeometry(140 * K, 12, 12), new THREE.MeshBasicMaterial({ color: 0x6EE7A8 })); sc.add(sat); sat.visible = false;
+    const satHolder = new THREE.Group(); sc.add(satHolder); satHolder.visible = false;
+    const sats = {}; let satLabel = null, trailKey = "";
+    const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })); sc.add(trail); trail.visible = false;
+    const stopsG = new THREE.Group(); sc.add(stopsG);
+    let tube = null;
+
     function paint() {
       const c = tc.getContext("2d"); c.globalAlpha = 1;
       if (baseImg.complete && baseImg.naturalWidth) c.drawImage(baseImg, 0, 0, tc.width, tc.height);
@@ -600,44 +791,148 @@
       if (tube) { sc.remove(tube); tube.geometry.dispose(); tube = null; }
       const r = walk.on ? walk.route : S.route;
       if (r && r.x.length > 2) {
-        const step = Math.max(1, Math.floor(r.x.length / 500)), pts = [];
-        for (let i = 0; i < r.x.length; i += step) pts.push(P(r.x[i], r.y[i], r.z[i] + 14 * K));
-        pts.push(P(r.x.at(-1), r.y.at(-1), r.z.at(-1) + 14 * K));
-        tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 2, 16 * K, 6), new THREE.MeshBasicMaterial({ color: 0xDDB78F }));
-        sc.add(tube);
+        const step = Math.max(1, Math.floor(r.x.length / 500)), pts = [], idx = [];
+        for (let i = 0; i < r.x.length; i += step) { pts.push(P(r.x[i], r.y[i], r.z[i] + 12 * K)); idx.push(i); }
+        pts.push(P(r.x.at(-1), r.y.at(-1), r.z.at(-1) + 12 * K)); idx.push(r.x.length - 1);
+        const segs = pts.length * 2, rad = 6, g3 = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), segs, 11 * K, rad, false);
+        const cols = new Float32Array(g3.attributes.position.count * 3), cc = new THREE.Color();
+        for (let i = 0; i <= segs; i++) {
+          const node = idx[Math.min(idx.length - 1, Math.round(i / segs * (idx.length - 1)))];
+          cc.set(SLCOL(r.slope[Math.min(node, r.slope.length - 1)]));
+          for (let j = 0; j <= rad; j++) { const v = (i * (rad + 1) + j) * 3; cols[v] = cc.r; cols[v + 1] = cc.g; cols[v + 2] = cc.b; }
+        }
+        g3.setAttribute("color", new THREE.BufferAttribute(cols, 3));
+        tube = new THREE.Mesh(g3, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })); sc.add(tube);
       }
+      while (stopsG.children.length) { const o = stopsG.children[0]; stopsG.remove(o); if (o.material && o.material.map) o.material.map.dispose(); }
+      S.stops.forEach((st, i) => {
+        const z = elevAt(st[0], st[1]); if (z == null) return;
+        const base = P(st[0], st[1], z);
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(3.5 * K, 3.5 * K, 240 * K, 8), pbr({ color: 0xdfe7ec, roughness: 0.4, metalness: 0.6 })); pole.position.copy(base); pole.position.y += 120 * K; pole.castShadow = true; stopsG.add(pole);
+        const sp = numSprite(i + 1); sp.scale.set(0.042, 0.042, 1); sp.position.copy(base); sp.position.y += 250 * K; stopsG.add(sp);
+      });
     }
+
+    // ---- select the terrain to add a waypoint, hover for a readout ----
+    const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+    function pickTerrain(e) {
+      const rc = cv.getBoundingClientRect(); ndc.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1); ray.setFromCamera(ndc, cam);
+      const h = ray.intersectObject(terrain)[0];
+      return h ? { x: h.point.x + M.width_m / 2, y: -h.point.z + M.height_m / 2 } : null;
+    }
+    cv.addEventListener("pointerdown", e => { down = [e.clientX, e.clientY]; });
+    cv.addEventListener("pointerup", e => {
+      if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) { down = null; return; }
+      down = null; if (walk.on) return;
+      const h = pickTerrain(e); if (!h) return;
+      dismissCoach(); S.stops.push([h.x, h.y]); plan(); toast("Waypoint added", `Waypoint ${S.stops.length} added. Select the terrain again to add another.`, "#a8c9d7");
+    });
+    cv.addEventListener("pointermove", e => {
+      const now = performance.now(); if (now - (T3.hv || 0) < 120 || e.buttons) return; T3.hv = now;
+      const h = pickTerrain(e); if (!h) return;
+      const [lo, la] = lonLat(h.x, h.y), z = elevAt(h.x, h.y), sl = slopeAt(h.x, h.y);
+      $("rLat").textContent = la.toFixed(4) + "° N"; $("rLon").textContent = lo.toFixed(4) + "° E"; $("rEl").textContent = z == null ? "—" : Math.round(z) + " m"; $("rSl").textContent = sl == null ? "—" : sl.toFixed(1) + "°";
+    });
+
+    T3.api = {
+      lookSat: () => { if (!T3.satDir) return; T3.chase = false; $("t3follow").setAttribute("aria-pressed", "false"); const h0 = T3.herePos, d = T3.satDir.clone(), flat = d.clone().setY(0); if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1); flat.normalize(); T3.skyLook = true; cam.position.copy(h0).addScaledVector(flat, -600 * K); cam.position.y += 250 * K; ctl.target.copy(cam.position).addScaledVector(d, 2600 * K); },
+      setLite: v => {
+        lite = v; T3.lite = v; try { localStorage.setItem("mw_lite", v ? "1" : "0"); } catch (e) { /* ignore */ }
+        rn.shadowMap.enabled = !v; sun.castShadow = !v; sc.environment = v ? null : envTex; if (rocksRef) rocksRef.visible = !v;
+        sc.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
+      },
+      zoom: f => { const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
+      reset: () => { T3.skyLook = false; homeCam(); }, top: () => { T3.skyLook = false; const t = ctl.target; cam.position.set(t.x, t.y + 14000 * K, t.z + 1); },
+    };
+
     T3.render = () => {
       const w = cv.clientWidth, h = cv.clientHeight;
       if (cv.width !== Math.round(w * rn.getPixelRatio())) { rn.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
       if (T3.dirty) { T3.dirty = false; paint(); }
-      const a = T3.sun.az * Math.PI / 180, e = Math.max(T3.sun.el, 2) * Math.PI / 180;
-      sun.position.set(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)).multiplyScalar(1000);
-      const day = Math.max(0, Math.min(1, T3.sun.el / 15)); sun.intensity = 1.15 * day; amb.intensity = 0.22 + 0.4 * day;
-      const k = T3.walker; wk.visible = walk.on && !!k; beam.visible = sat.visible = false;
-      if (wk.visible) {
-        const p = P(k.x, k.y, k.z); wk.position.copy(p); ring.scale.setScalar(Math.max(k.rad, 25 * K)); ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6);
-        if (k.pass) {
-          const s = sampleAt(k.pass, walk.simT), az = s[1] * Math.PI / 180, el = s[2] * Math.PI / 180, far = 9000 * K;
-          const q = p.clone().add(new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).multiplyScalar(far));
-          beamG.setFromPoints([p.clone().setY(p.y + 100 * K), q]); sat.position.copy(q);
-          const col = new THREE.Color(ORB[k.pass.orbiter].c); beam.material.color = col; sat.material.color = col; beam.visible = sat.visible = true;
+      const now = performance.now(), dtr = Math.min(0.1, (now - (T3.t0 || now)) / 1000); T3.t0 = now;
+
+      // sun, sky and fog follow the real Sun position at the site
+      const SN = T3.testSun || T3.sun, a = SN.az * Math.PI / 180, e = Math.max(SN.el, 1.5) * Math.PI / 180, day = Math.max(0, Math.min(1, (SN.el + 2) / 14));
+      const sd = new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e));
+      skyU.sunDir.value.set(sd.x, Math.sin(SN.el * Math.PI / 180), sd.z); skyU.day.value = day; sky.position.copy(cam.position);
+      sun.intensity = 1.5 * day; hemi.intensity = 0.12 + 0.28 * day + (T3.lite ? 0.14 : 0);
+      sc.fog.color.setRGB(0.04 + 0.56 * day, 0.05 + 0.42 * day, 0.07 + 0.30 * day);
+      envMats.forEach(m => { m.envMapIntensity = m.userData.env0 * (0.12 + 0.88 * day); });
+      sun.target.position.copy(ctl.target); sun.position.copy(ctl.target).addScaledVector(sd, 7000 * K); sun.target.updateMatrixWorld();
+      rn.toneMappingExposure = 0.78 + 0.4 * (1 - day);
+
+      // the astronaut: walks along the route; waits by the habitat otherwise
+      const k = T3.walker, walking = walk.on && !!k, u = astro.userData;
+      const idle = P(HAB[0] + 330 * K, HAB[1] - 260 * K, 0); idle.y = (( elevAt(HAB[0] + 330 * K, HAB[1] - 260 * K) ?? hz) - M.zmin) * EX;
+      const here = walking ? P(k.x, k.y, k.z) : idle;
+      astro.position.copy(here);
+      if (walking) {
+        if (Math.hypot(k.hdx, k.hdy) > 1e-6) astro.rotation.y = Math.atan2(k.hdx, -k.hdy);
+        if (!walk.busy) T3.phase = (T3.phase || 0) + dtr * 6.5;
+        const sw = Math.sin(T3.phase);
+        u.legL.rotation.x = sw * 0.62; u.legR.rotation.x = -sw * 0.62;
+        u.kneeL.rotation.x = Math.max(0, sw) * 0.95; u.kneeR.rotation.x = Math.max(0, -sw) * 0.95;
+        u.armL.rotation.x = -sw * 0.5; u.armR.rotation.x = sw * 0.5; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.45;
+        astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.05 * ASC;
+      } else { astro.rotation.y = 0.7; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
+      astroTag.position.copy(astro.position); astroTag.position.y += 2.95 * ASC;
+      wk.visible = walking;
+      if (walking) { wk.position.copy(here); ring.scale.setScalar(Math.max(k.rad, 25 * K)); ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6); }
+
+      // a satellite appears in the sky while one is above the horizon from here
+      const t = walk.on ? walk.simT : Date.now() / 1000;
+      let sm = null, orb = null, ap = null;
+      if (T3.testSat) { sm = [0, T3.testSat.az, T3.testSat.el]; orb = T3.testSat.orbiter; }
+      else { ap = DB.passes.find(p => p.samples.length && t >= p.samples[0][0] && t <= p.samples[p.samples.length - 1][0]); if (ap) { sm = sampleAt(ap, t); orb = ap.orbiter; } }
+      beam.visible = false;
+      if (sm && sm[2] > 1 && ORB[orb]) {
+        const far = 70000 * K, dir = skyDir(sm[1], sm[2]), spos = cam.position.clone().addScaledVector(dir, far); T3.satPos = spos; T3.satDir = dir; T3.herePos = here.clone();
+        const mdl = sats[orb] || (sats[orb] = makeSat(parseInt(ORB[orb].c.slice(1), 16))); if (!mdl.userData.nofog) { mdl.userData.nofog = true; mdl.traverse(o2 => { if (o2.material) o2.material.fog = false; }); }
+        if (mdl.parent !== satHolder) satHolder.add(mdl);
+        Object.values(sats).forEach(m2 => { m2.visible = m2 === mdl; });
+        mdl.scale.setScalar(SSC); mdl.position.copy(spos); mdl.rotation.y += dtr * 0.12;
+        const txt = `${orb} · ${Math.round(sm[2])}°`;
+        if (!satLabel || satLabel.userData.text !== txt) { if (satLabel) { satHolder.remove(satLabel); satLabel.material.map.dispose(); } satLabel = labelSprite(txt, ORB[orb].c); satLabel.material.fog = false; satLabel.scale.set(0.2, 0.044, 1); satLabel.center.set(0.5, 0); satHolder.add(satLabel); }
+        satLabel.position.copy(spos); satLabel.position.y += 2800 * K;
+        satHolder.visible = true;
+        if (ap) {
+          const key = ap.orbiter + ap.start;
+          if (trailKey !== key) { trailKey = key; trail.geometry.setFromPoints(ap.samples.filter(s2 => s2[2] > 0).map(s2 => skyDir(s2[1], s2[2]).multiplyScalar(far))); trail.material.color.set(ORB[orb].c); }
+          trail.material.fog = false; trail.position.copy(cam.position); trail.visible = true;
+        } else trail.visible = false;
+        if (walking && k.con) { beamG.setFromPoints([here.clone().setY(here.y + ASC * 2.2), spos]); beam.material.color.set(ORB[orb].c); beam.visible = true; }
+      } else { satHolder.visible = false; trail.visible = false; T3.satPos = null; }
+      const showFind = !!T3.satPos; if ($("t3sat").hidden === showFind) $("t3sat").hidden = !showFind;
+
+      // camera: free, following, or chasing from behind
+      if (T3.chase && !T3.drag) {
+        if (walking) {
+          const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; }
+          if (T3.dir) { const want = here.clone().addScaledVector(T3.dir, -1000 * K); want.y += 480 * K; cam.position.lerp(want, 0.06); }
+        } else {
+          const fwd = new THREE.Vector3(Math.sin(0.7), 0, Math.cos(0.7)), want = here.clone().addScaledVector(fwd, 1100 * K); want.y += 420 * K; cam.position.lerp(want, 0.06);
         }
-        if (walk.follow !== false) ctl.target.lerp(p, 0.05);
-      }
+        ctl.target.lerp(here.clone().setY(here.y + 150 * K), 0.12);
+      } else if (walking && walk.follow !== false && !T3.drag) ctl.target.lerp(here, 0.05);
+      ctl.maxPolarAngle = T3.skyLook ? Math.PI * 0.95 : Math.PI * 0.49;
       ctl.update(); rn.render(sc, cam);
     };
     T3.ready = true;
   };
   function setView(v) {
     S.view = v; $("v-2d").setAttribute("aria-pressed", v === "2d"); $("v-3d").setAttribute("aria-pressed", v === "3d");
-    $("view3d").hidden = v !== "3d"; $("map").style.visibility = v === "3d" ? "hidden" : "visible";
-    if (v === "3d") { if (!T3.ready) T3.init(); T3.dirty = true; }
+    $("view3d").hidden = v !== "3d"; $("map").style.visibility = v === "3d" ? "hidden" : "visible"; $("tools3d").hidden = v !== "3d";
+    if (v === "3d") { if (!T3.ready) T3.init(); T3.dirty = true; $("t3lite").setAttribute("aria-pressed", String(!T3.lite)); }
   }
   T3.render = () => {};
 
   /* ---------- controls ---------- */
   $("v-2d").onclick = () => setView("2d"); $("v-3d").onclick = () => setView("3d");
+  $("t3follow").onclick = e => { T3.skyLook = false; T3.chase = !T3.chase; e.currentTarget.setAttribute("aria-pressed", String(!!T3.chase)); };
+  $("t3lite").onclick = e => { if (!T3.api) return; T3.api.setLite(!T3.lite); e.currentTarget.setAttribute("aria-pressed", String(!T3.lite)); };
+  $("t3sat").onclick = () => T3.api && T3.api.lookSat();
+  $("t3top").onclick = () => T3.api && T3.api.top();
+  $("t3reset").onclick = () => T3.api && T3.api.reset();
   for (const k of ["slope", "radiation", "comms", "shadow", "cold"]) {
     const el = $("w-" + k), o = $("o-" + k), show = () => o.textContent = (+el.value * 100).toFixed(0) + "%"; show();
     el.oninput = () => { S.weights[k] = +el.value; show(); markCustom(); if (!walk.on) plan(250); if (S.layers.has("cost")) syncLayers(); };
@@ -662,7 +957,7 @@
   document.querySelectorAll(".style").forEach(b => b.onclick = () => applyStyle(b.dataset.s));
   function setDepart(min) {
     S.departOff = Math.max(0, Math.min(1440, min)); $("depart").value = S.departOff;
-    $("departTxt").textContent = S.departOff === 0 ? "Leave now" : `Leave in ${fDur(S.departOff * 60)}`;
+    $("departTxt").textContent = S.departOff === 0 ? "Departure: now" : `Departure in ${fDur(S.departOff * 60)}`;
     $("o-depart").textContent = `${fUTC(departT())} UTC`;
     plan(200); if (S.layers.size) syncLayers();
   }
@@ -704,29 +999,219 @@
     if (S.notify) notify("Marswalk alerts on", "You will be told 10 minutes before each pass and when it rises.");
   };
 
+  /* ---------- radio messages: voice and text, relayed only while an orbiter is overhead ---------- */
+  const COM = { dest: "earth", q: [], srv: new Map(), off: 0, cfg: null, rec: null, busy: new Set(), last: 0, polled: 0, lid: 0,
+    mic: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder && window.isSecureContext) };
+  const QUICK = ["Sample collected", "Terrain is steep, slowing down", "All good, continuing", "Need help"];
+  const comTime = () => walk.on ? walk.simT : Date.now() / 1000;                // the walker's clock (simulated during a walk)
+  const mmss = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? fCD(s) : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+  window.MW = { COM, S, walk, T3 };                                                  // debug handle: MW.COM.force = {orbiter, end} holds the link open for testing
+  function linkNow() {                                                          // is a relay orbiter overhead right now?
+    if (COM.practice) return { orbiter: "MRO", end: comTime() + 1800, practice: true };   // practice mode: the link is always open
+    if (COM.force) return COM.force;
+    if (walk.on) return walk.link || null;
+    const t = Date.now() / 1000, q = (NXT.passes || []).find(p => p.vis_start && p.vis_start <= t && t < p.vis_end);
+    return q ? { orbiter: q.orbiter, end: q.vis_end } : null;
+  }
+  function nextPassText() {
+    const t = comTime(), p = (walk.on ? DB.passes : NXT.passes).find(q => q.start > t);
+    return p ? `next: ${p.orbiter} in ${mmss(p.start - t)}` : "no pass in view";
+  }
+  function blip(force) {
+    if (!S.sound && !force) return;
+    const a = audio(), t = a.currentTime;
+    [900, 600].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(), at = t + i * 0.09; o.type = "square"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.06, at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, at + 0.08);
+      o.connect(g).connect(a.destination); o.start(at); o.stop(at + 0.09); });
+  }
+  function queueMsg(m) {
+    m.lid = ++COM.lid; m.to = COM.dest; m.status = "queued"; COM.q.push(m);
+    if (!linkNow()) toast("Message queued", `No relay orbiter overhead. It leaves on the next pass (${nextPassText().replace("next: ", "")}).`, "#93B7E6");
+    commsTick(true);
+  }
+  async function uplink(m, lk) {
+    m.status = "sending";
+    try {
+      const r = await fetch("/api/comms/send", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender: "astronaut", to: m.to, kind: m.kind, text: m.text || "", audio_b64: m.audio_b64 || null, mime: m.mime, via: lk.orbiter, speed: S.speed, secs: m.secs || null }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.detail || r.statusText);
+      COM.q = COM.q.filter(x => x !== m); COM.srv.set(j.id, j); blip();
+      toast(`Uplinked via ${lk.orbiter}`, m.to === "earth" ? `On its way to Earth: ${mmss(j.light_min * 60)} of light time (×${S.speed}).` : "Relayed to the pod.", ORB[lk.orbiter].c);
+    } catch (e) { m.status = "queued"; toast("Send failed", e.message, "#F0616B"); }
+    renderMsgs();
+  }
+  async function pollComms() {
+    try {
+      const j = await (await fetch(`/api/comms/inbox?role=astronaut&speed=${S.speed}`)).json();
+      COM.off = j.now - Date.now() / 1000; COM.cfg = j.config;
+      for (const m of j.messages) COM.srv.set(m.id, { ...COM.srv.get(m.id), ...m });
+    } catch (e) { /* server busy: keep what we have */ }
+  }
+  function playMsg(v) {
+    if (v.has_audio) { const a = new Audio(`/api/comms/audio/${v.id}?role=astronaut`); a.play().catch(() => { /* needs a tap first */ }); }
+    else if (v.text && window.speechSynthesis) { const u = new SpeechSynthesisUtterance(v.text); u.rate = 0.95; speechSynthesis.speak(u); }
+  }
+  async function deliverIncoming(m) {
+    if (COM.busy.has(m.id)) return; COM.busy.add(m.id);
+    try {
+      const r = await fetch(`/api/comms/deliver/${m.id}`, { method: "POST" }); if (!r.ok) return;
+      const v = await r.json(); COM.srv.set(v.id, { ...COM.srv.get(v.id), ...v }); blip();
+      toast(`Message from ${v.sender === "earth" ? "Earth" : "the pod"}`, v.text || "Voice message", "#6EE7A8"); playMsg(v);
+    } finally { COM.busy.delete(m.id); renderMsgs(); }
+  }
+  function commsTick(force) {
+    const now = performance.now(); if (!force && now - COM.last < 1000) return; COM.last = now;
+    const lk = linkNow(), was = COM.wasOpen; COM.wasOpen = !!lk;
+    if (lk && !was) {                                                           // a relay orbiter just came over: beep, buzz, open the mic
+      if (!S.sound) chime(lk.orbiter, true, true);
+      if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate([220, 110, 220]);
+      toast(`${lk.orbiter} is overhead`, COM.mic ? "Mic is open. Hold the talk button to send a voice message." : "Link open: queued messages are going now.", ORB[lk.orbiter].c);
+      openMic();
+    }
+    if (!lk && was) { closeMic(); toast("Link closed", "Messages now wait for the next pass.", "#93B7E6"); }
+    if (lk) {
+      COM.q.filter(x => x.status === "queued").forEach(m => uplink(m, lk));                                  // leave as soon as the link opens
+      [...COM.srv.values()].filter(m => m.to === "astronaut" && !m.delivered && Date.now() / 1000 + COM.off >= m.arrive).forEach(deliverIncoming);   // replies come down
+    }
+    if (now - COM.polled > 2000) { COM.polled = now; pollComms(); }
+    renderMsgs(lk);
+  }
+  /* ---------- walkie-talkie: the mic only opens while a relay orbiter is overhead ---------- */
+  COM.ptt = { stream: null, mr: null, chunks: [], t0: 0, t: 0 };
+  const blobB64 = blob => new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+  async function openMic() {
+    if (!COM.mic || COM.ptt.stream) return;
+    try { COM.ptt.stream = await navigator.mediaDevices.getUserMedia({ audio: true }); COM.ptt.denied = false; }
+    catch (e) { COM.ptt.denied = true; toast("Microphone blocked", "Allow the microphone for this page, then hold the talk button.", "#F0616B"); }
+    if (COM.ptt.stream && !linkNow()) closeMic();                              // the link closed while the permission box was open
+    renderTalk();
+  }
+  function closeMic() {
+    if (COM.ptt.mr && COM.ptt.mr.state === "recording") COM.ptt.mr.stop();
+    if (COM.ptt.stream) { COM.ptt.stream.getTracks().forEach(t => t.stop()); COM.ptt.stream = null; }
+    renderTalk();
+  }
+  async function pttDown(e) {
+    if (e && e.cancelable) e.preventDefault();
+    if (!linkNow() || COM.ptt.mr) return;
+    if (!COM.ptt.stream) await openMic();
+    if (!COM.ptt.stream || COM.ptt.mr) return;
+    const mr = new MediaRecorder(COM.ptt.stream); COM.ptt.mr = mr; COM.ptt.chunks = []; COM.ptt.t0 = Date.now();
+    mr.ondataavailable = ev => COM.ptt.chunks.push(ev.data);
+    mr.onstop = async () => {
+      const secs = (Date.now() - COM.ptt.t0) / 1000, blob = new Blob(COM.ptt.chunks, { type: mr.mimeType || "audio/webm" });
+      COM.ptt.mr = null; clearTimeout(COM.ptt.t); renderTalk();
+      if (secs < 0.4) return toast("Too short", "Hold the button the whole time you talk.", "#F5B85B");
+      if (blob.size > 1.4e6) return toast("Too long", "Keep it under about 30 seconds.", "#F0616B");
+      queueMsg({ kind: "voice", audio_b64: await blobB64(blob), mime: blob.type, secs });       // link is open, so this leaves at once
+    };
+    mr.start(); blip(true); renderTalk();
+    COM.ptt.t = setTimeout(() => mr.state === "recording" && mr.stop(), 30000);
+  }
+  function pttUp() { if (COM.ptt.mr && COM.ptt.mr.state === "recording") COM.ptt.mr.stop(); }
+  function renderTalk() {
+    const b = $("talkBtn"), lk = linkNow(), rec = !!(COM.ptt.mr && COM.ptt.mr.state === "recording"), dest = COM.dest === "earth" ? "Earth" : "the pod";
+    b.classList.toggle("ready", !!lk && !rec && COM.mic); b.classList.toggle("live", rec);
+    if (!COM.mic) { b.disabled = true; $("talkMain").textContent = "Mic unavailable"; $("talkSub").textContent = "Needs https or localhost (see below)"; return; }
+    b.disabled = !lk;
+    $("talkMain").textContent = rec ? "Release to send" : lk ? "Hold to transmit" : "Link closed";
+    $("talkSub").textContent = rec ? `Sending to ${dest} via ${lk ? lk.orbiter : "the orbiter"}` : lk ? `${lk.orbiter} overhead · mic open · ${fDur(lk.end - comTime())} left` : `No relay orbiter overhead · ${nextPassText()}`;
+  }
+  const talk = $("talkBtn");
+  talk.addEventListener("pointerdown", pttDown);
+  ["pointerup", "pointercancel", "pointerleave"].forEach(ev => talk.addEventListener(ev, pttUp));
+  talk.addEventListener("contextmenu", e => e.preventDefault());
+  addEventListener("keydown", e => { if (e.code === "Space" && !e.repeat && !/^(input|textarea|select|button)$/i.test(document.activeElement.tagName)) { e.preventDefault(); pttDown(); } });
+  addEventListener("keyup", e => { if (e.code === "Space") pttUp(); });
+
+  const msgLabel = m => m.kind === "voice" ? `Voice message${m.secs ? ` (${Math.round(m.secs)} s)` : ""}` : (m.text || "");
+  function renderMsgs(lk = linkNow()) {
+    const nowS = Date.now() / 1000 + COM.off, who = r => r === "earth" ? "Earth" : r === "pod" ? "the pod" : "you";
+    const bar = $("linkBar"); bar.className = "linkbar " + (lk ? "open" : "closed");
+    bar.innerHTML = lk ? `<i class="dot" style="background:${ORB[lk.orbiter].c}"></i><b>${lk.orbiter} overhead</b><span>${lk.practice ? "Test link" : `Link open · ${fDur(lk.end - comTime())} left`}</span>`
+      : `<i class="dot"></i><b>Link closed</b><span>${nextPassText()}</span>`;
+    const c = COM.cfg;
+    if (c) $("delayNote").textContent = `Earth is ${c.effective_min.toFixed(1)} light-minutes away (${c.override_min ? "demo setting" : c.source}). At ×${S.speed} the trip takes ${Math.max(1, Math.round(c.effective_min * 60 / S.speed))} s.`;
+    $("delayDemo").setAttribute("aria-pressed", !!(c && c.override_min));
+    const rows = COM.q.map(m => `<div class="msg out wait"><b>You to ${who(m.to)}</b><span>${msgLabel(m)}</span><em>Waiting for a relay pass · ${nextPassText()}</em><button type="button" data-cancel="${m.lid}" title="Cancel">×</button></div>`);
+    [...COM.srv.values()].sort((a, b) => b.id - a.id).forEach(m => {
+      const rem = Math.max(0, m.arrive - nowS), left = `${mmss(rem * m.speed)} of light time left (${Math.ceil(rem)} s real)`;
+      if (m.sender === "astronaut") rows.push(`<div class="msg out ${m.status === "in_flight" ? "fly" : "ok"}"><b>You to ${who(m.to)}${m.via ? ` via ${m.via}` : ""}</b><span>${msgLabel(m)}</span><em>${m.status === "in_flight" ? "On its way · " + left : "✓ Arrived"}</em></div>`);
+      else {
+        const st = m.delivered ? "delivered" : nowS >= m.arrive ? "at_orbiter" : "in_flight";
+        rows.push(`<div class="msg in ${st}"><b>From ${who(m.sender)}</b><span>${st === "delivered" ? msgLabel(m) : "Incoming message"}</span><em>${st === "in_flight" ? "Reply in flight to Mars orbit · " + left : st === "at_orbiter" ? "Waiting at the orbiter. It comes down on the next pass · " + nextPassText() : "✓ Received"}</em>${st === "delivered" ? `<button type="button" data-play="${m.id}" title="Play again">▶</button>` : ""}</div>`);
+      }
+    });
+    renderTalk();
+    $("msgs").innerHTML = rows.join("") || `<p class="hint">Messages you send leave when a relay orbiter is overhead. Replies from Earth wait at the orbiter until your next pass.</p>`;
+  }
+  $("msgs").addEventListener("click", e => {
+    const x = e.target.closest("[data-cancel]"), p = e.target.closest("[data-play]");
+    if (x) { COM.q = COM.q.filter(m => m.lid !== +x.dataset.cancel); renderMsgs(); }
+    if (p) { const v = COM.srv.get(+p.dataset.play); if (v) playMsg(v); }
+  });
+  $("quick").innerHTML = QUICK.map(t => `<button type="button" class="chip">${t}</button>`).join("");
+  $("quick").addEventListener("click", e => { const b = e.target.closest("button"); if (b) queueMsg({ kind: "text", text: b.textContent }); });
+  const sendTyped = () => { const t = $("msgText").value.trim(); if (!t) return; $("msgText").value = ""; queueMsg({ kind: "text", text: t }); };
+  $("msgSend").onclick = sendTyped; $("msgText").addEventListener("keydown", e => { if (e.key === "Enter") sendTyped(); });
+  document.querySelectorAll(".dest").forEach(b => b.onclick = () => { COM.dest = b.dataset.d; document.querySelectorAll(".dest").forEach(x => x.setAttribute("aria-pressed", x === b)); });
+  $("practice").onclick = e => {
+    COM.practice = !COM.practice; e.currentTarget.setAttribute("aria-pressed", COM.practice); $("practiceNote").hidden = !COM.practice;
+    audio().resume(); commsTick(true);
+  };
+  $("delayDemo").onclick = async () => {
+    const on = !(COM.cfg && COM.cfg.override_min);
+    try { COM.cfg = await (await fetch("/api/comms/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ override_min: on ? 7 : null, set_override: true }) })).json(); } catch (e) { /* ignore */ }
+    renderMsgs();
+  };
+  if (!COM.mic) {
+    $("recBtn").hidden = true; $("micNote").hidden = false;
+    $("micNote").textContent = window.isSecureContext ? "This browser cannot record audio. Use the quick buttons or type a message: it is read aloud on arrival."
+      : "The microphone only works over https. Open this page at https://" + location.hostname + ":8443 (accept the one-time warning), or use the quick buttons and typed messages meanwhile.";
+  }
+  $("recBtn").onclick = async () => {
+    if (COM.rec) { COM.rec.stop(); return; }
+    let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { return toast("Microphone blocked", "Allow the microphone for this page to record.", "#F0616B"); }
+    const mr = new MediaRecorder(stream), chunks = [], t0 = Date.now();
+    mr.ondataavailable = e => chunks.push(e.data);
+    mr.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop()); clearTimeout(COM.recT); COM.rec = null; $("recBtn").classList.remove("on"); $("recBtn").textContent = "Record, send on next pass";
+      const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+      if (blob.size > 1.4e6) return toast("Too long", "Keep voice messages under about 30 seconds.", "#F0616B");
+      const b64 = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+      queueMsg({ kind: "voice", audio_b64: b64, mime: blob.type, secs: (Date.now() - t0) / 1000 });
+    };
+    mr.start(); COM.rec = mr; $("recBtn").classList.add("on"); $("recBtn").textContent = "Stop and queue"; COM.recT = setTimeout(() => mr.state === "recording" && mr.stop(), 30000);
+  };
+  renderMsgs();
+
   /* ---------- phone layout ---------- */
   const mq = matchMedia("(max-width: 980px)");
   const sheet = { cur: "" };
   function openSheet(p) {
+    if (!p && !mq.matches) p = sheet.cur || "mission";                        // on desktop one tab is always showing
     sheet.cur = p || ""; document.body.dataset.sheet = sheet.cur;
     document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.p === sheet.cur));
     if (p) requestAnimationFrame(() => { drawTimeline(); drawProfile(); });
   }
   function closeSheet() { openSheet(""); }
-  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => openSheet(sheet.cur === b.dataset.p ? "" : b.dataset.p));
+  document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => openSheet(mq.matches && sheet.cur === b.dataset.p ? "" : b.dataset.p));
   document.querySelectorAll(".grab").forEach(g => g.onclick = closeSheet);
   $("fab").onclick = () => $("walkBtn").click();
-  function layoutPhone() {
-    if (mq.matches) { $("slotTimeline").append($("boxTimeline")); $("slotProfile").append($("boxProfile")); }
-    else { $("strip").append($("boxTimeline"), $("boxProfile")); closeSheet(); }
-    map.invalidateSize(); drawTimeline(); drawProfile();
-  }
+  function layoutPhone() { if (mq.matches) closeSheet(); else openSheet(sheet.cur || "mission"); map.invalidateSize(); drawTimeline(); drawProfile(); }
   mq.addEventListener("change", layoutPhone);
+  if ($("tlDetails")) $("tlDetails").addEventListener("toggle", () => requestAnimationFrame(drawTimeline));
+  $("tbNow").onclick = () => $("departNow").click(); $("tbBest").onclick = () => $("departBest").click();
+  const showPanel = open => { document.body.classList.toggle("nopanel", !open); $("expand").hidden = open; map.invalidateSize(); T3.dirty = true; requestAnimationFrame(() => { drawTimeline(); drawProfile(); }); };
+  $("collapse").onclick = () => showPanel(false); $("expand").onclick = () => showPanel(true);
+  $("zin").onclick = () => S.view === "3d" ? T3.api && T3.api.zoom(0.75) : map.zoomIn(0.5);
+  $("zout").onclick = () => S.view === "3d" ? T3.api && T3.api.zoom(1.33) : map.zoomOut(0.5);
+  $("zhome").onclick = () => S.view === "3d" ? T3.api && T3.api.reset() : (SITE === "jezero" ? map.setView(ll(HAB[0] - 1800, HAB[1] + 900), -2.5) : map.fitBounds(bounds, { padding: [-120, -120] }));
   const coach = $("coach");
   function dismissCoach() { coach.hidden = true; try { localStorage.setItem("mw_coach", "1"); } catch (e) { /* private mode */ } }
   $("coachOk").onclick = dismissCoach;
   try { coach.hidden = !!localStorage.getItem("mw_coach") || SITE !== "jezero"; } catch (e) { coach.hidden = false; }
-  if (mq.matches) $("stopHint").textContent = "Tap the map to add a science stop. Drag a stop to move it.";
+  if (mq.matches) $("stopHint").textContent = "Select a point on the map to add a waypoint. Drag a marker to move it.";
 
   applyStyle("safe", false);
   layoutPhone();

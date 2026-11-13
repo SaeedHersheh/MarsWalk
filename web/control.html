@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0c1217">
+<link rel="icon" type="image/png" href="img/brand/logo-64.png">
+<title>Marswalk · Mission control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
+<style>
+:root { --space: #0b1116; --panel: #0f171d; --card: #141e26; --line: rgba(168, 201, 215, 0.14); --ink: #FFFFFF; --text: #d0e2ea; --dim: #a8c3d1; --faint: #6f8a9a;
+  --dust: #a8c9d7; --dusk: #a8c9d7; --blue: #a8c9d7; --nasa-blue: rgba(168, 201, 215, 0.17); --red: #f2674f; --ok: #4fd1a5; --bad: #ff6a5a; --warn: #ffb84d;
+  --f-display: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif; --f-body: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { background: var(--space); color: var(--text); font: 15px/1.5 var(--f-body); padding: 0 0 env(safe-area-inset-bottom); }
+button { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: rgba(5, 6, 10, 0.94); backdrop-filter: blur(10px); z-index: 5; }
+.brand { display: grid; line-height: 1; }
+.brand b { font: 800 1.45rem var(--f-display); letter-spacing: 0.14em; text-transform: uppercase; }
+.logo { width: 46px; height: 46px; border-radius: 50%; box-shadow: 0 0 0 2px var(--line); }
+.brandrow { display: flex; align-items: center; gap: 12px; }
+.brand span { font-size: 0.8rem; color: var(--dim); letter-spacing: 0.06em; margin-top: 5px; font-weight: 500; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 8px 18px; cursor: pointer; font: 600 0.95rem var(--f-display); color: var(--dim); }
+.seg button[aria-pressed="true"] { background: var(--dust); color: #0c1217; }
+.stat { display: grid; line-height: 1.2; padding: 7px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.stat span { font-size: 0.78rem; color: var(--faint); }
+.stat b { font: 500 1rem var(--f-mono); }
+.spacer { flex: 1; }
+
+main { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; padding: 16px 18px 40px; max-width: 1280px; margin: 0 auto; }
+@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+section { display: grid; gap: 12px; align-content: start; }
+h2 { margin: 0; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dust); }
+.chip, .go { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 8px 14px; cursor: pointer; font-size: 0.88rem; }
+.chip:hover { border-color: var(--faint); }
+.chip[aria-pressed="true"] { border-color: var(--dust); color: #fff; background: var(--nasa-blue); }
+.go { border-radius: 12px; border: 0; background: var(--blue); color: #0c1217; font: 700 1rem var(--f-display); padding: 13px 20px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18); }
+.go:disabled { opacity: 0.4; cursor: default; }
+.go.rec { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.go.rec.on { background: var(--red); color: #fff; border-color: var(--red); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { filter: brightness(1.25); } }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hint { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--dim); }
+
+.start { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--dust); border-radius: 16px; background: rgba(168, 201, 215, 0.12); }
+.start b { font: 700 1.3rem var(--f-display); color: #fff; }
+.start p { margin: 0; color: var(--dim); line-height: 1.5; }
+
+.route { display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; gap: 10px; padding: 18px 14px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); font-size: 0.82rem; font-weight: 600; color: var(--dim); }
+.route .node { display: grid; justify-items: center; gap: 4px; }
+.route .node i { width: 12px; height: 12px; border-radius: 50%; background: var(--dusk); }
+.route .node.me i { background: var(--ok); box-shadow: 0 0 12px var(--ok); }
+.route .node.mars i { background: #d97b4a; }
+.route .line { position: relative; height: 2px; background: var(--line); }
+.route .line.long { background: repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 12px); }
+.route .line em { position: absolute; top: -20px; left: 0; right: 0; text-align: center; font-style: normal; color: var(--dust); white-space: nowrap; font-weight: 500; }
+
+.feed { display: grid; gap: 10px; }
+.card { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-left-width: 4px; border-radius: 14px; background: var(--panel); }
+.card.in { border-left-color: var(--dusk); }
+.card.in.arrived { border-left-color: var(--ok); }
+.card.out { border-left-color: var(--red); }
+.card h3 { margin: 0; display: flex; justify-content: space-between; gap: 10px; font-size: 0.8rem; font-weight: 600; color: var(--dim); }
+.card .body { font-size: 1.05rem; line-height: 1.4; overflow-wrap: anywhere; }
+.card audio { width: 100%; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--dusk), var(--ok)); transition: width 0.4s linear; }
+.cd { font: 500 0.9rem var(--f-mono); color: var(--dust); }
+.small { font-size: 0.82rem; color: var(--dim); }
+.empty { padding: 26px 14px; text-align: center; color: var(--faint); border: 1px dashed var(--line); border-radius: 10px; line-height: 1.5; }
+
+.compose { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.typed { display: flex; gap: 6px; }
+.typed input { flex: 1; min-width: 0; background: #0a1016; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); padding: 9px 14px; font: 16px var(--f-body); }
+.cfg { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+
+/* flat, instrument-style overrides */
+.chip, .go, .seg, .seg button, .stat, .card, .compose, .cfg, .start, .route, .typed input, .empty { border-radius: 4px; }
+.go { box-shadow: none; border: 1px solid var(--dust); font-size: 0.95rem; font-weight: 600; }
+.brand b { font-size: 1.05rem; letter-spacing: 0.09em; }
+.brand span { font-size: 0.78rem; }
+h2 { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.09em; color: var(--faint); padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.card { border-left-width: 3px; border-radius: 0 4px 4px 0; }
+.logo { width: 32px; height: 32px; box-shadow: none; }
+header { padding: 10px 18px; }
+.chip[aria-pressed="true"] { background: rgba(168, 201, 215, 0.14); border-color: var(--dust); color: #fff; }
+.seg { border-radius: 4px; overflow: hidden; }
+.seg button[aria-pressed="true"] { background: var(--dust); color: #0b1116; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brandrow"><img class="logo" src="img/brand/logo-96.png" alt="AirAwareNetwork" width="46" height="46"><div class="brand"><b>Marswalk</b><span id="roleName">Earth mission control</span></div></div>
+  <div class="seg" role="group" aria-label="Which station is this?">
+    <button type="button" data-r="earth" aria-pressed="true">Earth</button>
+    <button type="button" data-r="pod" aria-pressed="false">The pod</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="stat"><span>Light time to Mars</span><b id="lt">…</b></div>
+  <div class="stat"><span>Demo speed</span><b id="sp">…</b></div>
+  <div class="stat"><span>Signal</span><b id="sig">…</b></div>
+</header>
+
+<main>
+  <section>
+    <div class="start" id="start">
+      <b>Start listening</b>
+      <p>Browsers only play sound after a click. Press the button once and incoming voice messages will play on their own the moment they arrive. Typed messages are read aloud.</p>
+      <button type="button" class="go" id="startBtn">Start listening</button>
+    </div>
+
+    <div class="route" id="route" aria-label="Signal path">
+      <div class="node me"><i></i>Walker</div><div class="line"><em>UHF</em></div>
+      <div class="node"><i></i>Orbiter</div><div class="line long"><em id="routeLt">light time</em></div>
+      <div class="node mars" id="endNode"><i></i>Earth</div>
+    </div>
+
+    <h2>From the astronaut</h2>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <section>
+    <h2>Reply to the astronaut</h2>
+    <div class="compose">
+      <button type="button" class="go rec" id="recBtn">● Record voice reply</button>
+      <p class="hint" id="micNote" hidden></p>
+      <div class="chips" id="quick"></div>
+      <div class="typed"><input id="msgText" type="text" maxlength="300" placeholder="Or type a reply" autocomplete="off"><button type="button" class="chip" id="msgSend">Send</button></div>
+      <p class="hint" id="replyNote"></p>
+    </div>
+
+    <h2>Signal delay</h2>
+    <div class="cfg">
+      <div class="chips" id="delayChips">
+        <button type="button" class="chip" data-m="0" aria-pressed="true">Real</button>
+        <button type="button" class="chip" data-m="7" aria-pressed="false">7 min</button>
+        <button type="button" class="chip" data-m="3" aria-pressed="false">3 min (closest)</button>
+        <button type="button" class="chip" data-m="22" aria-pressed="false">22 min (farthest)</button>
+      </div>
+      <p class="hint" id="cfgNote"></p>
+      <div class="chips"><button type="button" class="chip" id="clearBtn">Clear all messages</button></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const pad = n => String(n).padStart(2, "0");
+  const mmss = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? `${Math.floor(s / 3600)}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}` : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+  const S = { role: "earth", listening: false, off: 0, cfg: null, msgs: new Map(), played: new Set(), rec: null };
+  try { const r = localStorage.getItem("mw_role"); if (r === "earth" || r === "pod") S.role = r; } catch (e) { /* private mode */ }
+  const mic = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder && window.isSecureContext);
+  const QUICK = ["Copy, continue to the next stop", "Return to the pod now", "Hold position, standing by", "Say again, you were cut off"];
+  const who = r => r === "earth" ? "Earth" : r === "pod" ? "The pod" : "The astronaut";
+
+  function setRole(r) {
+    S.role = r; try { localStorage.setItem("mw_role", r); } catch (e) { /* ignore */ }
+    document.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.r === r));
+    $("roleName").textContent = r === "earth" ? "Earth mission control" : "Pod · habitat station";
+    $("endNode").lastChild.textContent = r === "earth" ? "Earth" : "Pod";
+    S.msgs.clear(); S.after = 0; S.played.clear(); poll();
+  }
+  document.querySelectorAll(".seg button").forEach(b => b.onclick = () => setRole(b.dataset.r));
+
+  $("startBtn").onclick = () => { S.listening = true; $("start").hidden = true; const u = new SpeechSynthesisUtterance("Listening."); u.volume = 0.3; window.speechSynthesis && speechSynthesis.speak(u); render(); };
+
+  async function poll() {
+    try {
+      const j = await (await fetch(`/api/comms/inbox?role=${S.role}`)).json();
+      S.off = j.now - Date.now() / 1000; S.cfg = j.config;
+      for (const m of j.messages) S.msgs.set(m.id, { ...S.msgs.get(m.id), ...m });
+      $("sig").textContent = "linked"; $("sig").style.color = "var(--ok)";
+    } catch (e) { $("sig").textContent = "no server"; $("sig").style.color = "var(--bad)"; }
+  }
+
+  function play(m) {
+    if (m.has_audio) new Audio(`/api/comms/audio/${m.id}?role=${S.role}`).play().catch(() => {});
+    else if (m.text && window.speechSynthesis) { const u = new SpeechSynthesisUtterance(m.text); u.rate = 0.95; speechSynthesis.speak(u); }
+  }
+
+  function render() {
+    const now = Date.now() / 1000 + S.off, c = S.cfg;
+    if (c) {
+      $("lt").textContent = S.role === "earth" ? `${c.effective_min.toFixed(1)} min${c.override_min ? " (demo)" : ""}` : "none (same ground)";
+      $("sp").textContent = `×${c.speed}`;
+      $("routeLt").textContent = S.role === "earth" ? `${c.effective_min.toFixed(1)} light-min` : "local";
+      $("cfgNote").textContent = `Real value from ${c.source}: ${c.real_min ? c.real_min.toFixed(1) : "?"} min one way, right now. It swings between about 3 and 22 minutes over two years. The astronaut app sets the demo speed, which compresses this delay: at ×${c.speed} it takes ${Math.max(1, Math.round(c.effective_min * 60 / c.speed))} s.`;
+      document.querySelectorAll("#delayChips .chip").forEach(b => b.setAttribute("aria-pressed", +b.dataset.m === (c.override_min || 0)));
+      $("replyNote").textContent = S.role === "earth"
+        ? `A reply takes ${c.effective_min.toFixed(1)} light-minutes to reach Mars orbit, then waits there until the astronaut's next relay pass.`
+        : "A reply from the pod has no light delay, but still waits for the astronaut's next relay pass.";
+    }
+    const list = [...S.msgs.values()].sort((a, b) => b.id - a.id), html = [];
+    for (const m of list) {
+      const rem = Math.max(0, m.arrive - now), total = Math.max(0.5, m.arrive - m.sent), pct = Math.min(100, (1 - rem / total) * 100);
+      if (!m.mine) {
+        const arrived = m.status === "arrived";
+        if (arrived && S.listening && !S.played.has(m.id)) { S.played.add(m.id); play(m); }
+        if (arrived && !S.listening) S.played.add(m.id);
+        html.push(`<div class="card in ${arrived ? "arrived" : ""}"><h3><span>From the astronaut${m.via ? ` · relayed by ${m.via}` : ""}</span><span>${arrived ? "received" : "signal in flight"}</span></h3>` +
+          (arrived ? `<div class="body">${m.has_audio ? `<audio controls src="/api/comms/audio/${m.id}?role=${S.role}"></audio>` : ""}${m.text ? m.text : (m.has_audio ? "" : "(voice message)")}</div>`
+            : `<div class="bar"><i style="width:${pct}%"></i></div><div class="cd">arrives in ${mmss(rem * m.speed)} of light time · ${Math.ceil(rem)} s real</div><div class="small">${m.kind === "voice" ? "Voice message" : "Text message"} · content hidden until it arrives</div>`) + `</div>`);
+      } else {
+        const st = m.delivered ? "Delivered to the astronaut" : m.status === "in_flight" ? `On its way to Mars orbit · ${mmss(rem * m.speed)} of light time left (${Math.ceil(rem)} s real)` : "Waiting at the orbiter for the astronaut's next pass";
+        html.push(`<div class="card out"><h3><span>Your reply</span><span>${m.delivered ? "delivered" : m.status === "in_flight" ? "in flight" : "waiting for a pass"}</span></h3><div class="body">${m.kind === "voice" ? "Voice message" : m.text}</div>` +
+          (m.status === "in_flight" ? `<div class="bar"><i style="width:${pct}%"></i></div>` : "") + `<div class="small">${st}</div></div>`);
+      }
+    }
+    $("feed").innerHTML = html.join("") || `<div class="empty">Nothing yet.<br>Messages appear here once the astronaut sends one over a relay orbiter. Content stays hidden until the signal has crossed the light delay.</div>`;
+  }
+
+  async function send(body) {
+    const r = await fetch("/api/comms/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sender: S.role, to: "astronaut", speed: S.cfg ? S.cfg.speed : null, ...body }) });
+    if (r.ok) poll(); else alert((await r.json()).detail || "Could not send");
+  }
+  $("quick").innerHTML = QUICK.map(t => `<button type="button" class="chip">${t}</button>`).join("");
+  $("quick").onclick = e => { const b = e.target.closest("button"); if (b) send({ kind: "text", text: b.textContent }); };
+  const sendTyped = () => { const t = $("msgText").value.trim(); if (t) { $("msgText").value = ""; send({ kind: "text", text: t }); } };
+  $("msgSend").onclick = sendTyped; $("msgText").addEventListener("keydown", e => { if (e.key === "Enter") sendTyped(); });
+  document.querySelectorAll("#delayChips .chip").forEach(b => b.onclick = async () => {
+    await fetch("/api/comms/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ override_min: +b.dataset.m || null, set_override: true }) }); poll();
+  });
+  $("clearBtn").onclick = async () => { await fetch("/api/comms/clear", { method: "POST" }); S.msgs.clear(); S.played.clear(); render(); };
+
+  if (!mic) { $("recBtn").hidden = true; $("micNote").hidden = false; $("micNote").textContent = window.isSecureContext ? "This browser cannot record audio." : "Voice recording needs https or localhost. Use the buttons or type a reply: it is read aloud on the walker's side."; }
+  $("recBtn").onclick = async () => {
+    if (S.rec) { S.rec.stop(); return; }
+    let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { return alert("Microphone blocked. Allow it for this page."); }
+    const mr = new MediaRecorder(stream), chunks = [], t0 = Date.now();
+    mr.ondataavailable = e => chunks.push(e.data);
+    mr.onstop = async () => {
+      stream.getTracks().forEach(t => t.stop()); clearTimeout(S.recT); S.rec = null; $("recBtn").classList.remove("on"); $("recBtn").textContent = "● Record voice reply";
+      const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+      if (blob.size > 1.4e6) return alert("Too long. Keep it under about 30 seconds.");
+      const b64 = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+      send({ kind: "voice", audio_b64: b64, mime: blob.type, secs: (Date.now() - t0) / 1000 });
+    };
+    mr.start(); S.rec = mr; $("recBtn").classList.add("on"); $("recBtn").textContent = "■ Stop and send"; S.recT = setTimeout(() => mr.state === "recording" && mr.stop(), 30000);
+  };
+
+  setRole(S.role);
+  setInterval(poll, 1000); setInterval(render, 250);
+})();
+</script>
+</body>
+</html>

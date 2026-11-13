@@ -95,3 +95,13 @@ Three styles set the weights: Safest (slope weight 1, limit 18 degrees), Balance
 ## Phones
 
 The planner is built phone first below 980 px: the map fills the screen, the plan, layers and relay panels are bottom sheets behind a tab bar, and Start walk is a floating button. Above 980 px it is the desktop layout.
+
+## Radio messages
+
+The Relay sheet has a Radio messages section. Record a voice message or type one and choose Earth or the pod. It waits until a relay orbiter is overhead and the link is open, then leaves. Earth gets it after the real one-way light time (from Horizons, 11.1 min on 12 Nov 2026) divided by the demo speed (x30, x120, x600); the pod gets it in about a second. Replies from Earth cross the light delay, wait at the orbiter, and come down on the walker's next pass.
+
+Open http://localhost:8077/control.html on the laptop (or any device) as Earth mission control or as the pod. Press Start listening once so the browser allows sound. Content stays hidden until the signal has really arrived.
+
+Walkie-talkie: a beep and vibration tell you when a relay orbiter comes overhead, and only then does the mic open. Hold the big talk button (or the space bar) while you speak; it sends when you let go. Outside a pass the button is locked; you can still record a message to send on the next pass.
+
+The microphone needs https or localhost. For a phone, run `serve_https.cmd` (https on port 8443), open `https://<PC Wi-Fi address>:8443` on the phone and the laptop (both must use the same server), and accept the one-time certificate warning. The certificate in `certs/` was made for 192.168.1.156; if the PC gets a new address, make a new one (in Git Bash): `openssl req -x509 -newkey rsa:2048 -nodes -days 365 -keyout certs/key.pem -out certs/cert.pem -subj "/CN=marswalk.local" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:<new address>"`.
