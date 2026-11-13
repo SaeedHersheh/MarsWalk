@@ -581,9 +581,9 @@
       toast("Waypoint reached", `${walk.rest.length} to go.`, "#6EE7A8"); walk.lastRe = 0;
     }
     // newest best path: whenever the estimate has left the line, plan again from the estimate
-    if (!walk.busy && now - (walk.lastRe || 0) > 6000 && walk.rest.length && offRoute(r, bx, by) > Math.max(70, 3 * DX)) {
+    if (con && walk.fixKey === con.orbiter + con.start && !walk.busy && now - (walk.lastRe || 0) > 6000 && walk.rest.length && offRoute(r, bx, by) > Math.max(70, 3 * DX)) {
       walk.lastRe = now;
-      reroute([bx, by], walk.rest, con ? `New best route from your relay-fixed position (±${Math.round(rad)} m).` : `New best route from your dead-reckoned position (±${Math.round(rad)} m, no satellite).`);
+      reroute([bx, by], walk.rest, `${con.orbiter} fix: new best route from your position (±${Math.round(rad)} m).`);
     }
     me.setLatLng(ll(bx, by)); unc.setLatLng(ll(bx, by)); unc.setRadius(rad); ghost.setLatLng(ll(walk.mx, walk.my));
     unc.setStyle({ color: con ? "#6EE7A8" : "#93B7E6", fillColor: con ? "#6EE7A8" : "#93B7E6" });
