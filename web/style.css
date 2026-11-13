@@ -383,3 +383,18 @@ body.driving .maplegend { display: none; }
 body.walking #tbBest { display: none; }
 .tclock b { white-space: nowrap; }
 @media (max-width: 980px) { .tclock b { font-size: 14px; } .tctl .seg button { padding: 6px 9px; font-size: 12.5px; } .timebar { gap: 10px; } }
+
+/* walk HUD: skip the wait for the next satellite */
+.hudskip { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 8px 14px 8px 10px; border: 1px solid var(--blue-hi); border-radius: 999px; background: var(--accent-dim); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.hudskip:hover { background: var(--blue); }
+.hudskip svg { width: 16px; height: 16px; }
+@media (max-width: 980px) { .hudskip { padding: 8px; } .hudskip span { display: none; } }
+
+/* radio: the talk button already says whether the link is open, so the extra status bar is gone */
+.linkbar { display: none; }
+
+/* first visit: one line that says what to do */
+.hintpill { position: fixed; z-index: 630; left: calc(var(--sidew) + (100vw - var(--sidew)) / 2); bottom: calc(var(--tbh) + 36px); transform: translateX(-50%); padding: 9px 18px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line-2); backdrop-filter: blur(10px); font-size: 13.5px; color: var(--text); white-space: nowrap; pointer-events: none; }
+body.walking .hintpill { display: none; }
+@media (max-width: 980px) { .hintpill { left: 50%; bottom: calc(var(--nav) + var(--tbh) + 24px + env(safe-area-inset-bottom)); font-size: 12.5px; padding: 8px 14px; max-width: calc(100vw - 24px); white-space: normal; text-align: center; } body[data-sheet]:not([data-sheet=""]) .hintpill { display: none; } }
+.tools3d .chip { padding: 8px 14px; font-size: 13px; }

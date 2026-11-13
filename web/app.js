@@ -442,16 +442,16 @@
   const ghost = L.marker(ll(...HAB), { icon: L.divIcon({ className: "", html: '<div class="ghost"></div>', iconSize: [10, 10], iconAnchor: [5, 5] }), interactive: false, zIndexOffset: 800 }).bindTooltip("true position", { permanent: false });
   const unc = L.circle(ll(...HAB), { radius: 3, color: "#93B7E6", weight: 1.5, fillColor: "#93B7E6", fillOpacity: 0.16, interactive: false });
   function startWalk() {
-    if (!S.route) return;
+    if (!S.route || S.route.x.length < 2) return;
     Object.assign(walk, { on: true, route: S.route, t0: departT(), simT: departT(), odo: 0, odoFix: 0, theta: Math.random() * 6.28,
-      drift: [0, 0], dAlong: 0, _i: 0, follow: true, busy: false, hzOn: false, zNow: S.route.z[0], inContact: false, alerted: new Set(), dose: 0, lastSun: 0, last: performance.now(), dwellSaid: -1 });
-    Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 3, rest: [], hd: 0, still: true, keys: {}, lastRe: 0 }); syncDrive();
+      drift: [0, 0], dAlong: 0, _i: 0, ri: 0, lock: "", lockKey: "", px: null, follow: true, busy: false, hzOn: false, zNow: S.route.z[0], inContact: false, alerted: new Set(), dose: 0, lastSun: 0, last: performance.now(), dwellSaid: -1 });
+    Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 1.5, rest: [], hd: 0, still: true, keys: {}, lastRe: 0, ri: 0, lock: "", lockKey: "", loose: false }); T3.pathHead = null; syncDrive();
     me.addTo(map); unc.addTo(map); if (S.truth) ghost.addTo(map);
     walk._painted = -1;
     if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
     $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet();
     $("depart").disabled = true; drawStops();
-    toast("EVA started", `Leaving habitat ${fUTC(walk.t0)} UTC. No GPS: dead reckoning until the next relay pass.`, "#8ab8ff");
+    { const np = DB.passes.find(q => q.end > walk.simT); toast("Walk started", np && np.start <= walk.simT ? `${np.orbiter} is overhead: it will fix your position.` : np ? `There is no GPS on Mars. The suit estimates its own position until ${np.orbiter} rises in ${fDur(np.start - walk.simT)}.` : "There is no GPS on Mars. The suit estimates its own position.", "#8ab8ff"); }
     audio().resume();                                  // the Start press is the tap browsers need before any beep
   }
   const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" fill="currentColor"/></svg>', STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
@@ -463,7 +463,7 @@
     document.body.classList.toggle("walking", on);
   }
   function endWalk(msg) {
-    walk.on = false; walk.manual = false; syncDrive(); [me, unc, ghost].forEach(l => map.removeLayer(l));
+    walk.on = false; walk.manual = false; T3.pathHead = null; T3.dirty = true; syncDrive(); [me, unc, ghost].forEach(l => map.removeLayer(l));
     $("hud").hidden = true; $("homeBtn").disabled = true; syncWalk();
     $("depart").disabled = false; dopplerTone(null);
     if (msg) toast("EVA complete", msg, "#6EE7A8");
@@ -477,29 +477,75 @@
     return { i, x: r.x[i - 1] + (r.x[i] - r.x[i - 1]) * k, y: r.y[i - 1] + (r.y[i] - r.y[i - 1]) * k,
       d: r.d[i - 1] + (r.d[i] - r.d[i - 1]) * k, z: r.z[i - 1] + (r.z[i] - r.z[i - 1]) * k };
   }
-  async function reroute(from, stops, why) {
-    if (walk.busy) return; walk.busy = true;
+  // opt.soft: keep walking while the planner works (used while a satellite is tracking a hand-steered astronaut). opt.quiet: no notification.
+  async function reroute(from, stops, why, color = "#6EE7A8", opt = {}) {
+    if (walk.busy || walk.planning) return; if (opt.soft) walk.planning = true; else walk.busy = true;
+    setTimeout(() => { if (walk.busy) { $("hudNext").textContent = "Planning the new route…"; $("hudSub").textContent = "The clock is paused for a moment"; } }, 0);    // say so instead of freezing
     try {
       const r = await requestRoute([from, ...stops], walk.simT);
-      r.stopsReq = [from, ...stops]; walk.route = r; walk.t0 = walk.simT; walk._i = 0; walk._painted = -1;
-      toast("Rerouted", why, "#F5B85B"); T3.dirty = true;
-    } catch (e) { toast("Reroute failed", e.message, "#F0616B"); }
-    walk.busy = false;
+      r.stopsReq = [from, ...stops]; walk.route = r; walk.t0 = walk.simT; walk._i = 0; walk._painted = -1; walk.dAlong = 0; walk.ri = 0; walk.px = null; walk.loose = false;
+      if (!opt.quiet) toast("Route updated", why, color); T3.dirty = true;
+    } catch (e) { if (!opt.soft) toast("Could not plan a route", e.message, "#F0616B"); }
+    walk.busy = false; walk.planning = false;
   }
   /* Position from the relay link. The radio measures range and range rate (Doppler) to the orbiter once a minute;
      here those numbers are simulated from the true position with noise, then solved by least squares (relayfix.js).
      Orbiter geometry is the real JPL Horizons pass. Height comes from the terrain map. */
-  function relayFix(tx, ty, gx, gy) {
-    const t = walk.simT, q = currentPass(t); if (!q || !window.RelayFix) return null;
-    const sm = q.samples; let i0 = sm.findIndex(v => v[0] >= q.start), i1 = -1;
-    for (let i = 0; i < sm.length; i++) if (sm[i][0] <= t) i1 = i;
-    if (i0 < 0 || i1 - i0 < 2) return null;
+  const FIX_STEP = 10;                                   // seconds between radio measurements during a pass
+  function relayFix(q, tx, ty, gx, gy) {
+    if (!q || !window.RelayFix || q.samples.length < 2) return null;
+    const t0 = Math.max(q.start, q.samples[0][0]), n = Math.min(120, Math.floor((walk.simT - t0) / FIX_STEP) + 1); if (n < 3) return null;
+    const t1 = t0 + Math.floor((walk.simT - t0) / FIX_STEP) * FIX_STEP, ep = RelayFix.epochs(q.samples, t1 - (n - 1) * FIX_STEP, t1, FIX_STEP);
     const u = (elevAt(tx, ty) ?? 0) - (elevAt(...HAB) ?? 0);
-    const fx = RelayFix.solve(sm, i0, i1, { e: tx - HAB[0], n: ty - HAB[1], u }, { e: gx - HAB[0], n: gy - HAB[1] });
+    const fx = RelayFix.solve(ep, { e: tx - HAB[0], n: ty - HAB[1], u }, { e: gx - HAB[0], n: gy - HAB[1] }, { gauss: RelayFix.seeded(q.start) });
     if (!fx || !isFinite(fx.e) || !isFinite(fx.sigma)) return null;
-    return { x: fx.e + HAB[0], y: fx.n + HAB[1], sigma: fx.sigma, err: fx.err, used: fx.used, orbiter: q.orbiter, key: q.orbiter + q.start, n: i1 };
+    return { x: fx.e + HAB[0], y: fx.n + HAB[1], sigma: fx.sigma, err: fx.err, used: fx.used, orbiter: q.orbiter, key: q.orbiter + q.start, n: Math.round((t1 - t0) / FIX_STEP) };
   }
-  const REACH = Math.max(12, 0.75 * DX);
+  /* The suit's own estimate (dead reckoning) is "believed"; walk.drift = believed minus true. It grows with every metre walked
+     and a relay fix pulls it back. The uncertainty ring is drawn round the believed position. */
+  function driftBy(step) {
+    if (!(step > 0)) return;
+    walk.theta += (Math.random() - 0.5) * 0.12 * Math.sqrt(step);               // the heading bias wanders slowly, so the error builds one way and then curves
+    walk.drift[0] += Math.cos(walk.theta) * 0.7 * DRIFT * step; walk.drift[1] += Math.sin(walk.theta) * 0.7 * DRIFT * step;
+  }
+  // One step of the fix while pass q is in view. Returns the correction when the estimate was just updated, else null.
+  function navFix(q, tx, ty, good) {
+    const key = q.orbiter + q.start, bx = tx + walk.drift[0], by = ty + walk.drift[1];
+    if (walk.lockKey !== key) { walk.lockKey = key; walk.lock = "search"; walk.fxN = ""; walk.lockJump = null; }
+    const fx = relayFix(q, tx, ty, bx, by);
+    if (!fx || walk.fxN === key + fx.n) return null;
+    walk.fxN = key + fx.n;
+    if (fx.sigma > good) return null;                                            // geometry still too weak: keep listening
+    const first = walk.fixKey !== key;
+    walk.drift = [fx.x - tx, fx.y - ty]; walk.sig = Math.max(1.5, 2 * fx.sigma); walk.odoFix = walk.odo; walk.fixKey = key; walk.lock = "fix";
+    return { ...fx, jump: Math.hypot(fx.x - bx, fx.y - by), first };
+  }
+  const fixMsg = (orb, f) => `${orb} measured your position to ±${Math.max(2, Math.round(2 * f.sigma))} m. The suit's own estimate was ${Math.round(f.jump)} m out. Route updated from where you really are.`;
+  function hudRelay(con) {
+    const np = DB.passes.find(q => q.start > walk.simT + 20), el = $("hudLink"), locked = con && walk.lock === "fix";
+    el.textContent = con ? (locked ? `${con.orbiter} · fix ±${Math.round(walk.sig)} m` : `${con.orbiter} · locking on`) : np ? `${np.orbiter} in ${fDur(np.start - walk.simT)}` : "none in view";
+    el.style.color = con ? "var(--ok)" : "var(--ink)";
+    $("skipPass").hidden = !!con || !np;
+  }
+  // "Wait here for the next satellite": jump the clock to just before the next pass. The astronaut stays where they are.
+  function skipToPass() {
+    if (!walk.on || walk.busy) return;
+    const np = DB.passes.find(q => q.start > walk.simT + 20); if (!np) return toast("No pass coming", "No relay pass in the next two days of data.", "#F5B85B");
+    const dt = np.start - 12 - walk.simT; if (dt <= 0) return;
+    walk.simT += dt; walk.dose += (walk.route.dose_msv / (walk.route.time_s || 1)) * dt; walk.alerted.add(np.orbiter + np.start + "a"); warm(np.start); warm(np.start + 600);
+    if (walk.manual) return toast(`Waited ${fDur(dt)}`, `${np.orbiter} rises in a few seconds. Keep walking: it will fix your position.`, ORB[np.orbiter].c);
+    walk.t0 += dt; walk.loose = true;                                // this route's contact list was worked out for the old clock: use the pass itself until the next replan
+    toast(`Waited ${fDur(dt)}`, `${np.orbiter} rises in a few seconds and will fix your position.`, ORB[np.orbiter].c);
+  }
+  // The planner works out sunlight, cold and radio cover for the time asked. Doing that ahead of a pass makes the replan at the fix take a fraction of a second.
+  const warm = t => { requestRoute([HAB, [Math.min(M.width_m - DX, HAB[0] + 3 * DX), Math.min(M.height_m - DY, HAB[1] + 3 * DY)]], t).catch(() => {}); };
+  // nearest route node at or ahead of where we last were, and how far the point is from the route
+  function nearAhead(r, x, y) {
+    const j0 = Math.min(walk.ri || 0, r.x.length - 1); let best = j0, bd = 1e18;
+    for (let j = j0; j < Math.min(r.x.length, j0 + 160); j++) { const d = (r.x[j] - x) ** 2 + (r.y[j] - y) ** 2; if (d < bd) { bd = d; best = j; } }
+    walk.ri = best; return Math.sqrt(bd);
+  }
+  const REACH = 8, REACH_HOME = 5;                       // metres: you have to walk up to the marker, or back to the airlock
   function syncDrive() {
     const on = !!(walk.on && walk.manual); document.body.classList.toggle("driving", on);
     const b = $("t3drive"), c = $("driveBtn"); [b, c].forEach(x => { if (x) { x.setAttribute("aria-pressed", String(on)); x.textContent = on ? "Autopilot" : "Take control"; } });
@@ -511,10 +557,9 @@
     const r = walk.route, q = posOn(r, walk.simT - walk.t0);
     const k = r.stop_idx.slice(1).filter(i => i <= q.i).length;
     walk.rest = r.stopsReq.slice(1 + k); if (!walk.rest.length) walk.rest = [HAB];
-    walk.mx = q.x + walk.drift[0]; walk.my = q.y + walk.drift[1];           // the true position
-    walk.drift = [-walk.drift[0], -walk.drift[1]];                          // believed = true + drift
+    walk.mx = q.x - walk.drift[0]; walk.my = q.y - walk.drift[1];           // the true position (believed = true + drift)
     const j = Math.min(r.x.length - 1, q.i + 3); walk.hd = Math.atan2(r.x[j] - q.x, r.y[j] - q.y) || 0;
-    walk.manual = true; walk.still = true; walk.blocked = 0; syncDrive(); T3.dirty = true;
+    walk.manual = true; walk.still = true; walk.blocked = 0; walk.ri = Math.max(0, q.i - 1); syncDrive(); T3.dirty = true;
     if (S.speed > 30) { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
     if (S.view === "3d") { T3.chase = true; T3.skyLook = false; $("t3follow").setAttribute("aria-pressed", "true"); }
     toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#8ab8ff");
@@ -522,8 +567,8 @@
   async function releaseControl() {
     if (!walk.manual || walk.busy) return;
     const b = [walk.mx + walk.drift[0], walk.my + walk.drift[1]];
-    await reroute(b, walk.rest, "Autopilot: route from your last known position.");
-    walk.manual = false; T3.dirty = true; walk.dAlong = 0; walk.drift = [-walk.drift[0], -walk.drift[1]]; syncDrive();
+    await reroute(b, walk.rest, "Autopilot on. Walking the best route from the suit's estimated position.");
+    walk.manual = false; T3.dirty = true; syncDrive();
   }
   const stick = { x: 0, y: 0 };
   function driveInput() {
@@ -536,7 +581,7 @@
   function manualStep(dt, now) {
     const r = walk.route, [turn, fwd] = driveInput(), simDt = dt * S.speed;
     walk.hd += turn * 1.9 * dt * (fwd < 0 ? -1 : 1);
-    const sl0 = slopeAt(walk.mx, walk.my) ?? 0;
+    const sl0 = slopeAt(walk.mx, walk.my) ?? 0, x0 = walk.mx, y0 = walk.my;
     let step = 0; walk.still = Math.abs(fwd) < 0.05;
     if (!walk.still) {
       const v = 1.25 * Math.max(0.2, 1 - sl0 / 32) * (fwd < 0 ? 0.5 : 1);                   // m/s in a suit, slower on slope
@@ -547,59 +592,57 @@
       else { walk.mx = nx; walk.my = ny; }
       if (!step) walk.still = true;
     }
-    walk.odo += step; walk.dose += (r.dose_msv / r.time_s) * simDt;
-    walk.theta += (Math.random() - 0.5) * 0.08;                                              // dead reckoning drifts 2 % of distance walked
-    walk.drift[0] += Math.cos(walk.theta) * DRIFT * step; walk.drift[1] += Math.sin(walk.theta) * DRIFT * step;
+    walk.odo += step; walk.dose += (r.dose_msv / (r.time_s || 1)) * simDt;
     const z = elevAt(walk.mx, walk.my) ?? walk.zNow; walk.zNow = z;
-    // relay: a new measurement every minute of the pass, solved together with the earlier ones
-    const q = currentPass(walk.simT); let con = null;
+    // relay: while a pass is up the radio measures every 10 s and the estimate tightens; between passes it drifts
+    const q = currentPass(walk.simT), con = q ? { orbiter: q.orbiter, start: q.start, end: q.end } : null;
+    const tracked = !!(q && walk.lock === "fix" && walk.lockKey === q.orbiter + q.start);
+    if (!tracked) driftBy(step); else walk.odoFix = walk.odo;
     if (q) {
-      con = { orbiter: q.orbiter, start: q.start, end: q.end };
-      const fx = relayFix(walk.mx, walk.my, walk.mx + walk.drift[0], walk.my + walk.drift[1]);
-      if (fx && walk.fxN !== fx.key + fx.n && fx.sigma < 60) {
-        walk.fxN = fx.key + fx.n;
-        const was = Math.hypot(...walk.drift);
-        walk.drift = [fx.x - walk.mx, fx.y - walk.my]; walk.sig = Math.max(2, fx.sigma); walk.odoFix = walk.odo;
-        if (walk.fixKey !== fx.key) {
-          walk.fixKey = fx.key; chime(q.orbiter, true);
-          reroute([fx.x, fx.y], walk.rest, `${q.orbiter} position fix (${fx.used} range and Doppler measurements, ±${fx.sigma.toFixed(0)} m). Dead reckoning was ${Math.round(was)} m out. New route from where you really are.`);
-          walk.lastRe = now;
-        }
-      }
-    }
+      const had = walk.fixKey === q.orbiter + q.start && walk.sig <= 24, fix = navFix(q, walk.mx, walk.my, 15);
+      if (fix && !had && fix.sigma <= 12 && walk.rest.length) {                                // first solid fix of this pass: plan again from the real position
+        chime(q.orbiter, true); walk.lastRe = now;
+        reroute([fix.x, fix.y], walk.rest, fixMsg(q.orbiter, { ...fix, jump: walk.lockJump ?? fix.jump }), ORB[q.orbiter].c); walk.lockJump = null;
+      } else if (fix && fix.first) walk.lockJump = fix.jump;                                   // remember how far out the suit was when the lock began
+    } else if (walk.lock) { walk.lock = ""; }
     walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
     for (const p2 of DB.passes) {
       if (p2.end < walk.simT || p2.start > walk.simT + 620) continue;
       const k10 = p2.orbiter + p2.start + "a";
-      if (walk.simT >= p2.start - 600 && walk.simT < p2.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); chime(p2.orbiter); toast(`${p2.orbiter} in ${Math.round((p2.start - walk.simT) / 60)} min`, "Position fix and radio when it rises.", ORB[p2.orbiter].c); }
+      if (walk.simT >= p2.start - 600 && walk.simT < p2.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); warm(p2.start); chime(p2.orbiter); toast(`${p2.orbiter} in ${Math.round((p2.start - walk.simT) / 60)} min`, "It will fix your position and open the radio.", ORB[p2.orbiter].c); }
     }
     dopplerTone(con ? q : null, walk.simT);
-    const bx = walk.mx + walk.drift[0], by = walk.my + walk.drift[1], rad = (walk.sig || 3) + DRIFT * (walk.odo - walk.odoFix);
-    // waypoints are reached with the feet, not with the estimate
-    if (walk.rest.length && Math.hypot(walk.rest[0][0] - walk.mx, walk.rest[0][1] - walk.my) < REACH) {
-      const home = walk.rest[0] === HAB; walk.rest.shift();
-      if (!walk.rest.length) { T3.walker = null; endWalk(`${home ? "Back at the habitat" : "Final waypoint reached"} under manual control. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`); return; }
-      toast("Waypoint reached", `${walk.rest.length} to go.`, "#6EE7A8"); walk.lastRe = 0;
+    const bx = walk.mx + walk.drift[0], by = walk.my + walk.drift[1], rad = (walk.sig || 1.5) + DRIFT * (walk.odo - walk.odoFix);
+    // waypoints are reached with the feet, not with the estimate (closest approach during this step, so a fast clock cannot jump over one)
+    if (walk.rest.length) {
+      const w = walk.rest[0], home = w === HAB, ux = walk.mx - x0, uy = walk.my - y0, L2 = ux * ux + uy * uy, tt = L2 ? Math.max(0, Math.min(1, ((w[0] - x0) * ux + (w[1] - y0) * uy) / L2)) : 0;
+      if (Math.hypot(w[0] - x0 - ux * tt, w[1] - y0 - uy * tt) < (home ? REACH_HOME : REACH)) {
+        walk.rest.shift();
+        if (!walk.rest.length) { T3.walker = null; endWalk(`${home ? "Back at the airlock" : "Final waypoint reached"} under manual control. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`); return; }
+        toast("Waypoint reached", `${walk.rest.length} to go.`, "#6EE7A8"); walk.lastRe = 0;
+      }
     }
-    // newest best path: whenever the estimate has left the line, plan again from the estimate
-    if (con && walk.fixKey === con.orbiter + con.start && !walk.busy && now - (walk.lastRe || 0) > 6000 && walk.rest.length && offRoute(r, bx, by) > Math.max(70, 3 * DX)) {
-      walk.lastRe = now;
-      reroute([bx, by], walk.rest, `${con.orbiter} fix: new best route from your position (±${Math.round(rad)} m).`);
+    // the route always starts at the estimated position. While a satellite is tracking you, leaving the line plans a new one straight away.
+    const off = nearAhead(r, bx, by);
+    if (tracked && walk.sig <= 24 && !walk.busy && !walk.planning && now - (walk.lastRe || 0) > 2000 && walk.rest.length && off > Math.max(25, 1.5 * DX)) {
+      walk.lastRe = now; const tk = q.orbiter + q.start;                                      // say it once per pass, then just keep the route under your feet
+      reroute([bx, by], walk.rest, `${q.orbiter} is tracking you to ±${Math.round(rad)} m. The route now follows you wherever you walk.`, ORB[q.orbiter].c, { soft: true, quiet: walk.trackSaid === tk });
+      walk.trackSaid = tk;
     }
+    const from = Math.min(r.x.length - 1, walk.ri + 1);
+    T3.pathHead = { i: from, x: bx, y: by };
     me.setLatLng(ll(bx, by)); unc.setLatLng(ll(bx, by)); unc.setRadius(rad); ghost.setLatLng(ll(walk.mx, walk.my));
-    unc.setStyle({ color: con ? "#6EE7A8" : "#93B7E6", fillColor: con ? "#6EE7A8" : "#93B7E6" });
-    if (walk._painted !== -2) { walk._painted = -2; paintRoute(walk.route, 0); }
+    unc.setStyle({ color: tracked ? "#6EE7A8" : "#93B7E6", fillColor: tracked ? "#6EE7A8" : "#93B7E6" });
+    if (walk._painted !== from || !walk.px || Math.hypot(bx - walk.px[0], by - walk.px[1]) > Math.max(2, DX * 0.1)) { walk._painted = from; walk.px = [bx, by]; paintRoute(r, from, [bx, by]); }
     const tgt = walk.rest[0], dist = tgt ? Math.hypot(tgt[0] - bx, tgt[1] - by) : 0, brg = tgt ? Math.atan2(tgt[0] - bx, tgt[1] - by) : 0;
     $("arrow").style.transform = `rotate(${(brg - walk.hd) * 180 / Math.PI - 90}deg)`;
-    $("hudNext").textContent = `${tgt === HAB ? "Habitat" : "Waypoint"} · ${fKm(dist)}`;
-    $("hudSub").textContent = `Slope here ${sl0.toFixed(0)}° · ${walk.rest.length} stop${walk.rest.length === 1 ? "" : "s"} left`;
+    $("hudNext").textContent = `${tgt === HAB ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - walk.rest.filter(w2 => w2 !== HAB).length + 1)} of ${S.stops.length}`} · ${fKm(dist)}`;
+    $("hudSub").textContent = off > Math.max(25, 1.5 * DX) ? `${Math.round(off)} m off the route${tracked ? "" : " · no satellite to replan"}` : `Slope here ${sl0.toFixed(0)}° · ${walk.rest.length} stop${walk.rest.length === 1 ? "" : "s"} left`;
     $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
-    const np = DB.passes.find(p2 => p2.start > walk.simT);
-    $("hudLink").textContent = con ? `${con.orbiter} ✓` : np ? `${np.orbiter.split(" ").pop()} in ${Math.round((np.start - walk.simT) / 60)} m` : "none";
-    $("hudLink").style.color = con ? "var(--ok)" : "var(--ink)";
+    hudRelay(con);
     $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
     if (S.view === "2d" && !map.getBounds().pad(-0.25).contains(ll(walk.mx, walk.my))) map.panTo(ll(walk.mx, walk.my), { animate: true, duration: 0.4 });
-    T3.walker = { x: walk.mx, y: walk.my, z, rad, con, pass: con ? q : null, hdx: Math.sin(walk.hd), hdy: Math.cos(walk.hd), d: 0, still: walk.still, bx, by, manual: true };
+    T3.walker = { x: walk.mx, y: walk.my, z, rad, con, tracked, pass: con ? q : null, hdx: Math.sin(walk.hd), hdy: Math.cos(walk.hd), d: 0, still: walk.still, bx, by, manual: true };
   }
   addEventListener("keydown", e => {
     const k = e.key.toLowerCase(); if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
@@ -624,41 +667,36 @@
       if (walk.manual) manualStep(dtReal, now); else {
       const r = walk.route, el = walk.simT - walk.t0, p = posOn(r, el);
       const moved = Math.max(0, p.d - walk.dAlong); walk.odo += moved; walk.dAlong = p.d; walk.zNow = p.z;
-      walk.dose += (r.dose_msv / r.time_s) * dtReal * S.speed;
-      // drift: where the astronaut really is vs. where dead reckoning says
-      const since = walk.odo - walk.odoFix;
-      walk.theta += (Math.random() - 0.5) * 0.08;
-      const mag = 0.8 * DRIFT * since;
-      walk.drift = [Math.cos(walk.theta) * mag, Math.sin(walk.theta) * mag];
-      const tx = p.x + walk.drift[0], ty = p.y + walk.drift[1];
-      // relay contact along this route (terrain-aware, from the API)
-      const con = r.contacts.find(k => k.start && k.start <= walk.simT && walk.simT < k.end);
-      const pk = con ? con.orbiter + con.start : null;
-      if (con && walk.fixKey !== pk) {
-        const fx = relayFix(tx, ty, p.x, p.y);                 // least-squares fix from range + Doppler to the orbiter
-        if (fx && fx.sigma < 40) {
-          walk.fixKey = pk; const off = Math.hypot(...walk.drift);
+      walk.dose += (r.dose_msv / (r.time_s || 1)) * dtReal * S.speed;
+      // The astronaut steers by the suit's estimate, so the estimate rides the route and the real position slides off it.
+      const pq = currentPass(walk.simT);
+      const con = r.contacts.find(k => k.start && k.start <= walk.simT && walk.simT < k.end) || (pq && walk.loose ? { orbiter: pq.orbiter, start: pq.start, end: pq.end } : null), cq = con ? pq : null;
+      const tracked = !!(pq && walk.lock === "fix" && walk.lockKey === pq.orbiter + pq.start);
+      if (!tracked) driftBy(moved); else walk.odoFix = walk.odo;
+      const tx = p.x - walk.drift[0], ty = p.y - walk.drift[1];
+      if (cq && !tracked) {
+        const fix = navFix(cq, tx, ty, 6);                                       // wait for a solid fix (about ±12 m or better), then plan again from the real position
+        if (fix) {
           chime(con.orbiter, true);
           const k = r.stop_idx.slice(1).filter(i => i <= p.i).length, rest = r.stopsReq.slice(1 + k);
-          if (off > 20 && rest.length) reroute([fx.x, fx.y], rest, `${con.orbiter} position fix (${fx.used} range and Doppler measurements, ±${fx.sigma.toFixed(0)} m): you were ${Math.round(off)} m off the line. New route from the fixed position.`);
-          else toast("Position fix", `${con.orbiter}: ${fx.used} range and Doppler measurements, ±${fx.sigma.toFixed(0)} m. Drift was ${Math.round(off)} m.`, ORB[con.orbiter].c);
-          walk.odoFix = walk.odo; walk.drift = [0, 0]; walk.sig = Math.max(2, fx.sigma);
+          if (rest.length) reroute([fix.x, fix.y], rest, fixMsg(cq.orbiter, fix), ORB[cq.orbiter].c);
+          else toast("Position fix", `${cq.orbiter} measured your position to ±${Math.round(2 * fix.sigma)} m.`, ORB[cq.orbiter].c);
         }
-      }
-      if (con && walk.fixKey === pk) walk.odoFix = walk.odo;
+      } else if (!pq && walk.lock) walk.lock = "";
       walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
       // pass alerts: T-10 min and at rise
       for (const q of DB.passes) {
         if (q.end < walk.simT || q.start > walk.simT + 620) continue;
         const k10 = q.orbiter + q.start + "a", k0 = q.orbiter + q.start + "b";
-        if (walk.simT >= q.start - 600 && walk.simT < q.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); chime(q.orbiter); toast(`${q.orbiter} in ${Math.round((q.start - walk.simT) / 60)} min`, `${Math.round((q.end - q.start) / 60)} min long, ${q.max_el}° max. Get clear of high ground.`, ORB[q.orbiter].c); }
+        if (walk.simT >= q.start - 600 && walk.simT < q.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); warm(q.start); chime(q.orbiter); toast(`${q.orbiter} in ${Math.round((q.start - walk.simT) / 60)} min`, `${Math.round((q.end - q.start) / 60)} min long, ${q.max_el}° max. Get clear of high ground.`, ORB[q.orbiter].c); }
         if (walk.simT >= q.start && !walk.alerted.has(k0)) { walk.alerted.add(k0); if (!con) { chime(q.orbiter, true); toast(`${q.orbiter} rising`, r.contacts.some(k => k.orbiter === q.orbiter && !k.start) ? "Terrain is blocking the link from here." : "Above 10°.", ORB[q.orbiter].c); } }
       }
       dopplerTone(con ? currentPass(walk.simT) : null, walk.simT);
       // draw
-      const rad = (walk.sig || 3) + DRIFT * (walk.odo - walk.odoFix);
+      const rad = (walk.sig || 1.5) + DRIFT * (walk.odo - walk.odoFix);
+      T3.pathHead = { i: p.i, x: p.x, y: p.y };
       me.setLatLng(ll(p.x, p.y)); unc.setLatLng(ll(p.x, p.y)); unc.setRadius(rad); ghost.setLatLng(ll(tx, ty));
-      unc.setStyle({ color: con ? "#6EE7A8" : "#93B7E6", fillColor: con ? "#6EE7A8" : "#93B7E6" });
+      unc.setStyle({ color: tracked ? "#6EE7A8" : "#93B7E6", fillColor: tracked ? "#6EE7A8" : "#93B7E6" });
       if (walk._painted !== p.i) { walk._painted = p.i; paintRoute(r, p.i, [p.x, p.y]); }
       // HUD
       const nxt = r.stop_idx.find(i => i >= p.i) ?? r.x.length - 1, last = nxt === r.x.length - 1;
@@ -667,20 +705,19 @@
       $("arrow").style.transform = `rotate(${brg - 90}deg)`;
       const dw = r.dwell.find(d => el >= d.t && el < d.t + d.min * 60);
       const home = last && r.stopsReq.at(-1) === HAB;
-      $("hudNext").textContent = dw ? "Sampling" : `${home ? "Habitat" : last ? "Final waypoint" : `Next waypoint (${total - k - (r.stopsReq.at(-1) === HAB ? 1 : 0)} left)`} · ${fKm(r.d[nxt] - p.d)}`;
+      const left = total - k - (r.stopsReq.at(-1) === HAB ? 1 : 0);                          // science waypoints still to visit, this one included
+      $("hudNext").textContent = dw ? "Collecting a sample" : `${home ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - left + 1)} of ${S.stops.length}`} · ${fKm(r.d[nxt] - p.d)}`;
       $("hudSub").textContent = dw ? `${Math.ceil((dw.t + dw.min * 60 - el) / 60)} min of sampling left` : `${fDur(r.t[nxt] - el)} to go · home in ${fDur(r.time_s - el)}`;
       $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
-      const np = DB.passes.find(q => q.start > walk.simT);
-      $("hudLink").textContent = con ? `${con.orbiter} ✓` : np ? `${np.orbiter.split(" ").pop()} in ${Math.round((np.start - walk.simT) / 60)} m` : "none";
-      $("hudLink").style.color = con ? "var(--ok)" : "var(--ink)";
+      hudRelay(con || (tracked ? { orbiter: pq.orbiter } : null));
       $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
       if (r.ground_c) $("hudGround").textContent = `${Math.round(r.ground_c[Math.min(p.i, r.ground_c.length - 1)])} °C`;
       // hazard look-ahead (150 m)
       let hz = 0; for (let i = p.i; i < r.x.length && r.d[i] - p.d < 150; i++) hz = Math.max(hz, r.slope[i]);
       if (hz >= 15 && !walk.hzOn) { walk.hzOn = true; toast("Steep ground ahead", `${hz.toFixed(0)}° within 150 m. Slow down.`, "#F0616B"); } else if (hz < 10) walk.hzOn = false;
       if (S.view === "2d" && walk.follow !== false && !map.getBounds().pad(-0.25).contains(ll(p.x, p.y))) map.panTo(ll(p.x, p.y), { animate: true, duration: 0.6 });
-      T3.walker = { x: p.x, y: p.y, z: p.z, rad, con, pass: con ? currentPass(walk.simT) : null, hdx: r.x[j] - p.x, hdy: r.y[j] - p.y, d: p.d };
-      if (el >= r.time_s) endWalk(`Back at the habitat after ${fDur(walk.simT - (S.route.depart))}. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`);
+      T3.walker = { x: tx, y: ty, z: p.z, rad, con, tracked, pass: con ? currentPass(walk.simT) : null, hdx: r.x[j] - p.x, hdy: r.y[j] - p.y, d: p.d, bx: p.x, by: p.y, still: !!dw };
+      if (el >= r.time_s) endWalk(`${Math.hypot(r.x.at(-1) - HAB[0], r.y.at(-1) - HAB[1]) < 6 ? "Back at the airlock" : "At the last waypoint"} after ${fDur(walk.simT - (S.route.depart))}. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`);
       }
     }
     // 4 Hz UI refresh
@@ -952,10 +989,27 @@
     // Real sizes. The suited astronaut is 1.9 m, the habitat dome 8.4 m across with a 2.3 m airlock.
     // From far away they are smaller than a pixel, so labels and the beacon mark where they are (the way NASA Eyes marks spacecraft).
     // The orbiter is the one exception: it is hundreds of km away, so it is drawn as a sky marker and its label gives the real range.
-    const AS = 1.9 / 2.35, HS = 4.2, SSC = 430 * K, IDLE = [HAB[0] + 3.2, HAB[1] - 9.5];
+    const AS = 1.9 / 2.35, HS = 4.2, SSC = 430 * K, IDLE = HAB, HABM = [HAB[0], Math.min(M.height_m - 1, HAB[1] + 9.6)];   // the walk starts and ends at the habitat point, which is the ground in front of the airlock; the dome stands just north of it
     const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro);
     const astroTag = labelSprite("Astronaut", "#8ab8ff"); sc.add(astroTag);
-    const hab = makeHab(); hab.scale.setScalar(HS); hab.position.copy(P(HAB[0], HAB[1], 0)); hab.position.y = ground(HAB[0], HAB[1]); sc.add(hab);
+    const hab = makeHab(); hab.scale.setScalar(HS); hab.position.copy(P(HABM[0], HABM[1], 0)); hab.position.y = ground(HABM[0], HABM[1]); sc.add(hab);
+    // The dome stands 9.6 m from the start point with its airlock facing it, on the side the planned route does not use, so nobody walks through a wall.
+    function placeHab() {
+      const r = S.route; let hx = 0, hy = 1;
+      if (r && r.x.length > 2) {
+        const L = r.d.at(-1); let i1 = 0, i2 = r.x.length - 1;
+        while (i1 < r.x.length - 1 && r.d[i1] < Math.min(70, L / 2)) i1++;
+        while (i2 > 0 && L - r.d[i2] < Math.min(70, L / 2)) i2--;
+        const un = (x, y) => { const n = Math.hypot(x, y) || 1; return [x / n, y / n]; };
+        const a = un(r.x[i1] - HAB[0], r.y[i1] - HAB[1]), back = Math.hypot(r.x.at(-1) - HAB[0], r.y.at(-1) - HAB[1]) < 6, b = back ? un(r.x[i2] - HAB[0], r.y[i2] - HAB[1]) : a;
+        const sx = a[0] + b[0], sy = a[1] + b[1];
+        [hx, hy] = Math.hypot(sx, sy) > 0.35 ? un(-sx, -sy) : [-a[1], a[0]];
+      }
+      HABM[0] = Math.min(M.width_m - 1, Math.max(1, HAB[0] + hx * 9.6)); HABM[1] = Math.min(M.height_m - 1, Math.max(1, HAB[1] + hy * 9.6));
+      hab.position.copy(P(HABM[0], HABM[1], 0)); hab.position.y = ground(HABM[0], HABM[1]); hab.rotation.y = Math.atan2(-hx, hy);
+      habTag.position.copy(hab.position); habTag.position.y += 8.5; rockAt = null;
+    }
+    const estTag = labelSprite("Suit's estimate", "#93B7E6"); estTag.visible = false; sc.add(estTag);
     const habTag = labelSprite("Habitat", "#ffffff"); habTag.position.copy(hab.position); habTag.position.y += 8.5; sc.add(habTag);
     // rocks at their real size (about 10 cm to 1.4 m) wherever you look closely. Each one is placed by a hash of its ground cell, so it is always in the same spot.
     const RN = lite ? 280 : 720, RCELL = 6, v3 = new THREE.Vector3();
@@ -975,7 +1029,7 @@
       for (let i = c0 - nc; i <= c0 + nc && n < RN; i++) for (let j = c1 - nc; j <= c1 + nc && n < RN; j++) {
         if (hsh(i, j, 0) > 0.5) continue;
         const x = (i + hsh(i, j, 1)) * RCELL, y = (j + hsh(i, j, 2)) * RCELL;
-        if (x < 1 || y < 1 || x > M.width_m - 1 || y > M.height_m - 1 || Math.hypot(x - mx, y - my) > R || Math.hypot(x - HAB[0], y - HAB[1]) < 14) continue;
+        if (x < 1 || y < 1 || x > M.width_m - 1 || y > M.height_m - 1 || Math.hypot(x - mx, y - my) > R || Math.hypot(x - HABM[0], y - HABM[1]) < 15 || Math.hypot(x - HAB[0], y - HAB[1]) < 3) continue;
         const sz = 0.05 + Math.pow(hsh(i, j, 3), 5) * 0.95; if (sz < minS) continue; e.set(hsh(i, j, 4) * 0.5, hsh(i, j, 5) * 6.28, hsh(i, j, 6) * 0.5); q.setFromEuler(e);
         m4.compose(v3.set(x - M.width_m / 2, ground(x, y) + sz * 0.16, -(y - M.height_m / 2)), q, new THREE.Vector3(sz, sz, sz)); rocks.setMatrixAt(n, m4);
         const t = 0.2 + hsh(i, j, 7) * 0.2; cl.setRGB(t * 0.98, t * 0.72, t * 0.54); rocks.setColorAt(n, cl); n++;
@@ -993,18 +1047,23 @@
     const stopsG = new THREE.Group(); sc.add(stopsG);
     let tube = null;
 
-    let pathW = 0;
+    let pathW = 0, pathKey = "";
     function buildPath() {
       if (tube) { sc.remove(tube); tube.geometry.dispose(); tube = null; }
       const r = walk.on ? walk.route : S.route; if (!r || r.x.length < 2) return;
       const w = pathW || 22 * K, lift = 0.04 + w * 0.02, cw = M.width_m / nx, ch = M.height_m / ny, px = [], py = [], pn = [];
-      for (let i = 0; i < r.x.length - 1; i++) {                                 // a point wherever the route crosses an edge of the terrain mesh, so the ribbon never dips under it
-        const ax = r.x[i] / cw, ay = (M.height_m - r.y[i]) / ch, bx = r.x[i + 1] / cw, by = (M.height_m - r.y[i + 1]) / ch, ts = [0];
+      // while walking, the line starts at the suit's estimated position and the part already walked is gone
+      const hd = walk.on && T3.pathHead ? T3.pathHead : null, X = [], Y = [], Nn = [];
+      if (hd) { X.push(hd.x); Y.push(hd.y); Nn.push(Math.min(hd.i, r.x.length - 1)); }
+      for (let i = hd ? Math.min(hd.i, r.x.length - 1) : 0; i < r.x.length; i++) { X.push(r.x[i]); Y.push(r.y[i]); Nn.push(i); }
+      if (X.length < 2) return;
+      for (let i = 0; i < X.length - 1; i++) {                                   // a point wherever the route crosses an edge of the terrain mesh, so the ribbon never dips under it
+        const ax = X[i] / cw, ay = (M.height_m - Y[i]) / ch, bx = X[i + 1] / cw, by = (M.height_m - Y[i + 1]) / ch, ts = [0];
         const cuts = (a, b) => { if (a === b) return; for (let k2 = Math.ceil(Math.min(a, b)); k2 <= Math.max(a, b); k2++) { const t = (k2 - a) / (b - a); if (t > 1e-4 && t < 1 - 1e-4) ts.push(t); } };
         cuts(ax, bx); cuts(ay, by); cuts(ax + ay, bx + by); ts.sort((u1, u2) => u1 - u2);
-        for (const t of ts) { px.push(r.x[i] + (r.x[i + 1] - r.x[i]) * t); py.push(r.y[i] + (r.y[i + 1] - r.y[i]) * t); pn.push(i); }
+        for (const t of ts) { px.push(X[i] + (X[i + 1] - X[i]) * t); py.push(Y[i] + (Y[i + 1] - Y[i]) * t); pn.push(Nn[i + 1]); }
       }
-      px.push(r.x.at(-1)); py.push(r.y.at(-1)); pn.push(r.x.length - 1);
+      px.push(X.at(-1)); py.push(Y.at(-1)); pn.push(Nn.at(-1));
       const n = px.length, pa = new Float32Array(n * 6), ca = new Float32Array(n * 6), idx = [], cc = new THREE.Color();
       for (let i = 0; i < n; i++) {
         const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1); let dx = px[b] - px[a], dy = py[b] - py[a]; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
@@ -1029,6 +1088,7 @@
         if (imgs[n].complete && imgs[n].naturalWidth) { c.globalAlpha = n === "elevation" ? 0.75 : S.opacity; c.drawImage(imgs[n], 0, 0, tc.width, tc.height); }
       }
       c.globalAlpha = 1; tex.needsUpdate = true;
+      if (!walk.on) placeHab();
       buildPath();
       while (stopsG.children.length) { const o = stopsG.children[0]; stopsG.remove(o); if (o.material && o.material.map) o.material.map.dispose(); }
       S.stops.forEach((st, i) => {
@@ -1099,7 +1159,7 @@
         u.kneeL.rotation.x = Math.max(0, sw) * 0.95; u.kneeR.rotation.x = Math.max(0, -sw) * 0.95;
         u.armL.rotation.x = -sw * 0.5; u.armR.rotation.x = sw * 0.5; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.45;
         if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.04;
-      } else { astro.rotation.y = 0.5; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
+      } else { astro.rotation.y = hab.rotation.y + 0.35; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
       const camD = cam.position.distanceTo(here);
       const camH = cam.position.distanceTo(hab.position), nearHab = here.distanceTo(hab.position) < camH * 0.07;
       astroTag.position.copy(here); astroTag.position.y += 2.25; astroTag.visible = camD > 40 && !(nearHab && !walking);
@@ -1107,8 +1167,11 @@
       wk.visible = walking;
       if (walking) {
         wk.position.copy(k.bx != null ? P(k.bx, k.by, 0).setY(ground(k.bx, k.by)) : here);
-        const rr = Math.max(k.rad, 1.2); ring.scale.setScalar(rr); ring.position.y = 0.05 + rr * 0.012; ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6);
-        beacon.visible = camD > 700;                                                 // a locator beam, only from far away
+        const rr = Math.max(k.rad, 1.2); ring.scale.setScalar(rr); ring.position.y = 0.05 + rr * 0.012; ring.material.color.set(k.tracked ? 0x6EE7A8 : 0x93B7E6);
+        beacon.visible = camD > 700;
+        estTag.position.copy(wk.position); estTag.position.y += 0.4; estTag.visible = !k.tracked && wk.position.distanceTo(here) > Math.max(4, camD * 0.06) && camD < 900;
+      } else {
+        estTag.visible = false;                                                 // a locator beam, only from far away
       }
       // zoom-dependent detail: near plane, shadow box, rocks and the width of the painted route
       const cd = cam.position.distanceTo(ctl.target);
@@ -1116,7 +1179,8 @@
       const shW = Math.min(1700 * K, Math.max(16, cd * 1.5));
       if (Math.abs(shW - shNow) > shNow * 0.2) { shNow = shW; Object.assign(sun.shadow.camera, { left: -shW, right: shW, top: shW, bottom: -shW }); sun.shadow.camera.updateProjectionMatrix(); sun.shadow.normalBias = Math.max(0.02, 3 * shW / 1700); }
       if (cd < 700) { const mx = ctl.target.x + M.width_m / 2, my = M.height_m / 2 - ctl.target.z; if (!rockAt || Math.hypot(mx - rockAt[0], my - rockAt[1]) > Math.max(RCELL * 2, cd * 0.25) || cd > rockAt[2] * 1.3 || cd < rockAt[2] / 1.3) scatter(mx, my, cd); rocks.visible = true; } else rocks.visible = false;
-      const pw = Math.min(40 * K, Math.max(0.22, cd * 0.012)); if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35) { pathW = pw; buildPath(); }
+      const pw = Math.min(40 * K, Math.max(0.22, cd * 0.012)), hq = Math.max(0.3, (pathW || 1) * 0.6), ph = walk.on && T3.pathHead ? T3.pathHead.i + ":" + Math.round(T3.pathHead.x / hq) + ":" + Math.round(T3.pathHead.y / hq) : "";
+      if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35 || ph !== pathKey) { if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35) pathW = pw; pathKey = ph; buildPath(); }
 
       // a satellite appears in the sky while one is above the horizon from here
       const t = walk.on ? walk.simT : Date.now() / 1000;
@@ -1147,7 +1211,7 @@
       if (T3.chase && !T3.drag) {
         const dist = chaseBase() * (T3.chaseK || 1);
         if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; } }
-        const back = walking ? (T3.dir || new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(-Math.sin(0.5), 0, -Math.cos(0.5));   // idle: stand in front of the astronaut, habitat behind
+        const back = walking ? (T3.dir || new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(-Math.sin(hab.rotation.y + 0.35), 0, -Math.cos(hab.rotation.y + 0.35));   // idle: stand in front of the astronaut, habitat behind
         const want = here.clone().addScaledVector(back, -dist); want.y = here.y + 1.3 + dist * 0.36;
         const gy = ground(Math.min(M.width_m, Math.max(0, want.x + M.width_m / 2)), Math.min(M.height_m, Math.max(0, M.height_m / 2 - want.z))) + 0.7; if (want.y < gy) want.y = gy;
         cam.position.lerp(want, 1 - Math.exp(-dtr * (walking && k.manual ? 5 : 3.2)));
@@ -1161,14 +1225,19 @@
   function setView(v) {
     S.view = v; $("v-2d").setAttribute("aria-pressed", v === "2d"); $("v-3d").setAttribute("aria-pressed", v === "3d");
     $("view3d").hidden = v !== "3d"; $("map").style.visibility = v === "3d" ? "hidden" : "visible"; $("tools3d").hidden = v !== "3d";
-    if (v === "3d") { if (!T3.ready) T3.init(); T3.dirty = true; $("t3lite").setAttribute("aria-pressed", String(!T3.lite)); }
+    if (v === "3d") { if (!T3.ready) T3.init(); T3.dirty = true; $("t3lite").setAttribute("aria-pressed", String(!T3.lite)); if (walk.on) { T3.chase = true; T3.skyLook = false; $("t3follow").setAttribute("aria-pressed", "true"); } }
   }
   T3.render = () => {};
 
   /* ---------- controls ---------- */
   $("v-2d").onclick = () => setView("2d"); $("v-3d").onclick = () => setView("3d");
   $("t3follow").onclick = e => { T3.skyLook = false; T3.chase = !T3.chase; e.currentTarget.setAttribute("aria-pressed", String(!!T3.chase)); };
-  $("t3lite").onclick = e => { if (!T3.api) return; T3.api.setLite(!T3.lite); e.currentTarget.setAttribute("aria-pressed", String(!T3.lite)); };
+  { let l0 = innerWidth < 900; try { const v0 = localStorage.getItem("mw_lite"); if (v0 !== null) l0 = v0 === "1"; } catch (e) { /* private mode */ } $("t3lite").setAttribute("aria-pressed", String(!l0)); }
+  $("t3lite").onclick = e => {                                  // lives in Layers: it is a setting, not something you press while walking
+    const hi = e.currentTarget.getAttribute("aria-pressed") !== "true";
+    if (T3.api) T3.api.setLite(!hi); else { try { localStorage.setItem("mw_lite", hi ? "0" : "1"); } catch (e2) { /* private mode */ } }
+    e.currentTarget.setAttribute("aria-pressed", String(hi));
+  };
   $("t3sat").onclick = () => T3.api && T3.api.lookSat();
   $("t3top").onclick = () => T3.api && T3.api.top();
   $("t3reset").onclick = () => T3.api && T3.api.reset();
@@ -1228,6 +1297,10 @@
   tog("doppler", "doppler", () => { if (S.doppler) audio().resume(); });
   tog("truth", "truth", () => { if (walk.on) S.truth ? ghost.addTo(map) : map.removeLayer(ghost); });
   $("t3drive").onclick = () => walk.on && walk.manual ? releaseControl() : takeControl();
+  $("skipPass").onclick = skipToPass;
+  { const hint = $("hint"), bye = () => { hint.hidden = true; try { localStorage.setItem("mw_hint", "1"); } catch (e) { /* private mode */ } };
+    let seen = false; try { seen = localStorage.getItem("mw_hint") === "1"; } catch (e) { /* private mode */ }
+    hint.hidden = seen; $("walkBtn").addEventListener("click", bye); $("map").addEventListener("pointerdown", bye); $("view3d").addEventListener("pointerdown", bye); }
   $("walkBtn").onclick = () => walk.on ? endWalk() : startWalk();
   $("homeBtn").onclick = () => { if (!walk.on) return; const p = posOn(walk.route, walk.simT - walk.t0); reroute([p.x, p.y], [HAB], "Abort: shortest safe way back to the habitat."); };
   map.on("dragstart", () => walk.follow = false);
@@ -1246,7 +1319,7 @@
   const QUICK = ["Sample collected", "Terrain is steep, slowing down", "All good, continuing", "Need help"];
   const comTime = () => walk.on ? walk.simT : Date.now() / 1000;                // the walker's clock (simulated during a walk)
   const mmss = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? fCD(s) : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
-  window.MW = { COM, S, walk, T3 };                                                  // debug handle: MW.COM.force = {orbiter, end} holds the link open for testing
+  window.MW = { COM, S, walk, T3, tick };                                                  // debug handle: MW.COM.force = {orbiter, end} holds the link open for testing
   function linkNow() {                                                          // is a relay orbiter overhead right now?
     if (COM.practice) return { orbiter: "MRO", end: comTime() + 1800, practice: true };   // practice mode: the link is always open
     if (COM.force) return COM.force;
@@ -1306,8 +1379,7 @@
     if (lk && !was) {                                                           // a relay orbiter just came over: beep, buzz, open the mic
       if (!S.sound) chime(lk.orbiter, true, true);
       if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate([220, 110, 220]);
-      toast(`${lk.orbiter} is overhead`, COM.mic ? "Mic is open. Hold the talk button to send a voice message." : "Link open: queued messages are going now.", ORB[lk.orbiter].c);
-      openMic();
+      toast(`${lk.orbiter} is overhead`, COM.mic ? "Radio link open. Hold the talk button in Radio to send a voice message." : "Radio link open: queued messages are going now.", ORB[lk.orbiter].c);
     }
     if (!lk && was) { closeMic(); toast("Link closed", "Messages now wait for the next pass.", "#93B7E6"); }
     if (lk) {
@@ -1335,7 +1407,8 @@
   async function pttDown(e) {
     if (e && e.cancelable) e.preventDefault();
     if (!linkNow() || COM.ptt.mr) return;
-    if (!COM.ptt.stream) await openMic();
+    COM.ptt.held = true;
+    if (!COM.ptt.stream) { await openMic(); if (COM.ptt.stream && !COM.ptt.held) return toast("Microphone ready", "Now hold the talk button and speak.", "#6EE7A8"); }
     if (!COM.ptt.stream || COM.ptt.mr) return;
     const mr = new MediaRecorder(COM.ptt.stream); COM.ptt.mr = mr; COM.ptt.chunks = []; COM.ptt.t0 = Date.now();
     mr.ondataavailable = ev => COM.ptt.chunks.push(ev.data);
@@ -1349,14 +1422,14 @@
     mr.start(); blip(true); renderTalk();
     COM.ptt.t = setTimeout(() => mr.state === "recording" && mr.stop(), 30000);
   }
-  function pttUp() { if (COM.ptt.mr && COM.ptt.mr.state === "recording") COM.ptt.mr.stop(); }
+  function pttUp() { COM.ptt.held = false; if (COM.ptt.mr && COM.ptt.mr.state === "recording") COM.ptt.mr.stop(); }
   function renderTalk() {
     const b = $("talkBtn"), lk = linkNow(), rec = !!(COM.ptt.mr && COM.ptt.mr.state === "recording"), dest = COM.dest === "earth" ? "Earth" : "the pod";
     b.classList.toggle("ready", !!lk && !rec && COM.mic); b.classList.toggle("live", rec);
     if (!COM.mic) { b.disabled = true; $("talkMain").textContent = "Mic unavailable"; $("talkSub").textContent = "Needs https or localhost (see below)"; return; }
     b.disabled = !lk;
     $("talkMain").textContent = rec ? "Release to send" : lk ? "Hold to transmit" : "Link closed";
-    $("talkSub").textContent = rec ? `Sending to ${dest} via ${lk ? lk.orbiter : "the orbiter"}` : lk ? `${lk.orbiter} overhead · mic open · ${fDur(lk.end - comTime())} left` : `No relay orbiter overhead · ${nextPassText()}`;
+    $("talkSub").textContent = rec ? `Sending to ${dest} via ${lk ? lk.orbiter : "the orbiter"}` : lk ? `${lk.orbiter} overhead · ${fDur(lk.end - comTime())} left` : `No relay orbiter overhead · ${nextPassText()}`;
   }
   const talk = $("talkBtn");
   talk.addEventListener("pointerdown", pttDown);

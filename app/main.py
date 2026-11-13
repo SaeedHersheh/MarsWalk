@@ -544,6 +544,8 @@ def route(q: RouteReq):
             if p is None:
                 ok = False
                 break
+            if len(p) == 1:                               # both ends in the same cell: still a leg, just a short one
+                p = [p[0], p[0]]
             cells += p if not cells else p[1:]
             stop_idx.append(len(cells) - 1)
         if ok:
@@ -552,6 +554,17 @@ def route(q: RouteReq):
         raise HTTPException(422, "no walkable path between two of the stops (terrain too steep)")
     rr = np.array([c[0] for c in cells]); cc = np.array([c[1] for c in cells])
     x = (cc + 0.5) * DX; y = (H - 1 - rr + 0.5) * DY
+    for i, sxy in zip(stop_idx, seq):                     # start, waypoints and end sit on the exact point asked for, not the middle of its cell
+        if abs(sxy[0] - x[i]) <= DX and abs(sxy[1] - y[i]) <= DY:
+            x[i], y[i] = sxy[0], sxy[1]
+    # the grid search gives a staircase of 45 degree steps. Ease it into a walking line: each node moves toward its neighbours
+    # but never leaves its own cell, so the path stays on the ground the search approved. Stops do not move.
+    x0, y0 = (cc + 0.5) * DX, (H - 1 - rr + 0.5) * DY
+    keep = np.zeros(len(x), bool); keep[stop_idx] = True
+    for _ in range(4):
+        xs, ys = x.copy(), y.copy()
+        xs[1:-1] = 0.25 * x[:-2] + 0.5 * x[1:-1] + 0.25 * x[2:]; ys[1:-1] = 0.25 * y[:-2] + 0.5 * y[1:-1] + 0.25 * y[2:]
+        x = np.where(keep, x, np.clip(xs, x0 - 0.45 * DX, x0 + 0.45 * DX)); y = np.where(keep, y, np.clip(ys, y0 - 0.45 * DY, y0 + 0.45 * DY))
     z = S.Z[rr, cc].astype("float64")
     seg = np.hypot(np.diff(x), np.diff(y))
     s = np.divide(np.diff(z), seg, out=np.zeros_like(seg), where=seg > 0)

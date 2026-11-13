@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794586378">
+<link rel="stylesheet" href="style.css?v=1794588210">
 </head>
 <body>
 <div id="map"></div>
@@ -120,6 +120,9 @@
         <button type="button" class="lay" data-l="cost" aria-pressed="false"><i class="sw g-cost"></i><span><b>Traversal cost</b><small>Planner cost surface</small></span></button>
       </div>
       <label class="slider">Opacity <output id="o-op"></output><input type="range" id="opacity" min="0.2" max="1" step="0.05" value="0.8"></label>
+      <div class="layerlist">
+        <button type="button" class="lay" id="t3lite" aria-pressed="false"><span><b>High-quality 3D</b><small>Shadows and reflections. Turn off if 3D is slow.</small></span></button>
+      </div>
       <div class="legend" id="legend"></div>
       <p class="hint" id="layerNote"></p>
     </section>
@@ -192,7 +195,6 @@
   <button type="button" class="chip" id="t3sat" hidden>Find satellite</button>
   <button type="button" class="chip" id="t3top">Plan view</button>
   <button type="button" class="chip" id="t3reset">Reset view</button>
-  <button type="button" class="chip" id="t3lite" aria-pressed="false" title="Reflections, shadows and boulders. Turn off if the scene looks washed out or runs slowly.">High quality</button>
 </div>
 
 <div class="coach" id="coach" hidden><button type="button" id="coachOk">OK</button></div>
@@ -203,11 +205,13 @@
   <div class="hudmain"><b id="hudNext">—</b><span id="hudSub">—</span></div>
   <div class="hudcols">
     <div class="hudcol"><span>Position error</span><b id="hudPos">±3 m</b></div>
-    <div class="hudcol"><span>Relay</span><b id="hudLink">none</b></div>
+    <div class="hudcol"><span>Satellite</span><b id="hudLink">none</b></div>
     <div class="hudcol"><span>Dose</span><b id="hudDose">0</b></div>
     <div class="hudcol"><span>Ground</span><b id="hudGround">—</b></div>
   </div>
+  <button type="button" class="hudskip" id="skipPass" hidden title="Wait here until the next relay satellite rises" aria-label="Skip the wait for the next satellite"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5v14l9-7z M15 5v14h3V5z" fill="currentColor"/></svg><span>Skip to satellite</span></button>
 </div>
+<div class="hintpill" id="hint" hidden>Tap the map to add a waypoint. Press play to walk the route.</div>
 <div class="stick" id="stick" hidden aria-label="Walk and turn"><i></i></div>
 <div class="toasts" id="toasts"></div>
 <div class="maplegend" id="mapLegend" hidden></div>
@@ -255,7 +259,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="relayfix.js?v=1794586378"></script>
-<script src="app.js?v=1794586378"></script>
+<script src="relayfix.js?v=1794588210"></script>
+<script src="app.js?v=1794588210"></script>
 </body>
 </html>
