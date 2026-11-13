@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0d1216">
+<meta name="theme-color" content="#04060a">
 <link rel="icon" type="image/png" href="img/brand/logo-64.png">
 <title>Marswalk · EVA traverse planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794536774">
+<link rel="stylesheet" href="style.css?v=1794538078">
 </head>
 <body>
 <div id="map"></div>
@@ -18,18 +18,18 @@
 <div class="loader" id="loader">Loading terrain data…</div>
 
 <header class="appbar">
-  <a class="back" href="globe.html" title="All of Mars" aria-label="Back to the Mars globe"><span class="bk">‹</span><span class="lbl">Globe</span></a>
-  <img class="logo" src="img/brand/logo-96.png" alt="AirAwareNetwork" width="30" height="30">
-  <nav class="crumbs" aria-label="Location">
-    <b>Marswalk</b><i>›</i><span id="siteName">Jezero crater</span><small id="siteRes"></small><i class="tailsep">›</i><span class="tail">EVA traverse</span>
-  </nav>
+  <a class="brand" href="globe.html" title="AirAwareNetwork · Marswalk"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="40" height="40"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
+  <nav class="crumbs" aria-label="Location"><span id="siteName">Jezero crater</span><small id="siteRes"></small></nav>
   <div class="viewbar">
     <div class="seg" role="group" aria-label="View">
       <button type="button" id="v-2d" aria-pressed="true">Map</button>
       <button type="button" id="v-3d" aria-pressed="false">3D</button>
     </div>
+    <button type="button" class="bell" id="logBtn" aria-label="Notifications" title="Notifications" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15L6 17Z M10 21h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><i id="logCount"></i></button>
+    <a class="back" href="globe.html" title="Pick another place on Mars"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c3 3.5 3 14.500 0 18M12 3c-3 3.5-3 14.500 0 18" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Globe</span></a>
   </div>
 </header>
+<div class="logpanel" id="logPanel" hidden></div>
 
 <div class="sidebar" id="sidebar">
   <nav class="tabs" id="tabs" aria-label="Panels">
@@ -255,7 +255,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="relayfix.js?v=1794536774"></script>
-<script src="app.js?v=1794536774"></script>
+<script src="relayfix.js?v=1794538078"></script>
+<script src="app.js?v=1794538078"></script>
 </body>
 </html>

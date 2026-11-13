@@ -8,22 +8,22 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <style>
 /* Layout: full-bleed instrument view of Mars; a floating control column on the right, readout and place card bottom-left, one committed dark world (space is black in any theme). */
 :root {
-  --space: #0c1217;
-  --panel: rgba(17, 26, 33, 0.94);
-  --line: rgba(168, 201, 215, 0.16);
+  --space: #04060a;
+  --panel: rgba(10, 14, 21, 0.94);
+  --line: rgba(150, 175, 220, 0.18);
   --ink: #FFFFFF;
-  --dim: #a8c3d1;
-  --faint: #6f8a9a;
-  --dust: #a8c9d7;
-  --dusk: #a8c9d7;
-  --nasa-blue: rgba(168, 201, 215, 0.2);
-  --red: #f2674f;
-  --f-display: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif;
-  --f-body: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif;
+  --dim: #a3afc2;
+  --faint: #6c7a91;
+  --dust: #8ab8ff;
+  --dusk: #8ab8ff;
+  --nasa-blue: rgba(59, 130, 246, 0.22);
+  --red: #fc3d21;
+  --f-display: "Inter", "Cairo", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Inter", "Cairo", "Segoe UI", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
   color-scheme: dark;
 }
@@ -157,6 +157,18 @@ a.place { color: inherit; text-decoration: none; }
 .logo { width: 34px; height: 34px; box-shadow: none; }
 .chip[aria-pressed="true"] { background: rgba(168, 201, 215, 0.14); border-color: var(--dust); color: #fff; }
 .seg button[aria-pressed="true"] { background: var(--dust); color: #0b1116; }
+
+/* 2026-11 palette: space black, NASA blue actions, visible team logo */
+.logo { background: #0b1220; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 18px rgba(80, 150, 255, 0.55) !important; }
+.brand b { letter-spacing: 0.14em; }
+.chip, .go { border-radius: 999px; }
+.chip { padding: 8px 15px; }
+.chip[aria-pressed="true"] { background: rgba(59, 130, 246, 0.16); border-color: #3b82f6; color: #fff; }
+.seg { border-radius: 999px; padding: 3px; gap: 2px; }
+.seg button { border-radius: 999px; }
+.seg button[aria-pressed="true"] { background: #1a66e8; color: #fff; }
+.go { background: #1a66e8; color: #fff; border-color: #1a66e8; }
+.card, .panel, .readout, .place, .stat, .compose, .cfg, .start, .route, .empty { border-radius: 12px; }
 </style>
 </head>
 <body>
@@ -170,7 +182,7 @@ a.place { color: inherit; text-decoration: none; }
 <div class="busy" id="busy" hidden><div><b>Building site</b><span id="busyTxt"></span><i></i></div></div>
 
 <header class="head">
-  <div class="brandrow"><img class="logo" src="img/brand/logo-96.png" alt="AirAwareNetwork" width="42" height="42"><div class="brand"><b>Marswalk</b><span>AirAwareNetwork · click anywhere on Mars</span></div></div>
+  <div class="brandrow"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="42" height="42"><div class="brand"><b>Marswalk</b><span>AirAwareNetwork · click anywhere on Mars</span></div></div>
   <div class="seg" role="group" aria-label="View">
     <button type="button" id="v-globe" aria-pressed="true">Globe</button>
     <button type="button" id="v-map" aria-pressed="false">Map</button>

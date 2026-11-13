@@ -360,11 +360,11 @@
       c.globalAlpha = 1;
     });
     c.font = "11px 'IBM Plex Mono', monospace"; c.fillStyle = "#97adba";           // hour axis
-    for (let t = Math.ceil(TL.t0 / 7200) * 7200; t < TL.t0 + TL.span; t += 7200) { c.fillRect(X(t), h - axis + 1, 1, 4); c.fillText(fUTC(t).slice(0, 2), X(t) - 5, h - 2); }
+    const hs = pw < 300 ? 21600 : pw < 560 ? 14400 : 7200; for (let t = Math.ceil(TL.t0 / hs) * hs; t < TL.t0 + TL.span; t += hs) { c.fillRect(X(t), h - axis + 1, 1, 4); c.fillText(fUTC(t).slice(0, 2), X(t) - 5, h - 2); }
     const r = walk.on ? walk.route : S.route, a = walk.on ? walk.t0 : departT();    // the planned EVA window
     if (r) {
       const x0 = X(a), x1 = X(a + r.time_s);
-      c.fillStyle = "rgba(168,201,215,0.16)"; c.fillRect(x0, top - 1, x1 - x0, h - axis); c.strokeStyle = "#a8c9d7"; c.lineWidth = 1; c.strokeRect(x0 + 0.5, top - 0.5, x1 - x0, h - axis - 1);
+      c.fillStyle = "rgba(59,130,246,0.22)"; c.fillRect(x0, top - 1, x1 - x0, h - axis); c.strokeStyle = "#8ab8ff"; c.lineWidth = 1; c.strokeRect(x0 + 0.5, top - 0.5, x1 - x0, h - axis - 1);
       c.fillStyle = "#6EE7A8"; for (const k of r.contacts) if (k.start) c.fillRect(X(k.start), h - axis - 3, Math.max(2, X(k.end) - X(k.start)), 3);
     }
     const cx = X(clockT()); c.fillStyle = "#fff"; c.fillRect(cx, 0, 1.5, h - axis + 2);   // now
@@ -419,12 +419,23 @@
     dop.o.frequency.setTargetAtTime(520 * Math.pow(2, -rr / 3.4 * 0.6), a.currentTime, 0.1);
     dop.g.gain.setTargetAtTime(0.05, a.currentTime, 0.1);
   }
-  function toast(title, msg, color = "#93B7E6") {
-    const d = document.createElement("div"); d.className = "toast"; d.style.borderLeftColor = color;
-    d.innerHTML = `<b>${title}</b>${msg}`; $("toasts").prepend(d);
-    while ($("toasts").children.length > 4) $("toasts").lastChild.remove();
-    setTimeout(() => d.remove(), 9000);
+  // One quiet notification on screen at a time. Everything is kept in the log behind the bell.
+  const LOG = []; let logNew = 0;
+  function renderLog() {
+    $("logCount").textContent = logNew ? String(Math.min(logNew, 99)) : "";
+    if ($("logPanel").hidden) return;
+    $("logPanel").innerHTML = "<h3>Notifications</h3>" + (LOG.length ? LOG.map(e => `<div class="logrow"><i style="background:${e.color}"></i><b>${e.title}</b><time>${fUTC(e.t)}</time><span>${e.msg}</span></div>`).join("") : "<p>Nothing yet. Satellite passes, position fixes and route changes show up here.</p>");
   }
+  function toast(title, msg, color = "#8ab8ff") {
+    LOG.unshift({ title, msg, color, t: clockT() }); if (LOG.length > 40) LOG.pop();
+    if ($("logPanel").hidden) logNew++; renderLog();
+    const d = document.createElement("div"); d.className = "toast";
+    d.innerHTML = `<i style="background:${color}"></i><div><b>${title}</b><span>${msg}</span></div>`;
+    $("toasts").replaceChildren(d);
+    clearTimeout(toast.h); toast.h = setTimeout(() => d.remove(), 5200);
+  }
+  $("logBtn").onclick = e => { e.stopPropagation(); const open = $("logPanel").hidden; $("logPanel").hidden = !open; $("logBtn").setAttribute("aria-expanded", String(open)); if (open) logNew = 0; renderLog(); };
+  addEventListener("click", e => { if (!$("logPanel").hidden && !e.target.closest("#logPanel")) { $("logPanel").hidden = true; $("logBtn").setAttribute("aria-expanded", "false"); } });
 
   /* ---------- walk simulation ---------- */
   const me = L.marker(ll(...HAB), { icon: L.divIcon({ className: "", html: '<div class="me"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, zIndexOffset: 900 });
@@ -440,7 +451,7 @@
     if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
     $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet();
     $("depart").disabled = true; drawStops();
-    toast("EVA started", `Leaving habitat ${fUTC(walk.t0)} UTC. No GPS: dead reckoning until the next relay pass.`, "#a8c9d7");
+    toast("EVA started", `Leaving habitat ${fUTC(walk.t0)} UTC. No GPS: dead reckoning until the next relay pass.`, "#8ab8ff");
     audio().resume();                                  // the Start press is the tap browsers need before any beep
   }
   const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" fill="currentColor"/></svg>', STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
@@ -505,7 +516,7 @@
     const j = Math.min(r.x.length - 1, q.i + 3); walk.hd = Math.atan2(r.x[j] - q.x, r.y[j] - q.y) || 0;
     walk.manual = true; walk.still = true; walk.blocked = 0; syncDrive();
     if (S.view === "3d") { T3.chase = true; T3.skyLook = false; $("t3follow").setAttribute("aria-pressed", "true"); }
-    toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#a8c9d7");
+    toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#8ab8ff");
   }
   async function releaseControl() {
     if (!walk.manual || walk.busy) return;
@@ -579,7 +590,7 @@
     if (walk._painted !== -2) { walk._painted = -2; paintRoute(walk.route, 0); }
     const tgt = walk.rest[0], dist = tgt ? Math.hypot(tgt[0] - bx, tgt[1] - by) : 0, brg = tgt ? Math.atan2(tgt[0] - bx, tgt[1] - by) : 0;
     $("arrow").style.transform = `rotate(${(brg - walk.hd) * 180 / Math.PI - 90}deg)`;
-    $("hudNext").textContent = `Manual · ${tgt === HAB ? "Habitat" : "Next waypoint"} · ${fKm(dist)}`;
+    $("hudNext").textContent = `${tgt === HAB ? "Habitat" : "Waypoint"} · ${fKm(dist)}`;
     $("hudSub").textContent = `Slope here ${sl0.toFixed(0)}° · ${walk.rest.length} stop${walk.rest.length === 1 ? "" : "s"} left`;
     $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
     const np = DB.passes.find(p2 => p2.start > walk.simT);
@@ -874,12 +885,12 @@
     function labelSprite(text, color) {
       const c = document.createElement("canvas"); c.width = 512; c.height = 112; const x = c.getContext("2d");
       x.fillStyle = "rgba(11,17,22,0.9)"; x.fillRect(0, 0, 512, 112); x.strokeStyle = color; x.lineWidth = 3; x.strokeRect(2, 2, 508, 108); x.fillStyle = color; x.fillRect(0, 0, 8, 112);
-      x.fillStyle = "#f4f8fa"; x.font = "600 50px 'IBM Plex Sans', sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, 268, 58);
+      x.fillStyle = "#f4f8fa"; x.font = "600 50px 'Inter', sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, 268, 58);
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false })); sp.renderOrder = 10; sp.userData.text = text; return sp;
     }
     function numSprite(n) {
       const c = document.createElement("canvas"); c.width = 128; c.height = 128; const x = c.getContext("2d");
-      x.fillStyle = "#a8c9d7"; x.fillRect(18, 18, 92, 92); x.lineWidth = 8; x.strokeStyle = "#0b1116"; x.strokeRect(14, 14, 100, 100);
+      x.fillStyle = "#8ab8ff"; x.fillRect(18, 18, 92, 92); x.lineWidth = 8; x.strokeStyle = "#0b1116"; x.strokeRect(14, 14, 100, 100);
       x.fillStyle = "#0b1116"; x.font = "600 62px 'IBM Plex Mono', monospace"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(String(n), 64, 68);
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false })); sp.renderOrder = 9; return sp;
     }
@@ -887,7 +898,7 @@
 
     const ASC = 95 * K, HSC = 150 * K, SSC = 1500 * K;
     const astro = makeAstronaut(); astro.scale.setScalar(ASC); sc.add(astro);
-    const astroTag = labelSprite("Astronaut", "#a8c9d7"); astroTag.scale.set(0.17, 0.037, 1); astroTag.center.set(0.5, 0); sc.add(astroTag);
+    const astroTag = labelSprite("Astronaut", "#8ab8ff"); astroTag.scale.set(0.17, 0.037, 1); astroTag.center.set(0.5, 0); sc.add(astroTag);
     const hab = makeHab(); hab.scale.setScalar(HSC); hab.position.copy(P(HAB[0], HAB[1], hz)); sc.add(hab);
     // scattered boulders, so the ground has scale and texture when you come in close
     {
@@ -905,7 +916,7 @@
     }
     const wk = new THREE.Group(); sc.add(wk); wk.visible = false;                         // uncertainty ring + beacon under the walker
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 72), new THREE.MeshBasicMaterial({ color: 0x93B7E6, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })); ring.rotation.x = -Math.PI / 2; ring.position.y = 12 * K; wk.add(ring);
-    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(5 * K, 5 * K, 700 * K, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xa8c9d7, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide })); beacon.position.y = 350 * K; wk.add(beacon);
+    const beacon = new THREE.Mesh(new THREE.CylinderGeometry(5 * K, 5 * K, 700 * K, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0x8ab8ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide })); beacon.position.y = 350 * K; wk.add(beacon);
     const beamG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]);
     const beam = new THREE.Line(beamG, new THREE.LineBasicMaterial({ color: 0x6EE7A8 })); sc.add(beam); beam.visible = false;
     const satHolder = new THREE.Group(); sc.add(satHolder); satHolder.visible = false;
@@ -961,7 +972,7 @@
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) { down = null; return; }
       down = null; if (walk.on) return;
       const h = pickTerrain(e); if (!h) return;
-      dismissCoach(); S.stops.push([h.x, h.y]); plan(); toast("Waypoint added", `Waypoint ${S.stops.length} added. Select the terrain again to add another.`, "#a8c9d7");
+      dismissCoach(); S.stops.push([h.x, h.y]); plan(); toast("Waypoint added", `Waypoint ${S.stops.length} added. Select the terrain again to add another.`, "#8ab8ff");
     });
     cv.addEventListener("pointermove", e => {
       const now = performance.now(); if (now - (T3.hv || 0) < 120 || e.buttons) return; T3.hv = now;

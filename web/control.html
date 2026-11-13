@@ -8,11 +8,11 @@
 <title>Marswalk · Mission control</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <style>
-:root { --space: #0b1116; --panel: #0f171d; --card: #141e26; --line: rgba(168, 201, 215, 0.14); --ink: #FFFFFF; --text: #d0e2ea; --dim: #a8c3d1; --faint: #6f8a9a;
-  --dust: #a8c9d7; --dusk: #a8c9d7; --blue: #a8c9d7; --nasa-blue: rgba(168, 201, 215, 0.17); --red: #f2674f; --ok: #4fd1a5; --bad: #ff6a5a; --warn: #ffb84d;
-  --f-display: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif; --f-body: "IBM Plex Sans", "Cairo", "Segoe UI", system-ui, sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace; color-scheme: dark; }
+:root { --space: #04060a; --panel: #0a0e15; --card: #111723; --line: rgba(150, 175, 220, 0.16); --ink: #FFFFFF; --text: #d6dce7; --dim: #a3afc2; --faint: #6c7a91;
+  --dust: #8ab8ff; --dusk: #8ab8ff; --blue: #8ab8ff; --nasa-blue: rgba(59, 130, 246, 0.2); --red: #fc3d21; --ok: #4fd1a5; --bad: #ff6a5a; --warn: #ffb84d;
+  --f-display: "Inter", "Cairo", "Segoe UI", system-ui, sans-serif; --f-body: "Inter", "Cairo", "Segoe UI", system-ui, sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace; color-scheme: dark; }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body { background: var(--space); color: var(--text); font: 15px/1.5 var(--f-body); padding: 0 0 env(safe-area-inset-bottom); }
@@ -93,11 +93,23 @@ header { padding: 10px 18px; }
 .chip[aria-pressed="true"] { background: rgba(168, 201, 215, 0.14); border-color: var(--dust); color: #fff; }
 .seg { border-radius: 4px; overflow: hidden; }
 .seg button[aria-pressed="true"] { background: var(--dust); color: #0b1116; }
+
+/* 2026-11 palette: space black, NASA blue actions, visible team logo */
+.logo { background: #0b1220; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 18px rgba(80, 150, 255, 0.55) !important; }
+.brand b { letter-spacing: 0.14em; }
+.chip, .go { border-radius: 999px; }
+.chip { padding: 8px 15px; }
+.chip[aria-pressed="true"] { background: rgba(59, 130, 246, 0.16); border-color: #3b82f6; color: #fff; }
+.seg { border-radius: 999px; padding: 3px; gap: 2px; }
+.seg button { border-radius: 999px; }
+.seg button[aria-pressed="true"] { background: #1a66e8; color: #fff; }
+.go { background: #1a66e8; color: #fff; border-color: #1a66e8; }
+.card, .panel, .readout, .place, .stat, .compose, .cfg, .start, .route, .empty { border-radius: 12px; }
 </style>
 </head>
 <body>
 <header>
-  <div class="brandrow"><img class="logo" src="img/brand/logo-96.png" alt="AirAwareNetwork" width="46" height="46"><div class="brand"><b>Marswalk</b><span id="roleName">Earth mission control</span></div></div>
+  <div class="brandrow"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="46" height="46"><div class="brand"><b>Marswalk</b><span id="roleName">Earth mission control</span></div></div>
   <div class="seg" role="group" aria-label="Which station is this?">
     <button type="button" data-r="earth" aria-pressed="true">Earth</button>
     <button type="button" data-r="pod" aria-pressed="false">The pod</button>
