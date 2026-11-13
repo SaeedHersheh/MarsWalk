@@ -434,6 +434,7 @@
     if (!S.route) return;
     Object.assign(walk, { on: true, route: S.route, t0: departT(), simT: departT(), odo: 0, odoFix: 0, theta: Math.random() * 6.28,
       drift: [0, 0], dAlong: 0, _i: 0, follow: true, busy: false, hzOn: false, zNow: S.route.z[0], inContact: false, alerted: new Set(), dose: 0, lastSun: 0, last: performance.now(), dwellSaid: -1 });
+    Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 3, rest: [], hd: 0, still: true, keys: {}, lastRe: 0 }); syncDrive();
     me.addTo(map); unc.addTo(map); if (S.truth) ghost.addTo(map);
     walk._painted = -1;
     if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
@@ -451,7 +452,7 @@
     document.body.classList.toggle("walking", on);
   }
   function endWalk(msg) {
-    walk.on = false; [me, unc, ghost].forEach(l => map.removeLayer(l));
+    walk.on = false; walk.manual = false; syncDrive(); [me, unc, ghost].forEach(l => map.removeLayer(l));
     $("hud").hidden = true; $("homeBtn").disabled = true; syncWalk();
     $("depart").disabled = false; dopplerTone(null);
     if (msg) toast("EVA complete", msg, "#6EE7A8");
@@ -474,11 +475,141 @@
     } catch (e) { toast("Reroute failed", e.message, "#F0616B"); }
     walk.busy = false;
   }
+  /* Position from the relay link. The radio measures range and range rate (Doppler) to the orbiter once a minute;
+     here those numbers are simulated from the true position with noise, then solved by least squares (relayfix.js).
+     Orbiter geometry is the real JPL Horizons pass. Height comes from the terrain map. */
+  function relayFix(tx, ty, gx, gy) {
+    const t = walk.simT, q = currentPass(t); if (!q || !window.RelayFix) return null;
+    const sm = q.samples; let i0 = sm.findIndex(v => v[0] >= q.start), i1 = -1;
+    for (let i = 0; i < sm.length; i++) if (sm[i][0] <= t) i1 = i;
+    if (i0 < 0 || i1 - i0 < 2) return null;
+    const u = (elevAt(tx, ty) ?? 0) - (elevAt(...HAB) ?? 0);
+    const fx = RelayFix.solve(sm, i0, i1, { e: tx - HAB[0], n: ty - HAB[1], u }, { e: gx - HAB[0], n: gy - HAB[1] });
+    if (!fx || !isFinite(fx.e) || !isFinite(fx.sigma)) return null;
+    return { x: fx.e + HAB[0], y: fx.n + HAB[1], sigma: fx.sigma, err: fx.err, used: fx.used, orbiter: q.orbiter, key: q.orbiter + q.start, n: i1 };
+  }
+  const REACH = Math.max(45, 1.5 * DX);
+  function syncDrive() {
+    const on = !!(walk.on && walk.manual); document.body.classList.toggle("driving", on);
+    const b = $("t3drive"), c = $("driveBtn"); [b, c].forEach(x => { if (x) { x.setAttribute("aria-pressed", String(on)); x.textContent = on ? "Autopilot" : "Take control"; } });
+    $("stick").hidden = !on;
+  }
+  function takeControl() {
+    if (!walk.on) { if (!S.route) return; startWalk(); }
+    if (walk.manual || walk.busy) return;
+    const r = walk.route, q = posOn(r, walk.simT - walk.t0);
+    const k = r.stop_idx.slice(1).filter(i => i <= q.i).length;
+    walk.rest = r.stopsReq.slice(1 + k); if (!walk.rest.length) walk.rest = [HAB];
+    walk.mx = q.x + walk.drift[0]; walk.my = q.y + walk.drift[1];           // the true position
+    walk.drift = [-walk.drift[0], -walk.drift[1]];                          // believed = true + drift
+    const j = Math.min(r.x.length - 1, q.i + 3); walk.hd = Math.atan2(r.x[j] - q.x, r.y[j] - q.y) || 0;
+    walk.manual = true; walk.still = true; walk.blocked = 0; syncDrive();
+    if (S.view === "3d") { T3.chase = true; T3.skyLook = false; $("t3follow").setAttribute("aria-pressed", "true"); }
+    toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#a8c9d7");
+  }
+  async function releaseControl() {
+    if (!walk.manual || walk.busy) return;
+    const b = [walk.mx + walk.drift[0], walk.my + walk.drift[1]];
+    await reroute(b, walk.rest, "Autopilot: route from your last known position.");
+    walk.manual = false; walk.dAlong = 0; walk.drift = [-walk.drift[0], -walk.drift[1]]; syncDrive();
+  }
+  const stick = { x: 0, y: 0 };
+  function driveInput() {
+    const k = walk.keys || {};
+    let turn = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0), fwd = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0);
+    if (Math.abs(stick.x) > 0.12 || Math.abs(stick.y) > 0.12) { turn = stick.x; fwd = stick.y; }
+    return [turn, fwd];
+  }
+  function offRoute(r, x, y) { let m = 1e12; for (let i = 0; i < r.x.length; i += 2) { const d = (r.x[i] - x) ** 2 + (r.y[i] - y) ** 2; if (d < m) m = d; } return Math.sqrt(m); }
+  function manualStep(dt, now) {
+    const r = walk.route, [turn, fwd] = driveInput(), simDt = dt * S.speed;
+    walk.hd += turn * 1.9 * dt * (fwd < 0 ? -1 : 1);
+    const sl0 = slopeAt(walk.mx, walk.my) ?? 0;
+    let step = 0; walk.still = Math.abs(fwd) < 0.05;
+    if (!walk.still) {
+      const v = 1.25 * Math.max(0.2, 1 - sl0 / 32) * (fwd < 0 ? 0.5 : 1);                   // m/s in a suit, slower on slope
+      step = v * Math.abs(fwd) * simDt;
+      const sg = Math.sign(fwd), nx = walk.mx + Math.sin(walk.hd) * step * sg, ny = walk.my + Math.cos(walk.hd) * step * sg, sl = slopeAt(nx, ny);
+      if (sl == null || nx < DX * 2 || ny < DY * 2 || nx > M.width_m - DX * 2 || ny > M.height_m - DY * 2) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Edge of the mapped area", "Turn back.", "#F5B85B"); } }
+      else if (sl > 34 && sl > sl0) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Too steep", `${sl.toFixed(0)}° ahead. A suited astronaut cannot climb that. Go around.`, "#F0616B"); } }
+      else { walk.mx = nx; walk.my = ny; }
+      if (!step) walk.still = true;
+    }
+    walk.odo += step; walk.dose += (r.dose_msv / r.time_s) * simDt;
+    walk.theta += (Math.random() - 0.5) * 0.08;                                              // dead reckoning drifts 2 % of distance walked
+    walk.drift[0] += Math.cos(walk.theta) * DRIFT * step; walk.drift[1] += Math.sin(walk.theta) * DRIFT * step;
+    const z = elevAt(walk.mx, walk.my) ?? walk.zNow; walk.zNow = z;
+    // relay: a new measurement every minute of the pass, solved together with the earlier ones
+    const q = currentPass(walk.simT); let con = null;
+    if (q) {
+      con = { orbiter: q.orbiter, start: q.start, end: q.end };
+      const fx = relayFix(walk.mx, walk.my, walk.mx + walk.drift[0], walk.my + walk.drift[1]);
+      if (fx && walk.fxN !== fx.key + fx.n && fx.sigma < 60) {
+        walk.fxN = fx.key + fx.n;
+        const was = Math.hypot(...walk.drift);
+        walk.drift = [fx.x - walk.mx, fx.y - walk.my]; walk.sig = Math.max(2, fx.sigma); walk.odoFix = walk.odo;
+        if (walk.fixKey !== fx.key) {
+          walk.fixKey = fx.key; chime(q.orbiter, true);
+          reroute([fx.x, fx.y], walk.rest, `${q.orbiter} position fix (${fx.used} range and Doppler measurements, ±${fx.sigma.toFixed(0)} m). Dead reckoning was ${Math.round(was)} m out. New route from where you really are.`);
+          walk.lastRe = now;
+        }
+      }
+    }
+    walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
+    for (const p2 of DB.passes) {
+      if (p2.end < walk.simT || p2.start > walk.simT + 620) continue;
+      const k10 = p2.orbiter + p2.start + "a";
+      if (walk.simT >= p2.start - 600 && walk.simT < p2.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); chime(p2.orbiter); toast(`${p2.orbiter} in ${Math.round((p2.start - walk.simT) / 60)} min`, "Position fix and radio when it rises.", ORB[p2.orbiter].c); }
+    }
+    dopplerTone(con ? q : null, walk.simT);
+    const bx = walk.mx + walk.drift[0], by = walk.my + walk.drift[1], rad = (walk.sig || 3) + DRIFT * (walk.odo - walk.odoFix);
+    // waypoints are reached with the feet, not with the estimate
+    if (walk.rest.length && Math.hypot(walk.rest[0][0] - walk.mx, walk.rest[0][1] - walk.my) < REACH) {
+      const home = walk.rest[0] === HAB; walk.rest.shift();
+      if (!walk.rest.length) { T3.walker = null; endWalk(`${home ? "Back at the habitat" : "Final waypoint reached"} under manual control. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`); return; }
+      toast("Waypoint reached", `${walk.rest.length} to go.`, "#6EE7A8"); walk.lastRe = 0;
+    }
+    // newest best path: whenever the estimate has left the line, plan again from the estimate
+    if (!walk.busy && now - (walk.lastRe || 0) > 6000 && walk.rest.length && offRoute(r, bx, by) > Math.max(70, 3 * DX)) {
+      walk.lastRe = now;
+      reroute([bx, by], walk.rest, con ? `New best route from your relay-fixed position (±${Math.round(rad)} m).` : `New best route from your dead-reckoned position (±${Math.round(rad)} m, no satellite).`);
+    }
+    me.setLatLng(ll(bx, by)); unc.setLatLng(ll(bx, by)); unc.setRadius(rad); ghost.setLatLng(ll(walk.mx, walk.my));
+    unc.setStyle({ color: con ? "#6EE7A8" : "#93B7E6", fillColor: con ? "#6EE7A8" : "#93B7E6" });
+    if (walk._painted !== -2) { walk._painted = -2; paintRoute(walk.route, 0); }
+    const tgt = walk.rest[0], dist = tgt ? Math.hypot(tgt[0] - bx, tgt[1] - by) : 0, brg = tgt ? Math.atan2(tgt[0] - bx, tgt[1] - by) : 0;
+    $("arrow").style.transform = `rotate(${(brg - walk.hd) * 180 / Math.PI - 90}deg)`;
+    $("hudNext").textContent = `Manual · ${tgt === HAB ? "Habitat" : "Next waypoint"} · ${fKm(dist)}`;
+    $("hudSub").textContent = `Slope here ${sl0.toFixed(0)}° · ${walk.rest.length} stop${walk.rest.length === 1 ? "" : "s"} left`;
+    $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
+    const np = DB.passes.find(p2 => p2.start > walk.simT);
+    $("hudLink").textContent = con ? `${con.orbiter} ✓` : np ? `${np.orbiter.split(" ").pop()} in ${Math.round((np.start - walk.simT) / 60)} m` : "none";
+    $("hudLink").style.color = con ? "var(--ok)" : "var(--ink)";
+    $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
+    if (S.view === "2d" && !map.getBounds().pad(-0.25).contains(ll(walk.mx, walk.my))) map.panTo(ll(walk.mx, walk.my), { animate: true, duration: 0.4 });
+    T3.walker = { x: walk.mx, y: walk.my, z, rad, con, pass: con ? q : null, hdx: Math.sin(walk.hd), hdy: Math.cos(walk.hd), d: 0, still: walk.still, bx, by, manual: true };
+  }
+  addEventListener("keydown", e => {
+    const k = e.key.toLowerCase(); if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
+    if (/^(input|textarea|select)$/i.test(e.target.tagName) || !walk.on) return;
+    e.preventDefault(); if (!walk.manual) takeControl(); walk.keys[k] = true;
+  });
+  addEventListener("keyup", e => { if (walk.keys) walk.keys[e.key.toLowerCase()] = false; });
+  addEventListener("blur", () => { walk.keys = {}; });
+  {
+    const el = $("stick"), nub = el.firstElementChild; let id = null;
+    const set = e => { const b = el.getBoundingClientRect(), R = b.width / 2; let x = (e.clientX - b.left - R) / R, y = (e.clientY - b.top - R) / R; const m = Math.hypot(x, y); if (m > 1) { x /= m; y /= m; } stick.x = x; stick.y = -y; nub.style.transform = `translate(${x * R * 0.55}px, ${y * R * 0.55}px)`; };
+    const end = () => { id = null; stick.x = stick.y = 0; nub.style.transform = ""; };
+    el.addEventListener("pointerdown", e => { id = e.pointerId; el.setPointerCapture(id); set(e); e.preventDefault(); });
+    el.addEventListener("pointermove", e => { if (e.pointerId === id) set(e); });
+    el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+  }
   function tick(now) {
     requestAnimationFrame(tick);
     const dtReal = Math.min(0.5, (now - (walk.last || now)) / 1000); walk.last = now;
     if (walk.on && !walk.busy) {
       walk.simT += dtReal * S.speed;
+      if (walk.manual) manualStep(dtReal, now); else {
       const r = walk.route, el = walk.simT - walk.t0, p = posOn(r, el);
       const moved = Math.max(0, p.d - walk.dAlong); walk.odo += moved; walk.dAlong = p.d; walk.zNow = p.z;
       walk.dose += (r.dose_msv / r.time_s) * dtReal * S.speed;
@@ -490,15 +621,19 @@
       const tx = p.x + walk.drift[0], ty = p.y + walk.drift[1];
       // relay contact along this route (terrain-aware, from the API)
       const con = r.contacts.find(k => k.start && k.start <= walk.simT && walk.simT < k.end);
-      if (con && !walk.inContact) {
-        const off = Math.hypot(...walk.drift);
-        chime(con.orbiter, true);
-        const k = r.stop_idx.slice(1).filter(i => i <= p.i).length, rest = r.stopsReq.slice(1 + k);
-        if (off > 20 && rest.length) reroute([tx, ty], rest, `${con.orbiter} Doppler fix: you were ${Math.round(off)} m off the line. New route from your true position.`);
-        else toast("Position fix", `${con.orbiter} Doppler fix. Drift was ${Math.round(off)} m. Uncertainty reset.`, ORB[con.orbiter].c);
-        walk.odoFix = walk.odo; walk.drift = [0, 0];
+      const pk = con ? con.orbiter + con.start : null;
+      if (con && walk.fixKey !== pk) {
+        const fx = relayFix(tx, ty, p.x, p.y);                 // least-squares fix from range + Doppler to the orbiter
+        if (fx && fx.sigma < 40) {
+          walk.fixKey = pk; const off = Math.hypot(...walk.drift);
+          chime(con.orbiter, true);
+          const k = r.stop_idx.slice(1).filter(i => i <= p.i).length, rest = r.stopsReq.slice(1 + k);
+          if (off > 20 && rest.length) reroute([fx.x, fx.y], rest, `${con.orbiter} position fix (${fx.used} range and Doppler measurements, ±${fx.sigma.toFixed(0)} m): you were ${Math.round(off)} m off the line. New route from the fixed position.`);
+          else toast("Position fix", `${con.orbiter}: ${fx.used} range and Doppler measurements, ±${fx.sigma.toFixed(0)} m. Drift was ${Math.round(off)} m.`, ORB[con.orbiter].c);
+          walk.odoFix = walk.odo; walk.drift = [0, 0]; walk.sig = Math.max(2, fx.sigma);
+        }
       }
-      if (con) walk.odoFix = walk.odo;
+      if (con && walk.fixKey === pk) walk.odoFix = walk.odo;
       walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
       // pass alerts: T-10 min and at rise
       for (const q of DB.passes) {
@@ -509,7 +644,7 @@
       }
       dopplerTone(con ? currentPass(walk.simT) : null, walk.simT);
       // draw
-      const rad = 3 + DRIFT * (walk.odo - walk.odoFix);
+      const rad = (walk.sig || 3) + DRIFT * (walk.odo - walk.odoFix);
       me.setLatLng(ll(p.x, p.y)); unc.setLatLng(ll(p.x, p.y)); unc.setRadius(rad); ghost.setLatLng(ll(tx, ty));
       unc.setStyle({ color: con ? "#6EE7A8" : "#93B7E6", fillColor: con ? "#6EE7A8" : "#93B7E6" });
       if (walk._painted !== p.i) { walk._painted = p.i; paintRoute(r, p.i, [p.x, p.y]); }
@@ -534,6 +669,7 @@
       if (S.view === "2d" && walk.follow !== false && !map.getBounds().pad(-0.25).contains(ll(p.x, p.y))) map.panTo(ll(p.x, p.y), { animate: true, duration: 0.6 });
       T3.walker = { x: p.x, y: p.y, z: p.z, rad, con, pass: con ? currentPass(walk.simT) : null, hdx: r.x[j] - p.x, hdy: r.y[j] - p.y, d: p.d };
       if (el >= r.time_s) endWalk(`Back at the habitat after ${fDur(walk.simT - (S.route.depart))}. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`);
+      }
     }
     // 4 Hz UI refresh
     if (!tick.n || now - tick.n > 250) {
@@ -868,16 +1004,16 @@
       astro.position.copy(here);
       if (walking) {
         if (Math.hypot(k.hdx, k.hdy) > 1e-6) astro.rotation.y = Math.atan2(k.hdx, -k.hdy);
-        if (!walk.busy) T3.phase = (T3.phase || 0) + dtr * 6.5;
-        const sw = Math.sin(T3.phase);
+        if (!walk.busy && !k.still) T3.phase = (T3.phase || 0) + dtr * 6.5;
+        const sw = k.still ? 0 : Math.sin(T3.phase);
         u.legL.rotation.x = sw * 0.62; u.legR.rotation.x = -sw * 0.62;
         u.kneeL.rotation.x = Math.max(0, sw) * 0.95; u.kneeR.rotation.x = Math.max(0, -sw) * 0.95;
         u.armL.rotation.x = -sw * 0.5; u.armR.rotation.x = sw * 0.5; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.45;
-        astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.05 * ASC;
+        if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.05 * ASC;
       } else { astro.rotation.y = 0.7; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
       astroTag.position.copy(astro.position); astroTag.position.y += 2.95 * ASC;
       wk.visible = walking;
-      if (walking) { wk.position.copy(here); ring.scale.setScalar(Math.max(k.rad, 25 * K)); ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6); }
+      if (walking) { wk.position.copy(k.bx != null ? P(k.bx, k.by, elevAt(k.bx, k.by) ?? k.z) : here); ring.scale.setScalar(Math.max(k.rad, 25 * K)); ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6); }
 
       // a satellite appears in the sky while one is above the horizon from here
       const t = walk.on ? walk.simT : Date.now() / 1000;
@@ -908,7 +1044,7 @@
       if (T3.chase && !T3.drag) {
         if (walking) {
           const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; }
-          if (T3.dir) { const want = here.clone().addScaledVector(T3.dir, -1000 * K); want.y += 480 * K; cam.position.lerp(want, 0.06); }
+          if (T3.dir) { const cl = cam.aspect < 1 ? 1.7 : 1, want = here.clone().addScaledVector(T3.dir, -1000 * K * cl); want.y += 480 * K * cl; cam.position.lerp(want, k.manual ? 0.09 : 0.06); }
         } else {
           const fwd = new THREE.Vector3(Math.sin(0.7), 0, Math.cos(0.7)), want = here.clone().addScaledVector(fwd, 1100 * K); want.y += 420 * K; cam.position.lerp(want, 0.06);
         }
@@ -987,6 +1123,7 @@
   tog("sound", "sound", () => { if (S.sound) { audio().resume(); chime("MRO"); } });
   tog("doppler", "doppler", () => { if (S.doppler) audio().resume(); });
   tog("truth", "truth", () => { if (walk.on) S.truth ? ghost.addTo(map) : map.removeLayer(ghost); });
+  $("t3drive").onclick = $("driveBtn").onclick = () => walk.on && walk.manual ? releaseControl() : takeControl();
   $("walkBtn").onclick = () => walk.on ? endWalk() : startWalk();
   $("homeBtn").onclick = () => { if (!walk.on) return; const p = posOn(walk.route, walk.simT - walk.t0); reroute([p.x, p.y], [HAB], "Abort: shortest safe way back to the habitat."); };
   map.on("dragstart", () => walk.follow = false);

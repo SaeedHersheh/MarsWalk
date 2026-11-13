@@ -1,0 +1,365 @@
+<title>Marswalk System Design and PRD</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column, wide diagram scrolls inside its own frame. Dark-first, AirAware palette. */
+:root{
+  --bg:#0d1216; --panel:#131a20; --line:#26323b; --fg:#e4ecf0; --mute:#93a6b1; --accent:#a8c9d7;
+  --live:#3ddc97; --warn:#e8b04a; --risk:#e57373; --ink-on-accent:#0d1216;
+  --sans:"IBM Plex Sans",system-ui,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+  --bg:#f5f7f8; --panel:#ffffff; --line:#d3dce1; --fg:#17232b; --mute:#566872; --accent:#2f6f8a;
+  --live:#14804f; --warn:#a56a00; --risk:#b3261e; --ink-on-accent:#ffffff; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#f5f7f8; --panel:#ffffff; --line:#d3dce1; --fg:#17232b; --mute:#566872; --accent:#2f6f8a;
+  --live:#14804f; --warn:#a56a00; --risk:#b3261e; --ink-on-accent:#ffffff; color-scheme:light}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 var(--sans);margin:0;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 72px}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+header .tag{font:500 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:clamp(1.8rem,4.5vw,2.6rem);line-height:1.15;margin:8px 0 12px;font-weight:600;text-wrap:balance}
+header p{max-width:65ch;color:var(--mute);margin:0}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+nav a{font:500 13px var(--mono);color:var(--fg);text-decoration:none;border:1px solid var(--line);padding:6px 10px;border-radius:4px}
+nav a:hover,nav a:focus-visible{border-color:var(--accent);outline:none;color:var(--accent)}
+h2{font-size:1.45rem;margin:0 0 6px;font-weight:600;text-wrap:balance;padding-bottom:10px;border-bottom:1px solid var(--line)}
+h3{font-size:1.02rem;margin:28px 0 8px;font-weight:600}
+p{margin:10px 0;max-width:70ch}
+.lead{color:var(--mute)}
+section{scroll-margin-top:16px}
+ul,ol{max-width:72ch;padding-left:22px;margin:8px 0}
+li{margin:4px 0}
+code,.mono{font-family:var(--mono);font-size:.88em;background:var(--panel);border:1px solid var(--line);padding:1px 5px;border-radius:3px}
+.frame{border:1px solid var(--line);background:var(--panel);border-radius:4px;overflow-x:auto;margin:16px 0}
+.frame svg{display:block;min-width:860px;width:100%;height:auto}
+.cap{font-size:.85rem;color:var(--mute);margin:6px 0 0}
+table{border-collapse:collapse;width:100%;font-size:.93rem}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--panel);margin:12px 0}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td:first-child{white-space:nowrap}
+.pill{font:500 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.built{color:var(--live)} .part{color:var(--warn)} .plan{color:var(--mute)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.box{border:1px solid var(--line);background:var(--panel);border-radius:4px;padding:14px 16px;min-width:0}
+.box h3{margin-top:0}
+.steps{counter-reset:s;list-style:none;padding:0;max-width:none;display:flex;flex-direction:column;gap:0}
+.steps li{display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;padding:12px 0;border-bottom:1px solid var(--line);margin:0}
+.steps li:last-child{border-bottom:0}
+.steps li::before{counter-increment:s;content:counter(s);font:500 13px var(--mono);width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--accent);color:var(--accent);border-radius:50%}
+.steps b{font-weight:600}
+.callout{border-left:3px solid var(--warn);background:var(--panel);padding:10px 14px;max-width:72ch;border-radius:0 4px 4px 0}
+footer{color:var(--mute);font-size:.85rem;border-top:1px solid var(--line);padding-top:16px}
+/* svg */
+.sv-box{fill:var(--bg);stroke:var(--line);stroke-width:1.2}
+.sv-grp{fill:none;stroke:var(--line);stroke-dasharray:5 4;stroke-width:1.2}
+.sv-hi{fill:var(--bg);stroke:var(--accent);stroke-width:1.4}
+.sv-ext{fill:var(--bg);stroke:var(--warn);stroke-width:1.2}
+.sv-t{fill:var(--fg);font:600 13px var(--sans)}
+.sv-s{fill:var(--mute);font:400 11.5px var(--mono)}
+.sv-h{fill:var(--accent);font:500 11px var(--mono);letter-spacing:.1em}
+.sv-l{fill:var(--mute);font:400 11px var(--mono)}
+.sv-a{stroke:var(--accent);stroke-width:1.5;fill:none}
+.sv-d{stroke:var(--mute);stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+.sv-w{stroke:var(--warn);stroke-width:1.3;fill:none;stroke-dasharray:4 3}
+.sv-live{stroke:var(--live);stroke-width:1.5;fill:none}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="tag">AirAwareNetwork · NASA Space Apps 2026</div>
+  <h1>Marswalk: system design and product requirements</h1>
+  <p>Marswalk plans safe walking routes for astronauts on Mars, using real NASA terrain data, and models the radio and positioning link through relay orbiters. This page explains how the parts fit together, then states what the product must do.</p>
+  <nav aria-label="Sections">
+    <a href="#arch">1 Architecture</a><a href="#flows">2 Data flows</a><a href="#radio">3 Radio relay</a><a href="#data">4 Data sources</a><a href="#prd">5 PRD</a><a href="#reqs">6 Requirements</a><a href="#risks">7 Risks</a>
+  </nav>
+</header>
+
+<section id="arch">
+  <h2>1 System architecture</h2>
+  <p class="lead">Three browser pages talk to one Python server. The server reads terrain from files on disk, relay-orbiter pass times from Postgres, and calls JPL Horizons for live geometry. Solid arrows are request and response; dashed arrows are data prepared ahead of time.</p>
+  <div class="frame" role="img" aria-label="Architecture diagram: browser clients call the FastAPI server, which reads site rasters from disk, passes from Postgres and light time from JPL Horizons. Offline pipelines build rasters and pass data from NASA and USGS sources.">
+  <svg viewBox="0 0 1000 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker>
+      <marker id="am" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--mute)"/></marker>
+      <marker id="aw" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--warn)"/></marker>
+    </defs>
+
+    <!-- column headers -->
+    <text class="sv-h" x="20" y="24">CLIENTS (BROWSER)</text>
+    <text class="sv-h" x="330" y="24">SERVER (FASTAPI, app/)</text>
+    <text class="sv-h" x="730" y="24">STORAGE</text>
+
+    <!-- clients group -->
+    <rect class="sv-grp" x="10" y="34" width="270" height="400" rx="4"/>
+    <rect class="sv-hi" x="24" y="52" width="242" height="104" rx="4"/>
+    <text class="sv-t" x="38" y="76">Planner</text>
+    <text class="sv-s" x="38" y="96">index.html + app.js</text>
+    <text class="sv-s" x="38" y="114">Leaflet map · three.js 3D</text>
+    <text class="sv-s" x="38" y="132">timeline · profile · radio panel</text>
+    <rect class="sv-box" x="24" y="172" width="242" height="72" rx="4"/>
+    <text class="sv-t" x="38" y="196">Globe</text>
+    <text class="sv-s" x="38" y="216">globe.html · pick any site on Mars</text>
+    <text class="sv-s" x="38" y="232">radiation base map</text>
+    <rect class="sv-box" x="24" y="260" width="242" height="72" rx="4"/>
+    <text class="sv-t" x="38" y="284">Mission control</text>
+    <text class="sv-s" x="38" y="304">control.html · Earth or Pod role</text>
+    <text class="sv-s" x="38" y="320">sends and receives messages</text>
+    <rect class="sv-box" x="24" y="348" width="242" height="70" rx="4"/>
+    <text class="sv-t" x="38" y="372">Device audio</text>
+    <text class="sv-s" x="38" y="392">MediaRecorder push-to-talk</text>
+    <text class="sv-s" x="38" y="408">Web Audio playback (needs https)</text>
+
+    <!-- server group -->
+    <rect class="sv-grp" x="320" y="34" width="380" height="400" rx="4"/>
+    <rect class="sv-box" x="334" y="52" width="352" height="64" rx="4"/>
+    <text class="sv-t" x="348" y="76">Static files</text>
+    <text class="sv-s" x="348" y="96">web/ pages, site images, tiles</text>
+    <rect class="sv-hi" x="334" y="130" width="352" height="112" rx="4"/>
+    <text class="sv-t" x="348" y="154">Planning engine · main.py</text>
+    <text class="sv-s" x="348" y="174">Site registry (?site=id)</text>
+    <text class="sv-s" x="348" y="190">slope-tier cost routing + relax steps</text>
+    <text class="sv-s" x="348" y="206">radiation dose · heat · light · stats</text>
+    <text class="sv-s" x="348" y="222">relay passes and contact windows</text>
+    <rect class="sv-hi" x="334" y="256" width="352" height="96" rx="4"/>
+    <text class="sv-t" x="348" y="280">Comms router · comms.py</text>
+    <text class="sv-s" x="348" y="300">/api/comms/send · inbox · deliver</text>
+    <text class="sv-s" x="348" y="316">audio · config · clear</text>
+    <text class="sv-s" x="348" y="332">delay = light time ÷ speed + 1.5 s</text>
+    <rect class="sv-box" x="334" y="366" width="352" height="56" rx="4"/>
+    <text class="sv-t" x="348" y="388">Pass cache fallback</text>
+    <text class="sv-s" x="348" y="408">data/passes_cache.json if database is asleep</text>
+
+    <!-- storage group -->
+    <rect class="sv-grp" x="740" y="34" width="250" height="400" rx="4"/>
+    <rect class="sv-box" x="754" y="52" width="222" height="96" rx="4"/>
+    <text class="sv-t" x="768" y="76">PostgreSQL</text>
+    <text class="sv-s" x="768" y="96">db marswalk (WSL Ubuntu)</text>
+    <text class="sv-s" x="768" y="112">passes: range, range rate / min</text>
+    <text class="sv-s" x="768" y="128">sun: azimuth, elevation / 5 min</text>
+    <rect class="sv-box" x="754" y="162" width="222" height="124" rx="4"/>
+    <text class="sv-t" x="768" y="186">Site rasters · data/</text>
+    <text class="sv-s" x="768" y="206">DEM (elevation)</text>
+    <text class="sv-s" x="768" y="222">slope · heat · radiation</text>
+    <text class="sv-s" x="768" y="238">per-site GeoTIFF / NumPy</text>
+    <text class="sv-s" x="768" y="254">MOLA 463 m global COG</text>
+    <text class="sv-s" x="768" y="270">Jezero 20 m CTX base</text>
+    <rect class="sv-box" x="754" y="300" width="222" height="68" rx="4"/>
+    <text class="sv-t" x="768" y="324">Message store</text>
+    <text class="sv-s" x="768" y="344">in memory only</text>
+    <text class="sv-s" x="768" y="358">lost on server restart</text>
+    <rect class="sv-box" x="754" y="382" width="222" height="40" rx="4"/>
+    <text class="sv-t" x="768" y="406">.env · secrets</text>
+
+    <!-- client -> server arrows -->
+    <path class="sv-a" d="M266 104 H334" marker-end="url(#ar)"/>
+    <text class="sv-l" x="272" y="97">pages</text>
+    <path class="sv-a" d="M266 128 L300 128 L300 186 H334" marker-end="url(#ar)"/>
+    <text class="sv-l" x="270" y="206">/api/route</text>
+    <path class="sv-a" d="M266 296 L310 296 H334" marker-end="url(#ar)"/>
+    <path class="sv-a" d="M266 384 L304 384 L304 332 H334" marker-end="url(#ar)"/>
+    <text class="sv-l" x="266" y="373">audio</text>
+
+    <!-- server -> storage -->
+    <path class="sv-a" d="M686 186 L714 186 L714 100 H754" marker-end="url(#ar)"/>
+    <path class="sv-a" d="M686 214 H720 V224 H754" marker-end="url(#ar)"/>
+    <path class="sv-a" d="M686 304 H720 V334 H754" marker-end="url(#ar)"/>
+    <path class="sv-d" d="M686 394 L728 394 L728 112 H754" marker-end="url(#am)"/>
+
+    <!-- external live -->
+    <rect class="sv-ext" x="334" y="458" width="352" height="64" rx="4"/>
+    <text class="sv-t" x="348" y="482">JPL Horizons API (live)</text>
+    <text class="sv-s" x="348" y="502">Earth–Mars light time · Sun position · orbiter state</text>
+    <path class="sv-w" d="M510 458 V422" marker-end="url(#aw)"/>
+    <text class="sv-l" x="520" y="444">requests</text>
+
+    <!-- pipelines -->
+    <rect class="sv-grp" x="10" y="548" width="980" height="84" rx="4"/>
+    <text class="sv-h" x="24" y="568">OFFLINE PIPELINES (pipeline/) · RUN ONCE PER SITE</text>
+    <rect class="sv-box" x="24" y="578" width="170" height="44" rx="4"/>
+    <text class="sv-t" x="36" y="596" style="font-size:12px">build_site.py</text><text class="sv-s" x="36" y="613">DEM, slope, tiles</text>
+    <rect class="sv-box" x="206" y="578" width="170" height="44" rx="4"/>
+    <text class="sv-t" x="218" y="596" style="font-size:12px">build_heat.py</text><text class="sv-s" x="218" y="613">THEMIS/TES heat</text>
+    <rect class="sv-box" x="388" y="578" width="170" height="44" rx="4"/>
+    <text class="sv-t" x="400" y="596" style="font-size:12px">fetch_passes.py</text><text class="sv-s" x="400" y="613">Horizons → Postgres</text>
+    <rect class="sv-box" x="570" y="578" width="190" height="44" rx="4"/>
+    <text class="sv-t" x="582" y="596" style="font-size:12px">build_hirise / terrain</text><text class="sv-s" x="582" y="613">1 m slopes, 3D mesh</text>
+    <rect class="sv-box" x="772" y="578" width="206" height="44" rx="4"/>
+    <text class="sv-t" x="784" y="596" style="font-size:12px">site_stats.py</text><text class="sv-s" x="784" y="613">per-site summaries</text>
+
+    <!-- sources -->
+    <rect class="sv-ext" x="740" y="458" width="236" height="64" rx="4"/>
+    <text class="sv-t" x="754" y="482">NASA and USGS archives</text>
+    <text class="sv-s" x="754" y="502">MOLA · CTX · HiRISE · Trek · THEMIS</text>
+    <path class="sv-w" d="M858 548 V522" marker-end="url(#aw)"/>
+    <!-- pipelines output to storage -->
+    <path class="sv-d" d="M984 600 H994 V300 H976" marker-end="url(#am)"/>
+    <text class="sv-l" x="150" y="540">writes rasters and passes to storage (dashed, right edge)</text>
+  </svg>
+  </div>
+  <p class="cap">Solid blue-grey: request and response at runtime. Dashed grey: prepared ahead of time. Amber: external services.</p>
+
+  <h3>What each part is responsible for</h3>
+  <div class="grid2">
+    <div class="box"><h3>Planner (browser)</h3><p>Shows the map and 3D scene, lets the user place waypoints, calls the route API, draws the route, slope profile, relay-contact timeline and the radio panel. It holds the simulation clock and plays the walk back.</p></div>
+    <div class="box"><h3>Planning engine (server)</h3><p>Turns the terrain grid into a cost surface, finds the route, then scores it: distance, time, slope mix, radiation dose, relay contact minutes. Safest, Balanced and Fastest are three weightings of the same search.</p></div>
+    <div class="box"><h3>Comms router (server)</h3><p>Holds messages in a queue, works out how long each one takes to cross the Earth–Mars gap, and releases Earth-bound or Pod-bound messages only when a relay orbiter is overhead.</p></div>
+    <div class="box"><h3>Storage and pipelines</h3><p>Heavy data is built once per site and read from disk. Pass times live in Postgres, with a JSON cache so the app still works when the database sleeps.</p></div>
+  </div>
+</section>
+
+<section id="flows">
+  <h2>2 Data flows</h2>
+  <h3>Planning a walk</h3>
+  <ol class="steps">
+    <li><div><b>Choose a site.</b> The globe page opens the planner with <code>?site=&lt;id&gt;</code>. A new site triggers <code>POST /api/sites</code> and the build pipeline.</div></li>
+    <li><div><b>Load terrain.</b> The client fetches the site metadata, base image tiles and the slope and heat layers from the server.</div></li>
+    <li><div><b>Place waypoints.</b> Habitat plus up to several stops. The client sends them with the policy (Safest, Balanced or Fastest) to the route endpoint.</div></li>
+    <li><div><b>Search.</b> The server prices each cell by slope tier. If no route exists under the maximum slope it relaxes the limit in steps (+4°, +8°) and says so in the warnings.</div></li>
+    <li><div><b>Score.</b> Distance, walking time, slope mix, radiation, and relay contact windows from the stored passes.</div></li>
+    <li><div><b>Review.</b> The client draws the route coloured by slope, the verdict, the profile and the timeline. The user can slide the departure time or jump to the best window.</div></li>
+  </ol>
+
+  <h3>Keeping pass data fresh</h3>
+  <p>The pass fetcher asks Horizons for each orbiter's position over the next hours, computes elevation above the site's horizon, and writes pass start, end and peak elevation to Postgres. The server reads those rows; if the connection fails it reads <code>data/passes_cache.json</code>. Western longitudes must be sent to Horizons as negative east longitude in the 0–360 form.</p>
+</section>
+
+<section id="radio">
+  <h2>3 Radio relay: how a message crosses Mars and Earth</h2>
+  <p class="lead">The link is simulated, not real hardware. It uses real geometry: light time from Horizons (11.1 minutes one way when we tested) and real pass windows. The speed controls (×30, ×120, ×600) compress waiting time so a demo is watchable.</p>
+  <ol class="steps">
+    <li><div><b>Record.</b> The astronaut holds push-to-talk. The browser records audio with MediaRecorder (microphone needs https or localhost) and posts it as base64 to <code>/api/comms/send</code> with the destination, Earth or Pod.</div></li>
+    <li><div><b>Wait for a satellite.</b> The message is accepted but sits in the queue until a relay orbiter is above the horizon. The panel says when the next pass starts.</div></li>
+    <li><div><b>Uplink.</b> During a pass the message goes up to the orbiter. For Earth, the server computes delay as <code>light_min × 60 ÷ speed + 1.5 s</code>.</div></li>
+    <li><div><b>Delivery.</b> When the delay has elapsed the receiving page polls <code>/api/comms/inbox</code> and fetches the audio from <code>/api/comms/audio/&lt;id&gt;</code>. Mission control plays it.</div></li>
+    <li><div><b>Reply path.</b> Earth to astronaut messages wait at the orbiter until the next pass, then <code>/api/comms/deliver/&lt;id&gt;</code> releases them to the planner.</div></li>
+  </ol>
+  <p><b>Practice mode</b> pretends a satellite is overhead so the flow can be tested when no real pass is near. <code>/api/comms/config</code> sets the speed and <code>/api/comms/clear</code> empties the queue.</p>
+</section>
+
+<section id="data">
+  <h2>4 Data sources</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Source</th><th>Used for</th><th>When</th></tr></thead>
+    <tbody>
+      <tr><td>MOLA 463 m global elevation</td><td>Terrain and slope for any site on Mars</td><td>Build time</td></tr>
+      <tr><td>CTX imagery and DEM (USGS)</td><td>Jezero base map and 20 m terrain</td><td>Build time</td></tr>
+      <tr><td>HiRISE DEMs</td><td>1 m slopes where coverage exists</td><td>Build time</td></tr>
+      <tr><td>Mars Trek tiles</td><td>Base layers on the globe</td><td>Runtime (browser)</td></tr>
+      <tr><td>THEMIS and TES</td><td>Surface heat model</td><td>Build time</td></tr>
+      <tr><td>Curiosity RAD measurements</td><td>Anchor for the radiation model (0.67 mSv per day at the reference elevation, scaled by atmosphere column)</td><td>Model constants</td></tr>
+      <tr><td>JPL Horizons</td><td>Orbiter passes, Sun position, Earth–Mars light time</td><td>Pipeline and runtime</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="prd">
+  <h2>5 Product requirements document</h2>
+  <h3>Problem</h3>
+  <p>A person walking on Mars cannot call for help in real time. Messages to Earth take 4 to 24 minutes one way. Navigation has no GPS. Radiation, steep slopes and heat all add risk, and the shortest path is often the most dangerous one. Planners need to see, before leaving the habitat, which route is safest and when a relay satellite can carry their voice.</p>
+  <h3>Product</h3>
+  <p>Marswalk is a web app that plans an extravehicular walk anywhere on Mars from real NASA terrain data, picks routes that prefer flat ground and low exposure, shows when relay orbiters are overhead, and simulates voice messages crossing the relay with the true Earth light delay.</p>
+
+  <h3>Users</h3>
+  <div class="grid2">
+    <div class="box"><h3>EVA planner</h3><p>Draws a route, compares Safest, Balanced and Fastest, and decides departure time.</p></div>
+    <div class="box"><h3>Astronaut (on phone)</h3><p>Sees the route and the next satellite pass on a small screen and sends push-to-talk messages.</p></div>
+    <div class="box"><h3>Mission control</h3><p>Receives astronaut audio after the light delay and sends replies that wait for a pass.</p></div>
+    <div class="box"><h3>Judges and students</h3><p>Open the planner, press play, and understand in one minute why the route avoids the steep ground.</p></div>
+  </div>
+
+  <h3>Goals</h3>
+  <ul>
+    <li>Produce a route that avoids steep ground first and relaxes the limit only when no other route exists, and say when it did.</li>
+    <li>Show radiation, time, slope mix and relay contact for every route in one summary.</li>
+    <li>Work at any chosen location on Mars, not only Jezero.</li>
+    <li>Make the relay-delay idea tangible with audio and a speed control.</li>
+    <li>Be readable on a phone and on a projector.</li>
+  </ul>
+  <h3>Non-goals</h3>
+  <ul>
+    <li>Not flight software. It is a planning and education prototype.</li>
+    <li>No real radio hardware, no real orbiter command link.</li>
+    <li>No multi-user accounts or authentication in this version.</li>
+    <li>No dust storms, thermal suit limits or consumables model.</li>
+  </ul>
+
+  <h3>Success measures</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Measure</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr><td>Route on flat ground</td><td>At least 90% of default Jezero route on slopes under 10°, with the steepest slope reported</td></tr>
+      <tr><td>Route response time</td><td>Under 3 seconds for a 10 km walk on a cached site</td></tr>
+      <tr><td>Time to understand</td><td>A new viewer can state what the route colours mean within 60 seconds</td></tr>
+      <tr><td>Phone use</td><td>No horizontal scroll from 320 px to 1440 px; all controls reachable one-handed</td></tr>
+      <tr><td>Relay demo</td><td>A voice message recorded on one device plays on another after the computed delay</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="reqs">
+  <h2>6 Functional and non-functional requirements</h2>
+  <p class="lead">Status reflects the current prototype.</p>
+  <div class="tw"><table>
+    <thead><tr><th>ID</th><th>Requirement</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>FR-1</td><td>Select any site on Mars from a globe and open the planner there.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-2</td><td>Add, drag and remove waypoints; optional round trip to the habitat.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-3</td><td>Route policy: Safest, Balanced, Fastest, plus adjustable weights and maximum slope.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-4</td><td>Report distance, walking time, slope mix, steepest slope, radiation dose and career percentage.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-5</td><td>Layers: elevation, slope, heat, radiation, imagery, with opacity and legend.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-6</td><td>Relay timeline with pass windows per orbiter, EVA window and contact minutes.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-7</td><td>Departure time control with Now and Best window.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-8</td><td>Simulated walk with play and stop; speeds ×30, ×120, ×600.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-9</td><td>3D view with astronaut, habitat, relay satellite at its true sky direction, follow camera, quality toggle.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-10</td><td>Push-to-talk voice to Earth or Pod with light-time delay, queued until a pass.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-11</td><td>Mission control page for Earth and Pod roles.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-12</td><td>Position fix from the relay link: least-squares solve of range and Doppler measurements to the orbiter, using real JPL Horizons pass geometry. Measurements are simulated from the true position with noise (6 m range, 5 cm/s range rate).</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-15</td><td>Third-person manual control of the astronaut (keys or touch stick). Dead reckoning drifts, the fix corrects it, and the route is replanned from the estimated position.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>FR-13</td><td>Persist messages across server restarts.</td><td><span class="pill plan">Planned</span></td></tr>
+      <tr><td>FR-14</td><td>Save and share a planned route as a link.</td><td><span class="pill plan">Planned</span></td></tr>
+      <tr><td>NFR-1</td><td>Responsive from 320 px phones to desktop, with a bottom-sheet layout on phones.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>NFR-2</td><td>Offline-tolerant: pass data falls back to a cache when Postgres is unavailable.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>NFR-3</td><td>Microphone features served over https; LAN launcher included.</td><td><span class="pill built">Built</span></td></tr>
+      <tr><td>NFR-4</td><td>Public hosting with the Python backend.</td><td><span class="pill part">Needs tunnel or VM</span></td></tr>
+      <tr><td>NFR-5</td><td>Automated tests for routing and delay maths.</td><td><span class="pill plan">Planned</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Milestones</h3>
+  <ol class="steps">
+    <li><div><b>Prototype (done).</b> Jezero planner, routing, radiation, relay timeline.</div></li>
+    <li><div><b>Anywhere on Mars (done).</b> Globe, site builder, MOLA global elevation.</div></li>
+    <li><div><b>Relay radio and redesign (done).</b> Voice delay, mission control, NASA-style interface, realistic 3D.</div></li>
+    <li><div><b>Demo hardening (next).</b> Public link, route sharing, positioning accuracy view, tests.</div></li>
+  </ol>
+</section>
+
+<section id="risks">
+  <h2>7 Risks and open questions</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Risk</th><th>Effect</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Radiation model is an estimate anchored on one Curiosity location</td><td>Doses at other sites are approximate</td><td>Label as an estimate; scale by elevation only; invite better data</td></tr>
+      <tr><td>Messages stored in memory</td><td>Restart loses the queue</td><td>FR-13: store in Postgres</td></tr>
+      <tr><td>No authentication</td><td>Anyone on the link can read and send messages</td><td>Keep demo-only; add shared room codes before any wider release</td></tr>
+      <tr><td>Postgres in WSL sleeps</td><td>Fresh passes fail to load</td><td>JSON cache fallback in place</td></tr>
+      <tr><td>3D washed out on some phones</td><td>Poor first impression</td><td>Lite mode default on small screens; cause on a real device not yet confirmed</td></tr>
+      <tr><td>MOLA 463 m is coarse</td><td>Small hazards invisible outside Jezero and HiRISE areas</td><td>Show resolution in the breadcrumb; flag unknown ground</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Open questions</h3>
+  <ul>
+    <li>Where will the public demo run: a tunnel from the team laptop, or a small cloud VM?</li>
+    <li>The position fix ignores terrain blocking the orbiter in manual mode and assumes height is known from the terrain map. Is that acceptable for the demo?</li>
+    <li>Does the team want NASA's own 3D models in place of the procedural ones? That needs a download approval.</li>
+  </ul>
+</section>
+
+<footer>Marswalk by AirAwareNetwork. Prototype for NASA Space Apps 2026. Architecture reflects the code in the <code>Documents\Nasa</code> repository at commit <code>de4bff1</code>.</footer>
+</div>
