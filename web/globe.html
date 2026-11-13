@@ -3,172 +3,153 @@
 <head>
 <meta charset="utf-8">
 <link rel="icon" type="image/png" href="img/brand/logo-64.png">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#04060a">
 <title>Marswalk · Mars</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <style>
-/* Layout: full-bleed instrument view of Mars; a floating control column on the right, readout and place card bottom-left, one committed dark world (space is black in any theme). */
+/* Mars globe: the planet fills the screen. A slim top bar, one small tool stack on the right (layers, zoom), and a card for the place you picked.
+   Same language as the planner: space black, white type, NASA blue for actions. */
 :root {
-  --space: #04060a;
-  --panel: rgba(10, 14, 21, 0.94);
-  --line: rgba(150, 175, 220, 0.18);
-  --ink: #FFFFFF;
-  --dim: #a3afc2;
-  --faint: #6c7a91;
-  --dust: #8ab8ff;
-  --dusk: #8ab8ff;
-  --nasa-blue: rgba(59, 130, 246, 0.22);
-  --red: #fc3d21;
-  --f-display: "Inter", "Cairo", "Segoe UI", system-ui, sans-serif;
+  --bg: #04060a; --panel: #0a0e15; --surface: #111723; --surface-2: #19212f;
+  --line: #1a2230; --line-2: #2b3649;
+  --ink: #ffffff; --text: #d6dce7; --dim: #8f9cb1; --faint: #627087;
+  --blue: #1a66e8; --blue-hi: #3b82f6; --accent: #8ab8ff; --accent-dim: rgba(59, 130, 246, 0.16);
+  --red: #fc3d21; --glass: rgba(10, 14, 21, 0.9);
   --f-body: "Inter", "Cairo", "Segoe UI", system-ui, sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --bar: 58px;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body { background: var(--space); color: var(--ink); font-family: var(--f-body); font-size: 14px; overflow: hidden; }
-button { font: inherit; color: inherit; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--dusk); outline-offset: 2px; }
+body { background: var(--bg); color: var(--text); font: 15px/1.55 var(--f-body); overflow: hidden; -webkit-text-size-adjust: 100%; }
+button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+h2, h4, p { margin: 0; }
 
 #stage { position: fixed; inset: 0; }
 #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 #mapCanvas { cursor: grab; }
 #mapCanvas.dragging { cursor: grabbing; }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-
-/* header */
-.head {
-  position: fixed; z-index: 5;
-  top: calc(14px + env(safe-area-inset-top, 0px));
-  left: max(16px, env(safe-area-inset-left, 0px));
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
-  max-width: calc(100% - 340px);
-}
-.brand { display: grid; gap: 0; line-height: 1; }
-.brand b { font-family: var(--f-display); font-weight: 800; font-size: 1.45rem; letter-spacing: 0.14em; text-transform: uppercase; }
-.logo { width: 42px; height: 42px; border-radius: 50%; box-shadow: 0 0 0 2px var(--line); }
-.brandrow { display: flex; align-items: center; gap: 12px; }
-.brand span { font-family: var(--f-mono); font-size: 0.68rem; color: var(--dim); letter-spacing: 0.08em; margin-top: 4px; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); overflow: hidden; backdrop-filter: blur(8px); }
-.seg button { border: 0; background: transparent; padding: 6px 14px; cursor: pointer; font-family: var(--f-display); font-weight: 600; font-size: 0.95rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
-.seg button[aria-pressed="true"] { background: var(--dust); color: #0c1217; }
-#panelBtn { display: none; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: var(--f-display); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.95rem; }
-
-/* side panel */
-.panel {
-  position: fixed; z-index: 6;
-  top: calc(14px + env(safe-area-inset-top, 0px));
-  right: max(16px, env(safe-area-inset-right, 0px));
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  width: 300px; overflow-y: auto;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  backdrop-filter: blur(10px);
-  padding: 14px 14px 12px; display: grid; gap: 16px; align-content: start;
-}
-.sec { display: grid; gap: 8px; }
-.sec h2 { margin: 0; font-family: var(--f-mono); font-weight: 500; font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 5px 11px; cursor: pointer; font-size: 0.86rem; color: var(--ink); }
-.chip[aria-pressed="true"] { border-color: var(--dust); color: var(--dust); background: rgba(168, 201, 215, 0.16); }
-.chip:disabled { opacity: 0.35; cursor: default; }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 0.86rem; }
-.row input[type=range] { width: 100%; accent-color: var(--dust); }
-.row output { font-family: var(--f-mono); font-size: 0.8rem; color: var(--dust); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
-.legend { display: grid; gap: 4px; }
-.legend .bar { height: 10px; border-radius: 2px; }
-.legend .ticks { position: relative; height: 14px; font-family: var(--f-mono); font-size: 0.66rem; color: var(--dim); }
-.legend .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
-.legend .unit { font-size: 0.72rem; color: var(--faint); }
-.places { display: grid; gap: 2px; }
-.places h3 { margin: 6px 0 2px; font-size: 0.72rem; font-weight: 500; color: var(--faint); letter-spacing: 0.04em; }
-.place { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 8px; align-items: center; text-align: left; border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 5px 6px; cursor: pointer; }
-.place:hover { border-color: var(--line); }
-.place[aria-current="true"] { border-color: var(--dust); }
-.place i { width: 8px; height: 8px; border-radius: 50%; background: var(--dusk); }
-.place.feature i { background: transparent; border: 1px solid var(--ink); }
-.place .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; }
-.place .yr { font-family: var(--f-mono); font-size: 0.72rem; color: var(--dim); }
-.credits { font-size: 0.72rem; line-height: 1.5; color: var(--faint); border-top: 1px solid var(--line); padding-top: 10px; }
-
-/* bottom-left: card + readout */
-.dock {
-  position: fixed; z-index: 4;
-  left: max(16px, env(safe-area-inset-left, 0px));
-  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  display: grid; gap: 8px; width: min(360px, calc(100% - 352px));
-}
-.readout {
-  display: flex; flex-wrap: wrap; gap: 4px 16px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px;
-  font-family: var(--f-mono); font-size: 0.78rem; font-variant-numeric: tabular-nums; backdrop-filter: blur(8px);
-}
-.readout span { color: var(--faint); margin-right: 6px; letter-spacing: 0.08em; }
-.card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(10px);
-  display: grid; gap: 6px;
-}
-.card .kind { font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dusk); }
-.card h4 { margin: 0; font-family: var(--f-display); font-weight: 700; font-size: 1.6rem; line-height: 1; letter-spacing: 0.03em; }
-.card .coords { font-family: var(--f-mono); font-size: 0.8rem; color: var(--dust); font-variant-numeric: tabular-nums; }
-.card p { margin: 0; font-size: 0.88rem; line-height: 1.45; color: var(--dim); }
-.card .acts { display: flex; gap: 6px; margin-top: 2px; }
-
-/* globe labels */
-.mk { position: absolute; left: 0; top: 0; pointer-events: auto; border: 0; background: transparent; padding: 0; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; transition: opacity 0.2s; }
-.mk i { width: 9px; height: 9px; border-radius: 50%; background: var(--dusk); box-shadow: 0 0 0 2px rgba(5, 6, 10, 0.75); flex: none; }
-.mk b { font-weight: 500; font-size: 0.78rem; color: var(--ink); text-shadow: 0 1px 3px #000, 0 0 8px #000; }
-.mk.feature i { display: none; }
-.mk.feature b { font-family: var(--f-display); font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; font-size: 0.82rem; color: var(--dust); }
-.mk.sel i { background: var(--dust); box-shadow: 0 0 0 3px rgba(221, 183, 143, 0.35); }
-.mk.sel b { color: var(--dust); }
-
-.loader { position: fixed; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--f-mono); font-size: 0.8rem; color: var(--dim); letter-spacing: 0.1em; text-transform: uppercase; }
+.loader { position: fixed; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 14px; color: var(--dim); }
 .err { position: fixed; z-index: 9; left: 50%; top: 40%; transform: translate(-50%, -50%); max-width: 420px; text-align: center; color: var(--ink); }
 
-@media (max-width: 760px) {
-  .head { max-width: calc(100% - 32px); }
-  #panelBtn { display: inline-block; }
-  .panel { top: auto; left: max(16px, env(safe-area-inset-left, 0px)); width: auto; max-height: 62%; }
-  .panel.closed { display: none; }
-  .dock { width: calc(100% - 32px); }
-  .brand span { display: none; }
-}
-@media (prefers-reduced-motion: reduce) { .mk { transition: none; } }
-[hidden] { display: none !important; }
-a.place { color: inherit; text-decoration: none; }
-.chip.go { border-color: var(--dust); background: var(--dust); color: #0c1217; font-weight: 700; }
-.busy { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(5, 6, 10, 0.78); backdrop-filter: blur(4px); }
-.busy[hidden] { display: none; }
-.busy div { max-width: 420px; text-align: center; display: grid; gap: 12px; }
-.busy b { font-family: var(--f-display); font-size: 1.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dust); }
-.busy span { font-size: 0.92rem; line-height: 1.5; color: var(--dim); }
-.busy i { height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--dust), transparent); background-size: 200% 100%; animation: slide 1.4s linear infinite; }
+/* top bar: floats over space, no slab */
+.appbar { position: fixed; z-index: 20; top: 0; left: 0; right: 0; height: calc(var(--bar) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) max(20px, env(safe-area-inset-right, 0px)) 0 max(20px, env(safe-area-inset-left, 0px)); display: flex; align-items: center; gap: 18px; background: linear-gradient(rgba(4, 6, 10, 0.92) 35%, rgba(4, 6, 10, 0)); pointer-events: none; }
+.appbar > * { pointer-events: auto; }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; flex: none; }
+.logo { width: 40px; height: 40px; border-radius: 50%; background: #0b1220; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 18px rgba(80, 150, 255, 0.55); }
+.brand span { display: grid; line-height: 1.15; }
+.brand b { font-size: 16px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); }
+.brand small { font-size: 11.5px; letter-spacing: 0.06em; color: var(--dim); }
+.crumbs { display: flex; align-items: baseline; gap: 10px; min-width: 0; white-space: nowrap; overflow: hidden; padding-left: 18px; border-left: 1px solid var(--line-2); }
+.crumbs span { color: var(--ink); font-weight: 600; }
+.crumbs small { font-size: 13px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+.viewbar { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--glass); }
+.seg button { border: 0; background: transparent; padding: 6px 16px; border-radius: 999px; color: var(--dim); font-size: 13.5px; font-weight: 500; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--blue); color: #fff; font-weight: 600; }
+.seg.wide { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--surface); }
+.seg.wide button { padding: 9px 6px; }
+
+/* tool stack on the right: layers, zoom, reset */
+.rtools { position: fixed; z-index: 15; right: max(20px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); display: grid; border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; background: var(--glass); backdrop-filter: blur(10px); }
+.rtools button { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); padding: 0; }
+.rtools button:last-child { border-bottom: 0; }
+.rtools button:hover { background: var(--surface-2); color: var(--ink); }
+.rtools button[aria-expanded="true"] { background: var(--blue); color: #fff; }
+.rtools svg { width: 20px; height: 20px; }
+
+/* layers popover */
+.pop { position: fixed; z-index: 16; right: calc(max(20px, env(safe-area-inset-right, 0px)) + 56px); top: 50%; transform: translateY(-50%); width: 320px; max-height: min(78vh, 640px); overflow-y: auto; display: grid; gap: 26px; align-content: start; padding: 24px 22px 14px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 16px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6); scrollbar-width: thin; scrollbar-color: #2b3649 transparent; }
+.sec { display: grid; gap: 12px; }
+.sec h2 { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+.checks { display: grid; gap: 2px; }
+.chk { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 12px; align-items: center; text-align: left; padding: 8px 0; border: 0; background: transparent; font-size: 14.5px; color: var(--text); }
+.chk::before { content: ""; width: 18px; height: 18px; border: 1.5px solid var(--line-2); border-radius: 5px; }
+.chk:hover { color: var(--ink); }
+.chk[aria-pressed="true"]::before { background: var(--blue-hi) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E") center / 14px no-repeat; border-color: var(--blue-hi); }
+.chk:disabled { opacity: 0.35; cursor: default; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 14px; }
+.row input[type=range] { width: 100%; margin: 0; height: 22px; accent-color: var(--blue-hi); }
+.row output { font: 500 13px var(--f-mono); color: var(--accent); }
+.legend { display: grid; gap: 5px; }
+.legend .bar { height: 10px; border-radius: 5px; }
+.legend .ticks { position: relative; height: 15px; font: 11px var(--f-mono); color: var(--dim); }
+.legend .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.legend .unit { font-size: 12.5px; line-height: 1.45; color: var(--dim); }
+details.more { border-top: 1px solid var(--line); }
+details.more > summary { list-style: none; cursor: pointer; padding: 12px 0; font-size: 13.5px; color: var(--dim); display: flex; justify-content: space-between; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: "+"; font-size: 17px; line-height: 1.1; }
+details.more[open] > summary::after { content: "–"; }
+.credits { font-size: 12.5px; line-height: 1.6; color: var(--dim); padding-bottom: 10px; }
+
+/* the place you picked */
+.card { position: fixed; z-index: 14; left: max(20px, env(safe-area-inset-left, 0px)); bottom: calc(20px + env(safe-area-inset-bottom, 0px)); width: min(400px, calc(100% - 40px)); display: grid; gap: 14px; padding: 22px 22px 20px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 18px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); }
+.card .x { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--dim); font-size: 22px; line-height: 1; }
+.card .x:hover { background: var(--surface-2); color: var(--ink); }
+.card .kind { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); padding-right: 36px; }
+.card h4 { font-size: 26px; font-weight: 700; line-height: 1.15; color: var(--ink); margin-top: -8px; text-wrap: balance; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.facts div { display: grid; gap: 1px; }
+.facts span { font-size: 12px; color: var(--dim); }
+.facts b { font: 500 15px var(--f-mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.card p { font-size: 14px; line-height: 1.55; color: var(--dim); }
+.acts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
+.go { border: 0; border-radius: 999px; background: var(--blue); color: #fff; padding: 12px 22px; font-size: 14.5px; font-weight: 600; }
+.go:hover { background: var(--blue-hi); }
+.chip { border: 1px solid var(--line-2); background: transparent; border-radius: 999px; padding: 11px 18px; font-size: 14px; font-weight: 500; color: var(--text); }
+.chip:hover { border-color: var(--accent); color: var(--ink); }
+
+.hintpill { position: fixed; z-index: 12; left: 50%; bottom: calc(28px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 10px 20px; border-radius: 999px; background: var(--glass); border: 1px solid var(--line-2); backdrop-filter: blur(10px); font-size: 14px; color: var(--text); white-space: nowrap; pointer-events: none; }
+.readout { position: fixed; z-index: 11; right: calc(max(20px, env(safe-area-inset-right, 0px)) + 4px); bottom: calc(22px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 16px; font: 12px var(--f-mono); text-shadow: 0 1px 3px #000, 0 0 8px #000; pointer-events: none; font-variant-numeric: tabular-nums; }
+.readout span { color: rgba(255, 255, 255, 0.6); margin-right: 6px; font-family: var(--f-body); }
+.readout b { font-weight: 400; color: #fff; }
+
+/* labels on the globe */
+.mk { position: absolute; left: 0; top: 0; pointer-events: auto; border: 0; background: transparent; padding: 0; display: flex; align-items: center; gap: 7px; white-space: nowrap; transition: opacity 0.2s; }
+.mk i { width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(4, 6, 10, 0.7); flex: none; }
+.mk b { font-weight: 500; font-size: 12.5px; color: #fff; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
+.mk.feature i { display: none; }
+.mk.feature b { font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; font-size: 11.5px; color: #c7dcff; }
+.mk.site i { background: var(--blue-hi); box-shadow: 0 0 0 2px #fff; }
+.mk.site b { display: none; }
+.mk.site:hover b, .mk.site.sel b { display: inline; }
+.mk.pin i { width: 14px; height: 14px; background: transparent; box-shadow: 0 0 0 2.5px #fff, 0 0 0 4.5px rgba(4, 6, 10, 0.6); }
+.mk.pin b { display: none; }
+.mk.sel i { background: var(--blue-hi); box-shadow: 0 0 0 2.5px #fff, 0 0 12px var(--blue-hi); }
+.mk.sel b { color: #fff; }
+
+.busy { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(4, 6, 10, 0.82); backdrop-filter: blur(4px); padding: 24px; }
+.busy div { max-width: 440px; text-align: center; display: grid; gap: 14px; }
+.busy b { font-size: 22px; font-weight: 700; color: var(--ink); }
+.busy span { font-size: 14.5px; line-height: 1.55; color: var(--dim); }
+.busy i { height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--blue-hi), transparent); background-size: 200% 100%; animation: slide 1.4s linear infinite; }
 @keyframes slide { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
-/* flat, instrument-style overrides */
-.chip, .seg, .seg button, .card, .panel, .readout, .place { border-radius: 4px; }
-.seg { overflow: hidden; }
-.panel, .card, .readout { box-shadow: none; }
-.brand b { font-size: 1.05rem; letter-spacing: 0.09em; }
-.sec h2 { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.09em; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-.logo { width: 34px; height: 34px; box-shadow: none; }
-.chip[aria-pressed="true"] { background: rgba(168, 201, 215, 0.14); border-color: var(--dust); color: #fff; }
-.seg button[aria-pressed="true"] { background: var(--dust); color: #0b1116; }
-
-/* 2026-11 palette: space black, NASA blue actions, visible team logo */
-.logo { background: #0b1220; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 18px rgba(80, 150, 255, 0.55) !important; }
-.brand b { letter-spacing: 0.14em; }
-.chip, .go { border-radius: 999px; }
-.chip { padding: 8px 15px; }
-.chip[aria-pressed="true"] { background: rgba(59, 130, 246, 0.16); border-color: #3b82f6; color: #fff; }
-.seg { border-radius: 999px; padding: 3px; gap: 2px; }
-.seg button { border-radius: 999px; }
-.seg button[aria-pressed="true"] { background: #1a66e8; color: #fff; }
-.go { background: #1a66e8; color: #fff; border-color: #1a66e8; }
-.card, .panel, .readout, .place, .stat, .compose, .cfg, .start, .route, .empty { border-radius: 12px; }
+@media (max-width: 760px) {
+  :root { --bar: 54px; }
+  .appbar { padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); gap: 10px; }
+  .logo { width: 36px; height: 36px; }
+  .brand small, .crumbs { display: none; }
+  .rtools { right: max(12px, env(safe-area-inset-right, 0px)); top: calc(var(--bar) + 14px + env(safe-area-inset-top, 0px)); transform: none; }
+  .pop { left: 12px; right: 12px; top: auto; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: none; width: auto; max-height: 66dvh; z-index: 30; }
+  .card { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: auto; padding: 20px 18px 18px; }
+  .card h4 { font-size: 22px; }
+  .card p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .acts .go { flex: 1; }
+  .readout { display: none; }
+  .hintpill { font-size: 13.5px; }
+}
+@media (prefers-reduced-motion: reduce) { .mk { transition: none; } .busy i { animation: none; } }
 </style>
 </head>
 <body>
@@ -179,24 +160,33 @@ a.place { color: inherit; text-decoration: none; }
   <div id="labels"></div>
 </div>
 <div class="loader" id="loader">Loading Mars…</div>
-<div class="busy" id="busy" hidden><div><b>Building site</b><span id="busyTxt"></span><i></i></div></div>
+<div class="busy" id="busy" hidden><div><b>Building this site</b><span id="busyTxt"></span><i></i></div></div>
 
-<header class="head">
-  <div class="brandrow"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="42" height="42"><div class="brand"><b>Marswalk</b><span>AirAwareNetwork · click anywhere on Mars</span></div></div>
-  <div class="seg" role="group" aria-label="View">
-    <button type="button" id="v-globe" aria-pressed="true">Globe</button>
-    <button type="button" id="v-map" aria-pressed="false">Map</button>
+<header class="appbar">
+  <a class="brand" href="globe.html" title="AirAwareNetwork · Marswalk"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="40" height="40"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
+  <nav class="crumbs" aria-label="Location"><span>Mars</span><small>Pick a place to plan a walk</small></nav>
+  <div class="viewbar">
+    <div class="seg" role="group" aria-label="View">
+      <button type="button" id="v-globe" aria-pressed="true">Globe</button>
+      <button type="button" id="v-map" aria-pressed="false">Map</button>
+    </div>
   </div>
-  <button type="button" id="panelBtn" aria-expanded="false" aria-controls="panel">Layers</button>
 </header>
 
-<aside class="panel closed" id="panel" aria-label="Layers and places">
+<div class="rtools">
+  <button type="button" id="panelBtn" aria-expanded="false" aria-controls="panel" aria-label="Layers" title="Layers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 3 9l9 5 9-5-9-5Z M3 14l9 5 9-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+  <button type="button" id="zin" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
+  <button type="button" id="zout" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12" stroke="currentColor" stroke-width="2" fill="none"/></svg></button>
+  <button type="button" id="zhome" aria-label="Reset view" title="Reset view"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 2v4M10 14v4M2 10h4M14 10h4" stroke="currentColor" stroke-width="2"/></svg></button>
+</div>
+
+<aside class="pop" id="panel" hidden aria-label="Layers">
   <section class="sec">
     <h2>Base map</h2>
-    <div class="chips" role="group" aria-label="Base map">
-      <button type="button" class="chip" id="b-natural" aria-pressed="true">Natural color</button>
-      <button type="button" class="chip" id="b-elevation" aria-pressed="false">Elevation</button>
-      <button type="button" class="chip" id="b-radiation" aria-pressed="false">Radiation</button>
+    <div class="seg wide" role="group" aria-label="Base map">
+      <button type="button" id="b-natural" aria-pressed="true">Natural</button>
+      <button type="button" id="b-elevation" aria-pressed="false">Elevation</button>
+      <button type="button" id="b-radiation" aria-pressed="false">Radiation</button>
     </div>
     <div class="legend" id="legend" hidden>
       <div class="bar" id="legendBar"></div>
@@ -206,57 +196,56 @@ a.place { color: inherit; text-decoration: none; }
   </section>
 
   <section class="sec">
-    <h2>Overlays</h2>
-    <div class="chips">
-      <button type="button" class="chip" id="o-missions" aria-pressed="true">Landing sites</button>
-      <button type="button" class="chip" id="o-features" aria-pressed="true">Landmarks</button>
-      <button type="button" class="chip" id="o-grid" aria-pressed="false">Lat/lon grid</button>
-      <button type="button" class="chip" id="o-relief" aria-pressed="true">Relief shading</button>
+    <h2>Show</h2>
+    <div class="checks">
+      <button type="button" class="chk" id="o-missions" aria-pressed="true">Landing sites</button>
+      <button type="button" class="chk" id="o-features" aria-pressed="true">Landmarks</button>
+      <button type="button" class="chk" id="o-sites" aria-pressed="true">Places you have planned</button>
+      <button type="button" class="chk" id="o-grid" aria-pressed="false">Latitude and longitude grid</button>
+      <button type="button" class="chk" id="o-relief" aria-pressed="true">Relief shading</button>
     </div>
   </section>
 
   <section class="sec" id="globeOpts">
     <h2>Globe</h2>
-    <div class="chips">
-      <button type="button" class="chip" id="g-sun" aria-pressed="true">Sunlight</button>
-      <button type="button" class="chip" id="g-spin" aria-pressed="true">Spin</button>
-      <button type="button" class="chip" id="g-atmo" aria-pressed="true">Atmosphere</button>
+    <div class="checks">
+      <button type="button" class="chk" id="g-sun" aria-pressed="true">Day and night</button>
+      <button type="button" class="chk" id="g-spin" aria-pressed="true">Rotation</button>
+      <button type="button" class="chk" id="g-atmo" aria-pressed="true">Atmosphere</button>
     </div>
     <label class="row" for="exag">Relief exaggeration <output id="exagVal">×6</output></label>
     <div class="row"><input type="range" id="exag" min="1" max="20" step="1" value="6" aria-label="Relief exaggeration"></div>
   </section>
 
-  <section class="sec">
-    <h2>Planning sites</h2>
-    <div class="places" id="sites"></div>
-  </section>
-
-  <section class="sec">
-    <h2>Places</h2>
-    <div class="places" id="places"></div>
-  </section>
-
-  <p class="credits">Radiation map: Curiosity measured 0.67 mSv/day at Gale; other places are scaled by the air above them (elevation + assumed scale height). Click the globe or map, then "Plan a walk here": the planner builds that area from MOLA 463 m elevation and real orbiter passes. Jezero opens in full detail (20 m). Globe elevation: MOLA-based shape model MarsTopo719, referenced to the GMM-3 areoid (SHTOOLS). Color: Celestia Mars mosaic. Heights on the globe are exaggerated; readouts are true values.</p>
+  <details class="more">
+    <summary>About the data</summary>
+    <p class="credits">Radiation map: Curiosity measured 0.67 mSv/day at Gale; other places are scaled by the air above them (elevation and an assumed scale height). When you plan a walk, the planner builds that area from MOLA 463 m elevation and real orbiter passes. Jezero opens in full detail (20 m). Globe elevation: MOLA-based shape model MarsTopo719, referenced to the GMM-3 areoid (SHTOOLS). Color: Celestia Mars mosaic. Heights on the globe are exaggerated; readouts are true values.</p>
+  </details>
 </aside>
 
-<div class="dock">
-  <div class="card" id="card" hidden>
-    <span class="kind" id="cKind"></span>
-    <h4 id="cName"></h4>
-    <span class="coords" id="cCoords"></span>
-    <p id="cBlurb"></p>
-    <div class="acts">
-      <button type="button" class="chip go" id="cPlan">Plan a walk here</button>
-      <button type="button" class="chip" id="cSwitch">Show on map</button>
-      <button type="button" class="chip" id="cClose">Close</button>
-    </div>
+<div class="hintpill" id="hint">Click anywhere on Mars to plan a walk there</div>
+
+<div class="card" id="card" hidden>
+  <button type="button" class="x" id="cClose" aria-label="Close">×</button>
+  <span class="kind" id="cKind"></span>
+  <h4 id="cName"></h4>
+  <div class="facts">
+    <div><span>Latitude</span><b id="cLat">—</b></div>
+    <div><span>Longitude</span><b id="cLon">—</b></div>
+    <div><span>Elevation</span><b id="cEl">—</b></div>
+    <div><span>Radiation</span><b id="cRad">—</b></div>
   </div>
-  <div class="readout" aria-live="off">
-    <div><span>LAT</span><b id="rLat">—</b></div>
-    <div><span>LON</span><b id="rLon">—</b></div>
-    <div><span>ELEV</span><b id="rEl">—</b></div>
-    <div><span>DOSE</span><b id="rRad">—</b></div>
+  <p id="cBlurb"></p>
+  <div class="acts">
+    <button type="button" class="go" id="cPlan">Plan a walk here</button>
+    <button type="button" class="chip" id="cSwitch">Show on map</button>
   </div>
+</div>
+<div class="readout" aria-live="off">
+  <div><span>Lat</span><b id="rLat">—</b></div>
+  <div><span>Lon</span><b id="rLon">—</b></div>
+  <div><span>Elev</span><b id="rEl">—</b></div>
+  <div><span>Dose</span><b id="rRad">—</b></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -299,7 +288,7 @@ a.place { color: inherit; text-decoration: none; }
   /* ---------------- state ---------------- */
   const S = {
     view: "globe", base: "natural",
-    missions: true, features: true, grid: false, relief: true,
+    missions: true, features: true, sites: true, grid: false, relief: true,
     sun: true, spin: !reduce, atmo: true, exag: 6,
     sel: null
   };
@@ -493,20 +482,22 @@ a.place { color: inherit; text-decoration: none; }
 
   // labels (HTML)
   const labelsEl = $("labels");
-  PLACES.forEach((p, i) => {
+  function addMarker(p) {
     const b = document.createElement("button");
     b.type = "button"; b.className = `mk ${p.kind}`; b.innerHTML = `<i></i><b></b>`; b.querySelector("b").textContent = p.name;
-    b.setAttribute("aria-label", `${p.name}, ${fmtLat(p.lat)} ${fmtLon(p.lon)}`);
-    b.addEventListener("click", ev => { ev.stopPropagation(); select(p, true); });
+    if (p.kind !== "pin") { b.setAttribute("aria-label", `${p.name}, ${fmtLat(p.lat)} ${fmtLon(p.lon)}`); b.addEventListener("click", ev => { ev.stopPropagation(); select(p, true); }); } else b.style.pointerEvents = "none";
     labelsEl.appendChild(b);
     p.el = b; p.anchor = new THREE.Object3D(); p.anchor.position.copy(latLonVec(p.lat, p.lon)); spin.add(p.anchor);
-  });
+  }
+  PLACES.forEach(addMarker);
+  const PIN = { name: "", kind: "pin", lat: 0, lon: 0 }; addMarker(PIN);
+  const shown = p => p.kind === "mission" ? S.missions : p.kind === "site" ? S.sites : p.kind === "pin" ? !!(S.sel && S.sel.kind === "point") : S.features;
   const tmp = new THREE.Vector3(), camDir = new THREE.Vector3(), nrm = new THREE.Vector3();
   function surfR(lat, lon) { const e = elevAt(lat, lon); return e == null ? 1 : 1 + dispScale * ((e - LO) / (HI - LO) - H0); }
   function placeGlobeLabels() {
     const W = gCanvas.clientWidth, H = gCanvas.clientHeight;
-    for (const p of PLACES) {
-      const show = S.view === "globe" && (p.kind === "mission" ? S.missions : S.features);
+    for (const p of [...PLACES, PIN]) {
+      const show = S.view === "globe" && shown(p);
       if (!show) { p.el.hidden = true; continue; }
       p.anchor.getWorldPosition(tmp);
       tmp.multiplyScalar(surfR(p.lat, p.lon) + 0.004);
@@ -518,7 +509,7 @@ a.place { color: inherit; text-decoration: none; }
       p.el.hidden = false;
       p.el.style.opacity = Math.min(1, (facing - 0.08) * 4).toFixed(2);
       const x = (tmp.x + 1) / 2 * W, y = (1 - tmp.y) / 2 * H;
-      p.el.style.transform = p.kind === "mission" ? `translate(${x - 4.5}px, ${y - 4.5}px)` : `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+      p.el.style.transform = p.kind === "feature" ? `translate(-50%, -50%) translate(${x}px, ${y}px)` : p.kind === "pin" ? `translate(${x - 7}px, ${y - 7}px)` : `translate(${x - 4.5}px, ${y - 4.5}px)`;
     }
   }
 
@@ -632,7 +623,7 @@ a.place { color: inherit; text-decoration: none; }
     // grid
     if (S.grid) {
       const step = map.z > 22 ? 5 : map.z > 9 ? 10 : 30;
-      ctx.strokeStyle = "rgba(168,201,215,0.35)"; ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(138,184,255,0.35)"; ctx.lineWidth = 1;
       ctx.font = "10px 'IBM Plex Mono', monospace"; ctx.fillStyle = "rgba(237,231,223,0.75)";
       ctx.beginPath();
       for (let la = -90 + step; la < 90; la += step) { const y = toY(la); ctx.moveTo(0, y); ctx.lineTo(W, y); }
@@ -646,35 +637,35 @@ a.place { color: inherit; text-decoration: none; }
     // places
     map.hits = [];
     for (const p of PLACES) {
-      if (p.kind === "mission" ? !S.missions : !S.features) continue;
+      if (!shown(p)) continue;
       const x = nearestCopyX(p.lon), y = toY(p.lat);
       if (x < -60 || x > W + 60 || y < -20 || y > H + 20) continue;
       const sel = S.sel === p;
-      if (p.kind === "mission") {
+      if (p.kind === "mission" || p.kind === "site") {
         ctx.beginPath(); ctx.arc(x, y, sel ? 6 : 4.5, 0, 7);
-        ctx.fillStyle = sel ? "#a8c9d7" : "#93B7E6"; ctx.fill();
-        ctx.lineWidth = 2; ctx.strokeStyle = "rgba(5,6,10,0.8)"; ctx.stroke();
-        ctx.font = "500 12px 'IBM Plex Sans', sans-serif"; ctx.textAlign = "left";
-        halo(p.name, x + 9, y + 4, sel ? "#a8c9d7" : "#EDE7DF");
+        ctx.fillStyle = sel || p.kind === "site" ? "#3b82f6" : "#ffffff"; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = sel || p.kind === "site" ? "#ffffff" : "rgba(4,6,10,0.8)"; ctx.stroke();
+        ctx.font = "500 12.5px 'Inter', sans-serif"; ctx.textAlign = "left";
+        if (p.kind === "mission" || sel) halo(p.name, x + 10, y + 4, "#ffffff");
       } else {
-        ctx.font = "600 12px 'Saira Condensed', sans-serif"; ctx.textAlign = "center";
-        halo(p.name.toUpperCase().split("").join(String.fromCharCode(8202)), x, y + 4, sel ? "#FFFFFF" : "#a8c9d7");
+        ctx.font = "600 11.5px 'Inter', sans-serif"; ctx.textAlign = "center";
+        halo(p.name.toUpperCase().split("").join(String.fromCharCode(8202)), x, y + 4, sel ? "#ffffff" : "#c7dcff");
         ctx.textAlign = "left";
       }
       map.hits.push({ p, x, y });
     }
     if (S.sel && S.sel.kind === "point") {
       const x = nearestCopyX(S.sel.lon), y = toY(S.sel.lat);
-      ctx.strokeStyle = "#a8c9d7"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke();
+      ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.stroke();
     }
 
     // scale bar (north–south distance)
     const kmPerPx = KM_PER_DEG / map.z, target = kmPerPx * 120;
     const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000].find(v => v >= target * 0.5) || 5000;
-    const px = nice / kmPerPx, sx = W - (window.innerWidth > 760 ? 340 : 16) - px, sy = H - 62;
-    ctx.fillStyle = "rgba(12,13,17,0.75)"; ctx.fillRect(sx - 8, sy - 18, px + 16, 28);
-    ctx.fillStyle = "#EDE7DF"; ctx.fillRect(sx, sy, px, 3);
-    ctx.font = "11px 'IBM Plex Mono', monospace"; ctx.fillText(`${nice.toLocaleString("en-US")} km`, sx, sy - 5);
+    const px = nice / kmPerPx, sx = W - 24 - px, sy = H - 56;
+    ctx.fillStyle = "rgba(4,6,10,0.6)"; ctx.fillRect(sx - 1, sy - 1, px + 2, 5);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(sx, sy, px, 3);
+    ctx.font = "11px 'IBM Plex Mono', monospace"; halo(`${nice.toLocaleString("en-US")} km`, sx, sy - 6, "#ffffff");
   };
   function halo(t, x, y, color) {
     ctx.lineWidth = 3.5; ctx.strokeStyle = "rgba(5,6,10,0.85)"; ctx.lineJoin = "round"; ctx.strokeText(t, x, y);
@@ -742,8 +733,8 @@ a.place { color: inherit; text-decoration: none; }
   /* ================= UI ================= */
   function select(p, fly) {
     S.sel = p;
+    if (p.kind === "point") { PIN.lat = p.lat; PIN.lon = p.lon; PIN.anchor.position.copy(latLonVec(p.lat, p.lon)); }
     PLACES.forEach(q => { q.el.classList.toggle("sel", q === p); });
-    document.querySelectorAll(".place").forEach(b => b.setAttribute("aria-current", b.dataset.name === p.name ? "true" : "false"));
     refreshCard();
     if (fly) {
       if (S.spin) setToggle("spin", false);
@@ -752,37 +743,20 @@ a.place { color: inherit; text-decoration: none; }
     if (S.view === "map") map.draw();
   }
   function refreshCard() {
-    const p = S.sel; if (!p) { $("card").hidden = true; return; }
-    $("card").hidden = false;
-    $("cKind").textContent = p.kind === "mission" ? `Landing site · ${p.year} · ${p.where}` : p.kind === "feature" ? "Landmark" : "Point on the surface";
+    const p = S.sel; $("card").hidden = !p; $("hint").hidden = !!p; if (!p) return;
+    $("cKind").textContent = p.kind === "mission" ? `Landing site · ${p.year} · ${p.where}` : p.kind === "feature" ? "Landmark" : p.kind === "site" ? "A place you have planned" : "Point on the surface";
     $("cName").textContent = p.name;
     const pe = elevAt(p.lat, p.lon);
-    $("cCoords").textContent = `${fmtLat(p.lat)}  ${fmtLon(p.lon)}  ·  ${fmtEl(pe)}` + (pe == null ? "" : `  ·  ${radDose(pe).toFixed(2)} mSv/day`);
-    $("cBlurb").textContent = p.blurb || "Elevation is measured from the areoid, the Mars equivalent of sea level.";
-    $("cBlurb").hidden = false;
+    $("cLat").textContent = fmtLat(p.lat); $("cLon").textContent = fmtLon(p.lon); $("cEl").textContent = fmtEl(pe); $("cRad").textContent = pe == null ? "—" : `${radDose(pe).toFixed(2)} mSv/day`;
+    $("cBlurb").textContent = p.blurb || (p.kind === "site" ? `Terrain is already built for this area (${p.cell} m per pixel, ${p.size} km across), so the planner opens straight away.` : "The planner builds this area from NASA elevation data and real orbiter passes. It takes about a minute the first time.");
+    $("cPlan").textContent = p.siteId ? "Open the planner" : "Plan a walk here";
     $("cSwitch").textContent = S.view === "globe" ? "Show on map" : "Show on globe";
   }
-  $("cClose").addEventListener("click", () => { S.sel = null; PLACES.forEach(q => q.el.classList.remove("sel")); document.querySelectorAll(".place").forEach(b => b.setAttribute("aria-current", "false")); refreshCard(); if (S.view === "map") map.draw(); });
+  $("cClose").addEventListener("click", () => { S.sel = null; PLACES.forEach(q => q.el.classList.remove("sel")); refreshCard(); if (S.view === "map") map.draw(); });
   $("cSwitch").addEventListener("click", () => { setView(S.view === "globe" ? "map" : "globe"); if (S.sel) S.view === "globe" ? flyTo(S.sel.lat, S.sel.lon) : mapFlyTo(S.sel.lat, S.sel.lon); });
 
-  // place list
-  const list = $("places");
-  const addGroup = (title, items) => {
-    const h = document.createElement("h3"); h.textContent = title; list.appendChild(h);
-    items.forEach(p => {
-      const b = document.createElement("button");
-      b.type = "button"; b.className = `place ${p.kind}`; b.dataset.name = p.name; b.setAttribute("aria-current", "false");
-      b.innerHTML = `<i></i><span class="nm"></span><span class="yr"></span>`;
-      b.querySelector(".nm").textContent = p.name; b.querySelector(".yr").textContent = p.year || "";
-      b.addEventListener("click", () => { select(p, true); if (innerWidth <= 760) setPanel(false); });
-      list.appendChild(b);
-    });
-  };
-  addGroup("Landing sites", PLACES.filter(p => p.kind === "mission"));
-  addGroup("Landmarks", PLACES.filter(p => p.kind === "feature"));
-
   // toggles
-  const TOG = { missions: "o-missions", features: "o-features", grid: "o-grid", relief: "o-relief", sun: "g-sun", spin: "g-spin", atmo: "g-atmo" };
+  const TOG = { missions: "o-missions", features: "o-features", sites: "o-sites", grid: "o-grid", relief: "o-relief", sun: "g-sun", spin: "g-spin", atmo: "g-atmo" };
   function setToggle(k, v) { S[k] = v; $(TOG[k]).setAttribute("aria-pressed", v ? "true" : "false"); if (S.view === "map") map.draw(); }
   Object.entries(TOG).forEach(([k, id]) => { $(id).setAttribute("aria-pressed", S[k] ? "true" : "false"); $(id).addEventListener("click", () => setToggle(k, !S[k])); });
   function setBase(b) {
@@ -822,14 +796,21 @@ a.place { color: inherit; text-decoration: none; }
   $("v-map").addEventListener("click", () => setView("map"));
   addEventListener("hashchange", () => { const h = location.hash.slice(1); if (h === "globe" || h === "map") setView(h); });
 
-  function setPanel(open) { $("panel").classList.toggle("closed", !open); $("panelBtn").setAttribute("aria-expanded", open ? "true" : "false"); }
-  $("panelBtn").addEventListener("click", () => setPanel($("panel").classList.contains("closed")));
-  setPanel(innerWidth > 760);
-  addEventListener("resize", () => { if (innerWidth > 760) setPanel(true); });
+  function setPanel(open) { $("panel").hidden = !open; $("panelBtn").setAttribute("aria-expanded", open ? "true" : "false"); }
+  $("panelBtn").addEventListener("click", e => { e.stopPropagation(); setPanel($("panel").hidden); });
+  addEventListener("pointerdown", e => { if (!$("panel").hidden && !e.target.closest("#panel, #panelBtn")) setPanel(false); });
+  addEventListener("keydown", e => { if (e.key === "Escape") setPanel(false); });
+  const zoomBy = f => {
+    if (S.view === "map") { zoomAt(mCanvas.clientWidth / 2, mCanvas.clientHeight / 2, 1 / f); return; }
+    camera.position.setLength(Math.max(1.15, Math.min(7, camera.position.length() * f)));
+  };
+  $("zin").addEventListener("click", () => zoomBy(0.8)); $("zout").addEventListener("click", () => zoomBy(1.25));
+  $("zhome").addEventListener("click", () => { if (S.view === "map") { map.fit = true; map.cx = 0; map.cy = 0; map.draw(); } else camera.position.setLength(camera.aspect < 1 ? Math.min(7, 3.3 * Math.min(2.1, 0.9 / camera.aspect)) : 3.3); });
 
   /* ---------- plan anywhere ---------- */
   $("cPlan").addEventListener("click", async () => {
     const p = S.sel; if (!p) return;
+    if (p.siteId) { location.href = "/?site=" + p.siteId; return; }
     $("busy").hidden = false;
     $("busyTxt").textContent = `${fmtLat(p.lat)} ${fmtLon(p.lon)}: reading MOLA terrain, computing horizons, then asking JPL Horizons for the orbiter passes. About a minute.`;
     try {
@@ -842,11 +823,12 @@ a.place { color: inherit; text-decoration: none; }
   addEventListener("pageshow", () => { $("busy").hidden = true; });
   fetch("/api/sites").then(r => r.json()).then(list => {
     list.forEach(s => {
-      const a = document.createElement("a"); a.className = "place"; a.href = "/?site=" + s.id;
-      a.innerHTML = `<i></i><span class="nm"></span><span class="yr"></span>`;
-      a.querySelector(".nm").textContent = s.label; a.querySelector(".yr").textContent = s.cell_m + " m";
-      $("sites").appendChild(a);
+      const near = PLACES.find(q => Math.abs(q.lat - s.lat) < 0.6 && Math.abs(wrapLon(q.lon - s.lon_e)) < 0.6);
+      if (near) { near.siteId = s.id; return; }                       // already a landing site or landmark: it just opens faster
+      const p = { name: s.label, kind: "site", lat: s.lat, lon: s.lon_e, siteId: s.id, cell: s.cell_m, size: s.size_km };
+      PLACES.push(p); addMarker(p);
     });
+    if (S.view === "map") map.draw(); refreshCard();
   }).catch(() => {});
 
   applyRelief();

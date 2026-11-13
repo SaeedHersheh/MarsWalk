@@ -499,7 +499,7 @@
     if (!fx || !isFinite(fx.e) || !isFinite(fx.sigma)) return null;
     return { x: fx.e + HAB[0], y: fx.n + HAB[1], sigma: fx.sigma, err: fx.err, used: fx.used, orbiter: q.orbiter, key: q.orbiter + q.start, n: i1 };
   }
-  const REACH = Math.max(45, 1.5 * DX);
+  const REACH = Math.max(12, 0.75 * DX);
   function syncDrive() {
     const on = !!(walk.on && walk.manual); document.body.classList.toggle("driving", on);
     const b = $("t3drive"), c = $("driveBtn"); [b, c].forEach(x => { if (x) { x.setAttribute("aria-pressed", String(on)); x.textContent = on ? "Autopilot" : "Take control"; } });
@@ -709,8 +709,10 @@
     rn.shadowMap.enabled = !lite; rn.shadowMap.type = THREE.PCFSoftShadowMap;
     const sc = new THREE.Scene(); sc.fog = new THREE.Fog(0x9a7b5f, 14000 * K, 54000 * K);
     const cam = new THREE.PerspectiveCamera(42, 1, 10 * K, 130000 * K); T3.cam = cam;
-    const ctl = new THREE.OrbitControls(cam, cv); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.49; ctl.minDistance = 120 * K; ctl.maxDistance = 45000 * K;
-    ctl.addEventListener("start", () => { T3.drag = true; }); ctl.addEventListener("end", () => { T3.drag = false; });
+    const ctl = new THREE.OrbitControls(cam, cv); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.49; ctl.minDistance = 2.5; ctl.maxDistance = 45000 * K;
+    ctl.addEventListener("start", () => { T3.drag = true; }); ctl.addEventListener("end", () => { T3.drag = false; if (T3.chase) T3.chaseK = Math.min(14, Math.max(0.35, cam.position.distanceTo(ctl.target) / chaseBase())); });
+    // following distance: close in real time, further back the faster time runs, so the ground never streaks past
+    function chaseBase() { return 6.5 * Math.pow(walk.on ? Math.max(1, S.speed) : 1, 0.55) * (cam.aspect < 1 ? 1.25 : 1); }
     const P = (x, y, z) => new THREE.Vector3(x - M.width_m / 2, (z - M.zmin) * EX, -(y - M.height_m / 2));
     const hz = elevAt(...HAB);
     const homeCam = () => { ctl.target.copy(P(HAB[0] - 500 * K, HAB[1] + 700 * K, hz)); cam.position.copy(P(HAB[0] + 2200 * K, HAB[1] - 3600 * K, hz + 1300 * K)); };
@@ -766,7 +768,7 @@
     const sun = new THREE.DirectionalLight(0xffe4c4, 2.4);
     sun.castShadow = !lite; sun.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
     sun.shadow.camera.near = 10 * K; sun.shadow.camera.far = 16000 * K; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 3 * K;
-    const SH = 1700 * K; Object.assign(sun.shadow.camera, { left: -SH, right: SH, top: SH, bottom: -SH });
+    let shNow = 1700 * K; Object.assign(sun.shadow.camera, { left: -shNow, right: shNow, top: shNow, bottom: -shNow });
     const hemi = new THREE.HemisphereLight(0xd9bb98, 0x6a5240, 0.45); sc.add(sun, sun.target, hemi);
     const baseImg = new Image(); baseImg.src = M.basemap_3d; baseImg.onload = () => T3.dirty = true;
     const imgs = {};
@@ -783,12 +785,50 @@
     }), null, true);
     const DOMETEX = toTex(mkCanvas(512, 256, (x, w, h) => { x.fillStyle = "#f2f1ec"; x.fillRect(0, 0, w, h); x.strokeStyle = "rgba(60,64,70,0.55)"; x.lineWidth = 2; for (let i = 0; i <= w; i += 64) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); } for (let j = 0; j <= h; j += 51) { x.beginPath(); x.moveTo(0, j); x.lineTo(w, j); x.stroke(); } x.fillStyle = "rgba(60,64,70,0.45)"; for (let i = 0; i <= w; i += 64) for (let j = 0; j <= h; j += 17) x.fillRect(i - 1.5, j, 3, 3); }), null, true);
 
+    // ---- ground detail near the camera (the orbital image has one pixel per ~11 m; this adds grain, pebbles and blotches on top of its colour) ----
+    const DETAIL = (() => {
+      const n = 512, c = document.createElement("canvas"); c.width = c.height = n; const x = c.getContext("2d"), im = x.createImageData(n, n), d = im.data;
+      const lat = sz => { const g = new Float32Array(sz * sz); for (let i = 0; i < g.length; i++) g[i] = Math.random(); return g; };
+      const vn = (g, sz, u, v) => { const fx = u * sz, fy = v * sz, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty),
+        a = g[(iy % sz) * sz + ix % sz], b = g[(iy % sz) * sz + (ix + 1) % sz], c2 = g[((iy + 1) % sz) * sz + ix % sz], e2 = g[((iy + 1) % sz) * sz + (ix + 1) % sz]; return a + (b - a) * sx + (c2 - a) * sy + (a - b - c2 + e2) * sx * sy; };
+      const g1 = lat(8), g2 = lat(32), g3 = lat(128), g4 = lat(4), g5 = lat(16);
+      const fine = new Float32Array(n * n);
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const u = i / n, v = j / n;
+        fine[j * n + i] = 0.5 + (vn(g1, 8, u, v) - 0.5) * 0.3 + (vn(g2, 32, u, v) - 0.5) * 0.42 + (vn(g3, 128, u, v) - 0.5) * 0.38 + (Math.random() - 0.5) * 0.2;
+        d[(j * n + i) * 4 + 1] = Math.max(0, Math.min(255, (0.5 + (vn(g4, 4, u, v) - 0.5) * 0.75 + (vn(g5, 16, u, v) - 0.5) * 0.4) * 255));
+      }
+      for (let q = 0; q < 90; q++) {                                             // pebbles: dark stones with a lit edge
+        const cx = Math.random() * n, cy = Math.random() * n, r = 2 + Math.pow(Math.random(), 2.2) * 10, R = Math.ceil(r);
+        for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
+          const dd = Math.hypot(i, j * 1.25); if (dd > r) continue;
+          const k = ((Math.round(cy + j) % n + n) % n) * n + (Math.round(cx + i) % n + n) % n;
+          fine[k] = 0.3 + 0.28 * Math.max(0, (-i - j) / r) + (dd > r - 1.2 ? 0.06 : 0);
+        }
+      }
+      for (let k = 0; k < n * n; k++) { d[k * 4] = Math.max(0, Math.min(255, fine[k] * 255)); d[k * 4 + 2] = 128; d[k * 4 + 3] = 255; }
+      x.putImageData(im, 0, 0);
+      const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = Math.min(8, rn.capabilities.getMaxAnisotropy()); return t;
+    })();
+    terrain.material.onBeforeCompile = sh => {
+      sh.uniforms.mwDetail = { value: DETAIL };
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vMwPos;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvMwPos = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform sampler2D mwDetail;\nvarying vec3 vMwPos;").replace("#include <map_fragment>", `#include <map_fragment>
+        float mwD = distance(cameraPosition, vMwPos);
+        float mwF = 1.0 - smoothstep(90.0, 1100.0, mwD);
+        float mwA = texture2D(mwDetail, vMwPos.xz * 0.43).r;
+        float mwC = texture2D(mwDetail, vMwPos.xz * 0.083 + 0.11).r;
+        float mwB = texture2D(mwDetail, vMwPos.xz * 0.019 + 0.37).g;
+        diffuseColor.rgb *= mix(1.0, (0.4 + 1.2 * mwA) * (0.72 + 0.56 * mwC) * (0.62 + 0.76 * mwB), mwF);`);
+    };
+    terrain.material.customProgramCacheKey = () => "mw-terrain-detail";
+
     // ---- models ----
     const mk = (parent, geom, mat, x, y, z) => { const o = new THREE.Mesh(geom, mat); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; parent.add(o); return o; };
     function makeAstronaut() {
       const g = new THREE.Group(), ud = g.userData;
-      const suit = pbr({ color: 0xeceff2, roughness: 0.74, bumpMap: WEAVE, bumpScale: 0.7, envMapIntensity: 0.55 });
-      const dusty = pbr({ color: 0xcfc3b4, roughness: 0.88, bumpMap: WEAVE, bumpScale: 0.7, envMapIntensity: 0.4 });
+      const suit = pbr({ color: 0xeceff2, roughness: 0.74, bumpMap: WEAVE, bumpScale: 0.004, envMapIntensity: 0.55 });
+      const dusty = pbr({ color: 0xcfc3b4, roughness: 0.88, bumpMap: WEAVE, bumpScale: 0.004, envMapIntensity: 0.4 });
       const metal = pbr({ color: 0xb4bcc3, roughness: 0.32, metalness: 0.9, envMapIntensity: 1.2 });
       const rubber = pbr({ color: 0x1d2024, roughness: 0.92 });
       const visorM = pbr({ color: 0xd9a63b, roughness: 0.04, metalness: 1.0, envMapIntensity: 1.8 });
@@ -840,10 +880,10 @@
     }
     function makeHab() {
       const g = new THREE.Group();
-      const shell = pbr({ color: 0xffffff, map: DOMETEX, bumpMap: DOMETEX, bumpScale: 0.8, roughness: 0.6, envMapIntensity: 0.6 });
+      const shell = pbr({ color: 0xffffff, map: DOMETEX, bumpMap: DOMETEX, bumpScale: 0.015, roughness: 0.6, envMapIntensity: 0.6 });
       const metal = pbr({ color: 0x9ba6ae, roughness: 0.38, metalness: 0.85, envMapIntensity: 1.1 });
       const dark = pbr({ color: 0x1d2227, roughness: 0.55, metalness: 0.3 });
-      const regolith = pbr({ color: 0x80654d, roughness: 1, bumpMap: NOISE, bumpScale: 3 });
+      const regolith = pbr({ color: 0x6f5642, roughness: 1, bumpMap: NOISE, bumpScale: 0.05 });
       const cells = pbr({ map: CELLS, roughness: 0.3, metalness: 0.5, side: THREE.DoubleSide, envMapIntensity: 1.4 });
       mk(g, new THREE.SphereGeometry(1, 56, 28, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 0.1, 0);
       mk(g, new THREE.CylinderGeometry(1.03, 1.08, 0.14, 56), metal, 0, 0.07, 0);
@@ -864,7 +904,7 @@
     }
     function makeSat(hex) {
       const g = new THREE.Group();
-      const mli = pbr({ color: 0xc99d3d, roughness: 0.36, metalness: 0.85, bumpMap: FOIL, bumpScale: 2.4, envMapIntensity: 1.4 });
+      const mli = pbr({ color: 0xc99d3d, roughness: 0.36, metalness: 0.85, bumpMap: FOIL, bumpScale: 0.7, envMapIntensity: 1.4 });
       const silver = pbr({ color: 0xd0d7dd, roughness: 0.28, metalness: 0.92, envMapIntensity: 1.3 });
       const white = pbr({ color: 0xeceeef, roughness: 0.46, metalness: 0.2, side: THREE.DoubleSide, envMapIntensity: 1.0 });
       const black = pbr({ color: 0x14171a, roughness: 0.55, metalness: 0.35 });
@@ -892,39 +932,58 @@
       return g;
     }
     function labelSprite(text, color) {
-      const c = document.createElement("canvas"); c.width = 512; c.height = 112; const x = c.getContext("2d");
-      x.fillStyle = "rgba(11,17,22,0.9)"; x.fillRect(0, 0, 512, 112); x.strokeStyle = color; x.lineWidth = 3; x.strokeRect(2, 2, 508, 108); x.fillStyle = color; x.fillRect(0, 0, 8, 112);
-      x.fillStyle = "#f4f8fa"; x.font = "600 50px 'Inter', sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, 268, 58);
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false })); sp.renderOrder = 10; sp.userData.text = text; return sp;
+      const c = document.createElement("canvas"), x = c.getContext("2d"), H0 = 96; x.font = "600 44px 'Inter', sans-serif";
+      const tw = Math.ceil(x.measureText(text).width), w = tw + 112; c.width = w; c.height = H0;
+      const rr = (a, b, ww, hh, r) => { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + ww, b, a + ww, b + hh, r); x.arcTo(a + ww, b + hh, a, b + hh, r); x.arcTo(a, b + hh, a, b, r); x.arcTo(a, b, a + ww, b, r); x.closePath(); };
+      rr(3, 3, w - 6, H0 - 6, (H0 - 6) / 2); x.fillStyle = "rgba(10,14,21,0.88)"; x.fill(); x.lineWidth = 3; x.strokeStyle = "rgba(255,255,255,0.3)"; x.stroke();
+      x.fillStyle = color; x.beginPath(); x.arc(46, H0 / 2, 11, 0, 7); x.fill();
+      x.fillStyle = "#ffffff"; x.font = "600 44px 'Inter', sans-serif"; x.textAlign = "left"; x.textBaseline = "middle"; x.fillText(text, 72, H0 / 2 + 2);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false }));
+      sp.scale.set(0.034 * w / H0, 0.034, 1); sp.center.set(0.5, 0); sp.renderOrder = 10; sp.userData.text = text; return sp;
     }
     function numSprite(n) {
       const c = document.createElement("canvas"); c.width = 128; c.height = 128; const x = c.getContext("2d");
-      x.fillStyle = "#8ab8ff"; x.fillRect(18, 18, 92, 92); x.lineWidth = 8; x.strokeStyle = "#0b1116"; x.strokeRect(14, 14, 100, 100);
-      x.fillStyle = "#0b1116"; x.font = "600 62px 'IBM Plex Mono', monospace"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(String(n), 64, 68);
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false })); sp.renderOrder = 9; return sp;
+      x.beginPath(); x.arc(64, 64, 52, 0, 7); x.fillStyle = "#1a66e8"; x.fill(); x.lineWidth = 8; x.strokeStyle = "#ffffff"; x.stroke();
+      x.fillStyle = "#ffffff"; x.font = "600 60px 'IBM Plex Mono', monospace"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(String(n), 64, 68);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true, sizeAttenuation: false, toneMapped: false })); sp.center.set(0.5, 0); sp.renderOrder = 9; return sp;
     }
     const skyDir = (az, el) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)); };
 
-    const ASC = 95 * K, HSC = 150 * K, SSC = 1500 * K, AMAN = Math.max(12, 0.2 * M.width_m / nx); let as = ASC;   // AMAN: astronaut size under manual control (about 30 m on Jezero; the terrain mesh is 57 m per facet, so true 2 m would stand on one flat triangle)
-    const astro = makeAstronaut(); astro.scale.setScalar(ASC); sc.add(astro);
-    const astroTag = labelSprite("Astronaut", "#8ab8ff"); astroTag.scale.set(0.17, 0.037, 1); astroTag.center.set(0.5, 0); sc.add(astroTag);
-    const hab = makeHab(); hab.scale.setScalar(HSC); hab.position.copy(P(HAB[0], HAB[1], hz)); sc.add(hab);
-    // scattered boulders, so the ground has scale and texture when you come in close
-    {
-      const N = 5200, rg = new THREE.IcosahedronGeometry(1, 1), rp = rg.attributes.position;
+    // Real sizes. The suited astronaut is 1.9 m, the habitat dome 8.4 m across with a 2.3 m airlock.
+    // From far away they are smaller than a pixel, so labels and the beacon mark where they are (the way NASA Eyes marks spacecraft).
+    // The orbiter is the one exception: it is hundreds of km away, so it is drawn as a sky marker and its label gives the real range.
+    const AS = 1.9 / 2.35, HS = 4.2, SSC = 430 * K, IDLE = [HAB[0] + 3.2, HAB[1] - 9.5];
+    const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro);
+    const astroTag = labelSprite("Astronaut", "#8ab8ff"); sc.add(astroTag);
+    const hab = makeHab(); hab.scale.setScalar(HS); hab.position.copy(P(HAB[0], HAB[1], 0)); hab.position.y = ground(HAB[0], HAB[1]); sc.add(hab);
+    const habTag = labelSprite("Habitat", "#ffffff"); habTag.position.copy(hab.position); habTag.position.y += 8.5; sc.add(habTag);
+    // rocks at their real size (about 10 cm to 1.4 m) wherever you look closely. Each one is placed by a hash of its ground cell, so it is always in the same spot.
+    const RN = lite ? 280 : 720, RCELL = 6, v3 = new THREE.Vector3();
+    const rocks = (() => {
+      const rg = new THREE.IcosahedronGeometry(1, 1), rp = rg.attributes.position;
       for (let i = 0; i < rp.count; i++) { const f = 0.78 + Math.random() * 0.4; rp.setXYZ(i, rp.getX(i) * f, rp.getY(i) * f * 0.62, rp.getZ(i) * f); }
       rg.computeVertexNormals();
-      const rocks = new THREE.InstancedMesh(rg, pbr({ color: 0xffffff, roughness: 0.96, bumpMap: NOISE, bumpScale: 4, envMapIntensity: 0.2 }), N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), cl = new THREE.Color();
-      for (let i = 0; i < N; i++) {
-        const x = Math.random() * M.width_m, y = Math.random() * M.height_m, z = elevAt(x, y); if (z == null || Math.hypot(x - HAB[0], y - HAB[1]) < 190 * K) { m4.makeScale(0, 0, 0); rocks.setMatrixAt(i, m4); continue; }
-        const s = (2.5 + Math.pow(Math.random(), 3.2) * 34) * K, p = P(x, y, z); e.set(Math.random() * 0.5, Math.random() * 6.28, Math.random() * 0.5); q.setFromEuler(e);
-        m4.compose(p.setY(p.y + s * 0.2), q, new THREE.Vector3(s, s, s)); rocks.setMatrixAt(i, m4);
-        const t = 0.42 + Math.random() * 0.32; cl.setRGB(t * 0.92, t * 0.74, t * 0.60); rocks.setColorAt(i, cl);
+      const m = new THREE.InstancedMesh(rg, pbr({ color: 0xffffff, roughness: 0.96, envMapIntensity: 0.2 }), RN), cl = new THREE.Color(0x8a6f5a);
+      for (let i = 0; i < RN; i++) m.setColorAt(i, cl);
+      m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; sc.add(m); return m;
+    })();
+    rocksRef = rocks;
+    const hsh = (i, j, k) => { let n = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k + 1, 1274126177); n = Math.imul(n ^ (n >>> 13), 1103515245); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+    let rockAt = null;
+    function scatter(mx, my, cd) {                                               // wider field and only the bigger rocks as the camera pulls back
+      const R = Math.min(lite ? 120 : 260, Math.max(lite ? 46 : 70, cd * 2.2)), minS = cd * 0.0035, c0 = Math.round(mx / RCELL), c1 = Math.round(my / RCELL), nc = Math.ceil(R / RCELL), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), cl = new THREE.Color(); let n = 0;
+      for (let i = c0 - nc; i <= c0 + nc && n < RN; i++) for (let j = c1 - nc; j <= c1 + nc && n < RN; j++) {
+        if (hsh(i, j, 0) > 0.5) continue;
+        const x = (i + hsh(i, j, 1)) * RCELL, y = (j + hsh(i, j, 2)) * RCELL;
+        if (x < 1 || y < 1 || x > M.width_m - 1 || y > M.height_m - 1 || Math.hypot(x - mx, y - my) > R || Math.hypot(x - HAB[0], y - HAB[1]) < 14) continue;
+        const sz = 0.05 + Math.pow(hsh(i, j, 3), 5) * 0.95; if (sz < minS) continue; e.set(hsh(i, j, 4) * 0.5, hsh(i, j, 5) * 6.28, hsh(i, j, 6) * 0.5); q.setFromEuler(e);
+        m4.compose(v3.set(x - M.width_m / 2, ground(x, y) + sz * 0.16, -(y - M.height_m / 2)), q, new THREE.Vector3(sz, sz, sz)); rocks.setMatrixAt(n, m4);
+        const t = 0.2 + hsh(i, j, 7) * 0.2; cl.setRGB(t * 0.98, t * 0.72, t * 0.54); rocks.setColorAt(n, cl); n++;
       }
-      rocks.receiveShadow = true; rocks.visible = !lite; rocksRef = rocks; sc.add(rocks);
+      rocks.count = n; rocks.instanceMatrix.needsUpdate = true; rocks.instanceColor.needsUpdate = true; rockAt = [mx, my, cd];
     }
     const wk = new THREE.Group(); sc.add(wk); wk.visible = false;                         // uncertainty ring + beacon under the walker
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 72), new THREE.MeshBasicMaterial({ color: 0x93B7E6, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })); ring.rotation.x = -Math.PI / 2; ring.position.y = 12 * K; wk.add(ring);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 72), new THREE.MeshBasicMaterial({ color: 0x93B7E6, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; wk.add(ring);
     const beacon = new THREE.Mesh(new THREE.CylinderGeometry(5 * K, 5 * K, 700 * K, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0x8ab8ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide })); beacon.position.y = 350 * K; wk.add(beacon);
     const beamG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]);
     const beam = new THREE.Line(beamG, new THREE.LineBasicMaterial({ color: 0x6EE7A8 })); sc.add(beam); beam.visible = false;
@@ -933,6 +992,32 @@
     const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })); sc.add(trail); trail.visible = false;
     const stopsG = new THREE.Group(); sc.add(stopsG);
     let tube = null;
+
+    let pathW = 0;
+    function buildPath() {
+      if (tube) { sc.remove(tube); tube.geometry.dispose(); tube = null; }
+      const r = walk.on ? walk.route : S.route; if (!r || r.x.length < 2) return;
+      const w = pathW || 22 * K, lift = 0.04 + w * 0.02, cw = M.width_m / nx, ch = M.height_m / ny, px = [], py = [], pn = [];
+      for (let i = 0; i < r.x.length - 1; i++) {                                 // a point wherever the route crosses an edge of the terrain mesh, so the ribbon never dips under it
+        const ax = r.x[i] / cw, ay = (M.height_m - r.y[i]) / ch, bx = r.x[i + 1] / cw, by = (M.height_m - r.y[i + 1]) / ch, ts = [0];
+        const cuts = (a, b) => { if (a === b) return; for (let k2 = Math.ceil(Math.min(a, b)); k2 <= Math.max(a, b); k2++) { const t = (k2 - a) / (b - a); if (t > 1e-4 && t < 1 - 1e-4) ts.push(t); } };
+        cuts(ax, bx); cuts(ay, by); cuts(ax + ay, bx + by); ts.sort((u1, u2) => u1 - u2);
+        for (const t of ts) { px.push(r.x[i] + (r.x[i + 1] - r.x[i]) * t); py.push(r.y[i] + (r.y[i + 1] - r.y[i]) * t); pn.push(i); }
+      }
+      px.push(r.x.at(-1)); py.push(r.y.at(-1)); pn.push(r.x.length - 1);
+      const n = px.length, pa = new Float32Array(n * 6), ca = new Float32Array(n * 6), idx = [], cc = new THREE.Color();
+      for (let i = 0; i < n; i++) {
+        const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1); let dx = px[b] - px[a], dy = py[b] - py[a]; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+        cc.set(SLCOL(r.slope[Math.min(pn[i], r.slope.length - 1)]));
+        for (let sd2 = 0; sd2 < 2; sd2++) {
+          const sg = sd2 ? 1 : -1, x = Math.min(M.width_m, Math.max(0, px[i] - dy * sg * w / 2)), y = Math.min(M.height_m, Math.max(0, py[i] + dx * sg * w / 2)), o = (i * 2 + sd2) * 3;
+          pa[o] = x - M.width_m / 2; pa[o + 1] = ground(x, y) + lift; pa[o + 2] = -(y - M.height_m / 2); ca[o] = cc.r; ca[o + 1] = cc.g; ca[o + 2] = cc.b;
+        }
+        if (i < n - 1) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+      }
+      const g3 = new THREE.BufferGeometry(); g3.setAttribute("position", new THREE.BufferAttribute(pa, 3)); g3.setAttribute("color", new THREE.BufferAttribute(ca, 3)); g3.setIndex(idx);
+      tube = new THREE.Mesh(g3, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 })); tube.renderOrder = 1; tube.frustumCulled = false; sc.add(tube);
+    }
 
     function paint() {
       const c = tc.getContext("2d"); c.globalAlpha = 1;
@@ -944,29 +1029,13 @@
         if (imgs[n].complete && imgs[n].naturalWidth) { c.globalAlpha = n === "elevation" ? 0.75 : S.opacity; c.drawImage(imgs[n], 0, 0, tc.width, tc.height); }
       }
       c.globalAlpha = 1; tex.needsUpdate = true;
-      if (tube) { sc.remove(tube); tube.geometry.dispose(); tube = null; }
-      const r = walk.on ? walk.route : S.route;
-      if (r && r.x.length > 2) {
-        const step = Math.max(1, Math.floor(r.x.length / 500)), pts = [], idx = [];
-        const tr = (walk.on && walk.manual ? 2.5 : 11) * K, lift = tr * 1.1;                // a footpath when you walk it yourself
-        for (let i = 0; i < r.x.length; i += step) { pts.push(P(r.x[i], r.y[i], 0).setY(ground(r.x[i], r.y[i]) + lift)); idx.push(i); }
-        pts.push(P(r.x.at(-1), r.y.at(-1), 0).setY(ground(r.x.at(-1), r.y.at(-1)) + lift)); idx.push(r.x.length - 1);
-        const segs = pts.length * 2, rad = 6, g3 = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), segs, tr, rad, false);
-        const cols = new Float32Array(g3.attributes.position.count * 3), cc = new THREE.Color();
-        for (let i = 0; i <= segs; i++) {
-          const node = idx[Math.min(idx.length - 1, Math.round(i / segs * (idx.length - 1)))];
-          cc.set(SLCOL(r.slope[Math.min(node, r.slope.length - 1)]));
-          for (let j = 0; j <= rad; j++) { const v = (i * (rad + 1) + j) * 3; cols[v] = cc.r; cols[v + 1] = cc.g; cols[v + 2] = cc.b; }
-        }
-        g3.setAttribute("color", new THREE.BufferAttribute(cols, 3));
-        tube = new THREE.Mesh(g3, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false })); sc.add(tube);
-      }
+      buildPath();
       while (stopsG.children.length) { const o = stopsG.children[0]; stopsG.remove(o); if (o.material && o.material.map) o.material.map.dispose(); }
       S.stops.forEach((st, i) => {
-        const z = elevAt(st[0], st[1]); if (z == null) return;
-        const base = P(st[0], st[1], z);
-        const pole = new THREE.Mesh(new THREE.CylinderGeometry(3.5 * K, 3.5 * K, 240 * K, 8), pbr({ color: 0xdfe7ec, roughness: 0.4, metalness: 0.6 })); pole.position.copy(base); pole.position.y += 120 * K; pole.castShadow = true; stopsG.add(pole);
-        const sp = numSprite(i + 1); sp.scale.set(0.042, 0.042, 1); sp.position.copy(base); sp.position.y += 250 * K; stopsG.add(sp);
+        if (elevAt(st[0], st[1]) == null) return;
+        const base = P(st[0], st[1], 0).setY(ground(st[0], st[1]));                      // a 2.4 m marker pole; the number floats above it at any distance
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.4, 8), pbr({ color: 0xdfe7ec, roughness: 0.4, metalness: 0.6 })); pole.position.copy(base); pole.position.y += 1.2; pole.castShadow = true; stopsG.add(pole);
+        const sp = numSprite(i + 1); sp.scale.set(0.04, 0.04, 1); sp.position.copy(base); sp.position.y += 2.6; stopsG.add(sp);
       });
     }
 
@@ -995,10 +1064,10 @@
       lookSat: () => { if (!T3.satDir) return; T3.chase = false; $("t3follow").setAttribute("aria-pressed", "false"); const h0 = T3.herePos, d = T3.satDir.clone(), flat = d.clone().setY(0); if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1); flat.normalize(); T3.skyLook = true; cam.position.copy(h0).addScaledVector(flat, -600 * K); cam.position.y += 250 * K; ctl.target.copy(cam.position).addScaledVector(d, 2600 * K); },
       setLite: v => {
         lite = v; T3.lite = v; try { localStorage.setItem("mw_lite", v ? "1" : "0"); } catch (e) { /* ignore */ }
-        rn.shadowMap.enabled = !v; sun.castShadow = !v; sc.environment = v ? null : envTex; if (rocksRef) rocksRef.visible = !v;
+        rn.shadowMap.enabled = !v; sun.castShadow = !v; sc.environment = v ? null : envTex;
         sc.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
       },
-      zoom: f => { const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
+      zoom: f => { if (T3.chase) { T3.chaseK = Math.min(14, Math.max(0.35, (T3.chaseK || 1) * f)); return; } const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
       reset: () => { T3.skyLook = false; homeCam(); }, top: () => { T3.skyLook = false; const t = ctl.target; cam.position.set(t.x, t.y + 14000 * K, t.z + 1); },
     };
 
@@ -1018,24 +1087,36 @@
       sun.target.position.copy(ctl.target); sun.position.copy(ctl.target).addScaledVector(sd, 7000 * K); sun.target.updateMatrixWorld();
       rn.toneMappingExposure = 0.78 + 0.4 * (1 - day);
 
-      // the astronaut: walks along the route; waits by the habitat otherwise
+      // the astronaut: walks along the route; waits outside the airlock otherwise
       const k = T3.walker, walking = walk.on && !!k, u = astro.userData;
-      const idle = P(HAB[0] + 330 * K, HAB[1] - 260 * K, 0); idle.y = (( elevAt(HAB[0] + 330 * K, HAB[1] - 260 * K) ?? hz) - M.zmin) * EX;
-      const here = walking ? P(k.x, k.y, k.z) : idle; here.y = ground(walking ? k.x : HAB[0] + 330 * K, walking ? k.y : HAB[1] - 260 * K);
-      as += ((walking && k.manual ? AMAN : ASC) - as) * 0.08; astro.scale.setScalar(as); hab.scale.setScalar(HSC * as / ASC); hab.position.y = ground(HAB[0], HAB[1]); beacon.visible = !(walking && k.manual); ctl.minDistance = Math.min(120 * K, 4 * as);
+      const here = walking ? P(k.x, k.y, 0) : P(IDLE[0], IDLE[1], 0); here.y = ground(walking ? k.x : IDLE[0], walking ? k.y : IDLE[1]);
       astro.position.copy(here);
       if (walking) {
         if (Math.hypot(k.hdx, k.hdy) > 1e-6) astro.rotation.y = Math.atan2(k.hdx, -k.hdy);
-        if (!walk.busy && !k.still) T3.phase = (T3.phase || 0) + dtr * 6.5;
+        if (!walk.busy && !k.still) T3.phase = (T3.phase || 0) + dtr * 6.2;
         const sw = k.still ? 0 : Math.sin(T3.phase);
         u.legL.rotation.x = sw * 0.62; u.legR.rotation.x = -sw * 0.62;
         u.kneeL.rotation.x = Math.max(0, sw) * 0.95; u.kneeR.rotation.x = Math.max(0, -sw) * 0.95;
         u.armL.rotation.x = -sw * 0.5; u.armR.rotation.x = sw * 0.5; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.45;
-        if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.05 * as;
-      } else { astro.rotation.y = 0.7; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
-      astroTag.position.copy(astro.position); astroTag.position.y += 2.95 * as;
+        if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.04;
+      } else { astro.rotation.y = 0.5; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
+      const camD = cam.position.distanceTo(here);
+      const camH = cam.position.distanceTo(hab.position), nearHab = here.distanceTo(hab.position) < camH * 0.07;
+      astroTag.position.copy(here); astroTag.position.y += 2.25; astroTag.visible = camD > 40 && !(nearHab && !walking);
+      habTag.visible = camH > 110 && !(nearHab && walking);
       wk.visible = walking;
-      if (walking) { wk.position.copy(k.bx != null ? P(k.bx, k.by, 0).setY(ground(k.bx, k.by)) : here); ring.scale.setScalar(Math.max(k.rad, 25 * K)); ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6); }
+      if (walking) {
+        wk.position.copy(k.bx != null ? P(k.bx, k.by, 0).setY(ground(k.bx, k.by)) : here);
+        const rr = Math.max(k.rad, 1.2); ring.scale.setScalar(rr); ring.position.y = 0.05 + rr * 0.012; ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6);
+        beacon.visible = camD > 700;                                                 // a locator beam, only from far away
+      }
+      // zoom-dependent detail: near plane, shadow box, rocks and the width of the painted route
+      const cd = cam.position.distanceTo(ctl.target);
+      const nr = Math.min(10 * K, Math.max(0.12, cd * 0.03)); if (Math.abs(nr - cam.near) > cam.near * 0.15) { cam.near = nr; cam.updateProjectionMatrix(); }
+      const shW = Math.min(1700 * K, Math.max(16, cd * 1.5));
+      if (Math.abs(shW - shNow) > shNow * 0.2) { shNow = shW; Object.assign(sun.shadow.camera, { left: -shW, right: shW, top: shW, bottom: -shW }); sun.shadow.camera.updateProjectionMatrix(); sun.shadow.normalBias = Math.max(0.02, 3 * shW / 1700); }
+      if (cd < 700) { const mx = ctl.target.x + M.width_m / 2, my = M.height_m / 2 - ctl.target.z; if (!rockAt || Math.hypot(mx - rockAt[0], my - rockAt[1]) > Math.max(RCELL * 2, cd * 0.25) || cd > rockAt[2] * 1.3 || cd < rockAt[2] / 1.3) scatter(mx, my, cd); rocks.visible = true; } else rocks.visible = false;
+      const pw = Math.min(40 * K, Math.max(0.22, cd * 0.012)); if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35) { pathW = pw; buildPath(); }
 
       // a satellite appears in the sky while one is above the horizon from here
       const t = walk.on ? walk.simT : Date.now() / 1000;
@@ -1049,29 +1130,29 @@
         if (mdl.parent !== satHolder) satHolder.add(mdl);
         Object.values(sats).forEach(m2 => { m2.visible = m2 === mdl; });
         mdl.scale.setScalar(SSC); mdl.position.copy(spos); mdl.rotation.y += dtr * 0.12;
-        const txt = `${orb} · ${Math.round(sm[2])}°`;
-        if (!satLabel || satLabel.userData.text !== txt) { if (satLabel) { satHolder.remove(satLabel); satLabel.material.map.dispose(); } satLabel = labelSprite(txt, ORB[orb].c); satLabel.material.fog = false; satLabel.scale.set(0.2, 0.044, 1); satLabel.center.set(0.5, 0); satHolder.add(satLabel); }
-        satLabel.position.copy(spos); satLabel.position.y += 2800 * K;
+        const txt = sm[3] ? `${orb} · ${Math.round(sm[3]).toLocaleString("en-US")} km away` : `${orb} · ${Math.round(sm[2])}°`;
+        if (!satLabel || satLabel.userData.text !== txt) { if (satLabel) { satHolder.remove(satLabel); satLabel.material.map.dispose(); } satLabel = labelSprite(txt, ORB[orb].c); satLabel.material.fog = false; satHolder.add(satLabel); }
+        satLabel.position.copy(spos); satLabel.position.y += 1100 * K;
         satHolder.visible = true;
         if (ap) {
           const key = ap.orbiter + ap.start;
           if (trailKey !== key) { trailKey = key; trail.geometry.setFromPoints(ap.samples.filter(s2 => s2[2] > 0).map(s2 => skyDir(s2[1], s2[2]).multiplyScalar(far))); trail.material.color.set(ORB[orb].c); }
           trail.material.fog = false; trail.position.copy(cam.position); trail.visible = true;
         } else trail.visible = false;
-        if (walking && k.con) { beamG.setFromPoints([here.clone().setY(here.y + as * 2.2), spos]); beam.material.color.set(ORB[orb].c); beam.visible = true; }
+        if (walking && k.con) { beamG.setFromPoints([here.clone().setY(here.y + 1.8), spos]); beam.material.color.set(ORB[orb].c); beam.visible = true; }
       } else { satHolder.visible = false; trail.visible = false; T3.satPos = null; }
       const showFind = !!T3.satPos; if ($("t3sat").hidden === showFind) $("t3sat").hidden = !showFind;
 
-      // camera: free, following, or chasing from behind
+      // camera: free, or following from behind at a distance that suits the time rate
       if (T3.chase && !T3.drag) {
-        if (walking) {
-          const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; }
-          if (T3.dir) { const cl = (cam.aspect < 1 ? 1.7 : 1) * as, want = here.clone().addScaledVector(T3.dir, -10.5 * cl); want.y += 5 * cl; cam.position.lerp(want, k.manual ? 0.09 : 0.06); }
-        } else {
-          const fwd = new THREE.Vector3(Math.sin(0.7), 0, Math.cos(0.7)), want = here.clone().addScaledVector(fwd, 1100 * K); want.y += 420 * K; cam.position.lerp(want, 0.06);
-        }
-        ctl.target.lerp(here.clone().setY(here.y + 1.6 * as), 0.12);
-      } else if (walking && walk.follow !== false && !T3.drag) ctl.target.lerp(here, 0.05);
+        const dist = chaseBase() * (T3.chaseK || 1);
+        if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; } }
+        const back = walking ? (T3.dir || new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(-Math.sin(0.5), 0, -Math.cos(0.5));   // idle: stand in front of the astronaut, habitat behind
+        const want = here.clone().addScaledVector(back, -dist); want.y = here.y + 1.3 + dist * 0.36;
+        const gy = ground(Math.min(M.width_m, Math.max(0, want.x + M.width_m / 2)), Math.min(M.height_m, Math.max(0, M.height_m / 2 - want.z))) + 0.7; if (want.y < gy) want.y = gy;
+        cam.position.lerp(want, 1 - Math.exp(-dtr * (walking && k.manual ? 5 : 3.2)));
+        ctl.target.lerp(here.clone().setY(here.y + 1.45), 1 - Math.exp(-dtr * 9));
+      } else if (walking && walk.follow !== false && !T3.drag && !T3.skyLook) ctl.target.lerp(here, 0.05);
       ctl.maxPolarAngle = T3.skyLook ? Math.PI * 0.95 : Math.PI * 0.49;
       ctl.update(); rn.render(sc, cam);
     };
@@ -1140,12 +1221,13 @@
   document.querySelectorAll(".lay").forEach(b => b.onclick = () => { const n = b.dataset.l; S.layers.has(n) ? S.layers.delete(n) : S.layers.add(n); b.setAttribute("aria-pressed", S.layers.has(n)); syncLayers(); });
   $("o-op").textContent = "80%";
   $("opacity").oninput = e => { S.opacity = +e.target.value; $("o-op").textContent = Math.round(S.opacity * 100) + "%"; syncLayers(); };
-  document.querySelectorAll(".spd").forEach(b => b.onclick = () => { S.speed = +b.dataset.s; document.querySelectorAll(".spd").forEach(x => x.setAttribute("aria-pressed", x === b)); });
+  { const spds = [...document.querySelectorAll(".spd")], setSpeed = b => { S.speed = +b.dataset.s; spds.forEach(x => x.setAttribute("aria-pressed", x === b)); };
+    spds.forEach((b, i) => b.onclick = () => setSpeed(b.getAttribute("aria-pressed") === "true" && matchMedia("(max-width: 980px)").matches ? spds[(i + 1) % spds.length] : b)); }
   const tog = (id, key, fn) => $(id).onclick = e => { S[key] = !S[key]; e.target.setAttribute("aria-pressed", S[key]); fn && fn(); };
   tog("sound", "sound", () => { if (S.sound) { audio().resume(); chime("MRO"); } });
   tog("doppler", "doppler", () => { if (S.doppler) audio().resume(); });
   tog("truth", "truth", () => { if (walk.on) S.truth ? ghost.addTo(map) : map.removeLayer(ghost); });
-  $("t3drive").onclick = $("driveBtn").onclick = () => walk.on && walk.manual ? releaseControl() : takeControl();
+  $("t3drive").onclick = () => walk.on && walk.manual ? releaseControl() : takeControl();
   $("walkBtn").onclick = () => walk.on ? endWalk() : startWalk();
   $("homeBtn").onclick = () => { if (!walk.on) return; const p = posOn(walk.route, walk.simT - walk.t0); reroute([p.x, p.y], [HAB], "Abort: shortest safe way back to the habitat."); };
   map.on("dragstart", () => walk.follow = false);

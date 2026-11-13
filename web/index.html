@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794539566">
+<link rel="stylesheet" href="style.css?v=1794586378">
 </head>
 <body>
 <div id="map"></div>
@@ -237,6 +237,7 @@
   </div>
   <div class="tctl">
     <div class="seg small" role="group" aria-label="Time scale">
+      <button type="button" class="spd" data-s="1" title="Real time">×1</button>
       <button type="button" class="spd" data-s="30">×30</button>
       <button type="button" class="spd" data-s="120" aria-pressed="true">×120</button>
       <button type="button" class="spd" data-s="600">×600</button>
@@ -244,7 +245,6 @@
     <div class="tbtns">
       <button type="button" class="chip" id="tbNow">Now</button>
       <button type="button" class="chip" id="tbBest">Best window</button>
-      <button type="button" class="chip" id="driveBtn" aria-pressed="false" title="Walk the astronaut yourself: W/S walk, A/D turn">Take control</button>
       <button type="button" class="chip" id="homeBtn" disabled>Abort to habitat</button>
     </div>
   </div>
@@ -255,7 +255,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="relayfix.js?v=1794539566"></script>
-<script src="app.js?v=1794539566"></script>
+<script src="relayfix.js?v=1794586378"></script>
+<script src="app.js?v=1794586378"></script>
 </body>
 </html>
