@@ -38,6 +38,53 @@
     return Math.atan(Math.hypot((b - a) / (2 * DX), (d - c) / (2 * DY))) * 180 / Math.PI;
   };
 
+  /* ---------- habitat radio: a direct line between the mast on the habitat and the suit ----------
+     The link holds wherever the ground does not rise above the straight line between the two antennas (the curve of Mars included).
+     Antenna heights are assumptions: 8 m mast, 1.8 m suit. No power limit inside the mapped area. */
+  const HAB_MAST = 8, SUIT_ANT = 1.8, R_MARS = 3389500;
+  const elevBil = (x, y) => {                            // ground height between cell centres, so a line of sight is not broken by the steps of the grid
+    const cf = Math.min(W - 1.001, Math.max(0, x / DX - 0.5)), rf = Math.min(H - 1.001, Math.max(0, H - 0.5 - y / DY));
+    if (x < 0 || y < 0 || x > M.width_m || y > M.height_m) return null;
+    const c0 = Math.floor(cf), r0 = Math.floor(rf), u = cf - c0, v = rf - r0, i = r0 * W + c0;
+    return (ELEV[i] * (1 - u) * (1 - v) + ELEV[i + 1] * u * (1 - v) + ELEV[i + W] * (1 - u) * v + ELEV[i + W + 1] * u * v) * M.elev_scale;
+  };
+  function habLinkAt(x, y) {
+    const dx = x - HAB[0], dy = y - HAB[1], d = Math.hypot(dx, dy);
+    if (d < 40) return { ok: true, d };
+    const z0 = (elevBil(HAB[0], HAB[1]) ?? 0) + HAB_MAST, z1 = (elevBil(x, y) ?? 0) + SUIT_ANT, n = Math.min(600, Math.max(6, Math.ceil(d / (DX * 0.75))));
+    for (let i = 1; i < n; i++) {
+      const f = i / n, zt = elevBil(HAB[0] + dx * f, HAB[1] + dy * f); if (zt == null) continue;
+      if (zt > z0 + (z1 - z0) * f - (d * f) * (d * (1 - f)) / (2 * R_MARS)) return { ok: false, d };
+    }
+    return { ok: true, d };
+  }
+  const HL = { t: 0, v: { ok: true, d: 0 }, n: 0 };
+  function habNow() {                                    // the astronaut's own link, checked a few times a second; it has to change for about a second before it counts
+    const now = performance.now(); if (now - HL.t < 350) return HL.v; HL.t = now;
+    const raw = walk.on && T3.walker ? habLinkAt(T3.walker.x, T3.walker.y) : { ok: true, d: 0 };
+    if (raw.ok === HL.v.ok || !walk.on) { HL.n = 0; HL.v = raw; } else if (++HL.n >= 3) { HL.n = 0; HL.v = raw; } else HL.v = { ok: HL.v.ok, d: raw.d };
+    return HL.v;
+  }
+  // map layer: everywhere the habitat link reaches. Rays go out from the mast; a spot is covered if an antenna held there clears all the ground before it.
+  let HABCOV = null;
+  function habCoverUrl() {
+    if (HABCOV) return HABCOV;
+    const CW = Math.min(1024, W), CH = Math.max(1, Math.round(CW * H / W)), vis = new Uint8Array(CW * CH), NR = 8192;
+    const z0 = (elevBil(HAB[0], HAB[1]) ?? 0) + HAB_MAST, step = Math.min(DX, DY), maxD = Math.hypot(M.width_m, M.height_m);
+    for (let a = 0; a < NR; a++) {
+      const th = a / NR * 2 * Math.PI, ux = Math.sin(th), uy = Math.cos(th); let mx = -Infinity;
+      for (let d = step; d < maxD; d += step) {
+        const x = HAB[0] + ux * d, y = HAB[1] + uy * d, z = elevBil(x, y); if (z == null) break;
+        const drop = d * d / (2 * R_MARS), k = Math.min(CH - 1, Math.floor((1 - y / M.height_m) * CH)) * CW + Math.min(CW - 1, Math.floor(x / M.width_m * CW));
+        if ((z + SUIT_ANT - drop - z0) / d >= mx) vis[k] = 2; else if (!vis[k]) vis[k] = 1;
+        const sT = (z - drop - z0) / d; if (sT > mx) mx = sT;
+      }
+    }
+    const c = document.createElement("canvas"); c.width = CW; c.height = CH; const x2 = c.getContext("2d"), im = x2.createImageData(CW, CH), dd = im.data;
+    for (let i = 0; i < CW * CH; i++) { const v = vis[i]; if (v === 2) { dd[i * 4] = 61; dd[i * 4 + 1] = 220; dd[i * 4 + 2] = 151; dd[i * 4 + 3] = 105; } else if (v === 1) { dd[i * 4] = 6; dd[i * 4 + 1] = 8; dd[i * 4 + 2] = 14; dd[i * 4 + 3] = 165; } }
+    x2.putImageData(im, 0, 0); HABCOV = c.toDataURL("image/png"); return HABCOV;
+  }
+
   /* ---------- state ---------- */
   const S = {
     stops: SITE === "jezero" ? [[15100, 16000], [12700, 16300]] : [],     // science stops (x east, y north, metres)
@@ -82,11 +129,12 @@
   const hiBox = M.hirise && L.rectangle([[M.hirise.box[2], M.hirise.box[0]], [M.hirise.box[3], M.hirise.box[1]]],
     { color: "#93B7E6", weight: 1, dashArray: "6 6", fill: false, interactive: false });
   const layerUrl = n => {
+    if (n === "hab") return habCoverUrl();
     const t = Math.floor((n === "sun" || n === "heat" ? clockT() : departT()) / 600) * 600;
     return Q(`/api/layer/${n}.png?t=${t}` + (n === "cost" ? `&w=${encodeURIComponent(JSON.stringify(S.weights))}` : ""));
   };
   function syncLayers() {
-    for (const n of ["slope", "radiation", "comms", "sun", "heat", "cost"]) {
+    for (const n of ["slope", "radiation", "comms", "hab", "sun", "heat", "cost"]) {
       const on = S.layers.has(n);
       if (on) {
         const u = layerUrl(n);
@@ -103,6 +151,7 @@
     slope: ["linear-gradient(90deg,#3cc878 0%,#ebdc50 25%,#f59632 45%,#eb5a28 62%,#d71e2d 63%,#780a28 100%)", "0°", "40°", M.hirise ? "Dashed box: slopes from HiRISE 1 m." : ""],
     radiation: ["linear-gradient(90deg,#2878dc,#6e3caa,#dc506e,#ffc85a)", "", "", ""],
     comms: ["linear-gradient(90deg,#3cdceb,#f0be46,#e6323c)", "", "", ""],
+    hab: ["linear-gradient(90deg,#3ddc97 0%,#3ddc97 50%,#1b2330 50%,#1b2330 100%)", "link holds", "hidden", "Line of sight from an 8 m mast on the habitat to a suit antenna (heights are assumptions)."],
     sun: ["linear-gradient(90deg,#0e1646 0%,#0e1646 30%,#ffe1aa 100%)", "shadow", "full sun", ""],
     heat: ["linear-gradient(90deg,#140e46,#283caa,#4696d2,#9664be,#e1506e,#fa963c,#fff096)", "", "", ""],
     cost: ["linear-gradient(90deg,#1ea078,#dcd250,#f07832,#c8283c,#19050f)", "easy", "no-go", "what the planner sees with your weights"],
@@ -112,12 +161,13 @@
     slope: "Green is easy walking. Amber is a moderate slope. Red is steep. The planner avoids red unless there is no other way.",
     radiation: "Darker blue = more shielded. Cliff bases and valley floors hide part of the sky, so they get less. Higher ground has thinner air above it, so it gets more. Inside one crater the spread is small: the big differences are between places on Mars (see the globe).",
     comms: "Red = places where hills hide the relay orbiters for much of the day.",
+    hab: "Green = the habitat's radio mast can see you there, so voice and messages to the habitat go straight through. Dark = the ground is in the way.",
     sun: "Dark blue = night, or shadow cast by the terrain right now.",
     heat: "Ground temperature at the clock time. Cold ground drains suit power.",
     cost: "What the planner sees with your settings: green is cheap to cross, dark red is avoided.",
     elevation: "Height above the Mars datum. Brighter = higher.",
   };
-  const LNAME = { slope: "Slope", radiation: "Radiation", comms: "Relay blind spots", sun: "Sun & shadow", heat: "Ground temp", cost: "Planner cost", elevation: "Elevation" };
+  const LNAME = { slope: "Slope", radiation: "Radiation", comms: "Relay blind spots", hab: "Habitat radio", sun: "Sun & shadow", heat: "Ground temp", cost: "Planner cost", elevation: "Elevation" };
   async function drawLegend() {
     const act = [...S.layers].pop() || (S.base === "elevation" ? "elevation" : null);
     const el = $("legend"); $("layerNote").textContent = act ? NOTE[act] : "Select a layer to display it on the map.";
@@ -445,7 +495,7 @@
     if (!S.route || S.route.x.length < 2) return;
     Object.assign(walk, { on: true, route: S.route, t0: departT(), simT: departT(), odo: 0, odoFix: 0, theta: Math.random() * 6.28,
       drift: [0, 0], dAlong: 0, _i: 0, ri: 0, lock: "", lockKey: "", px: null, follow: true, busy: false, hzOn: false, zNow: S.route.z[0], inContact: false, alerted: new Set(), dose: 0, lastSun: 0, last: performance.now(), dwellSaid: -1 });
-    Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 1.5, rest: [], hd: 0, still: true, keys: {}, lastRe: 0, ri: 0, lock: "", lockKey: "", loose: false }); T3.pathHead = null; syncDrive();
+    Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 1.5, rest: [], hd: 0, still: true, keys: {}, lastRe: 0, ri: 0, lock: "", lockKey: "", loose: false, habOk: undefined }); HL.t = 0; T3.pathHead = null; syncDrive();
     me.addTo(map); unc.addTo(map); if (S.truth) ghost.addTo(map);
     walk._painted = -1;
     if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
@@ -484,7 +534,7 @@
     try {
       const r = await requestRoute([from, ...stops], walk.simT);
       r.stopsReq = [from, ...stops]; walk.route = r; walk.t0 = walk.simT; walk._i = 0; walk._painted = -1; walk.dAlong = 0; walk.ri = 0; walk.px = null; walk.loose = false;
-      if (!opt.quiet) toast("Route updated", why, color); T3.dirty = true;
+      if (!opt.quiet) toast(opt.title || "Route updated", why, color); T3.dirty = true;
     } catch (e) { if (!opt.soft) toast("Could not plan a route", e.message, "#F0616B"); }
     walk.busy = false; walk.planning = false;
   }
@@ -520,12 +570,19 @@
     walk.drift = [fx.x - tx, fx.y - ty]; walk.sig = Math.max(1.5, 2 * fx.sigma); walk.odoFix = walk.odo; walk.fixKey = key; walk.lock = "fix";
     return { ...fx, jump: Math.hypot(fx.x - bx, fx.y - by), first };
   }
-  const fixMsg = (orb, f) => `${orb} measured your position to ±${Math.max(2, Math.round(2 * f.sigma))} m. The suit's own estimate was ${Math.round(f.jump)} m out. Route updated from where you really are.`;
-  function hudRelay(con) {
+  const fixMsg = (orb, f) => `${orb} gave your position: ${fLL(f.x, f.y)}, good to ±${Math.max(2, Math.round(2 * f.sigma))} m. The suit's own estimate was ${Math.round(f.jump)} m out. New ${POLICY()} route planned from there.`;
+  const shortOrb = n => n.split(" ").pop();              // "Mars Odyssey" -> "Odyssey": the HUD is narrow on a phone
+  const fLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${Math.abs(la).toFixed(4)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(4)}°${lo >= 0 ? "E" : "W"}`; };
+  const POLICY = () => ({ safe: "Safest", balanced: "Balanced", fast: "Fastest" })[S.style] || "custom";
+  function hudRelay(con, bx, by) {
     const np = DB.passes.find(q => q.start > walk.simT + 20), el = $("hudLink"), locked = con && walk.lock === "fix";
-    el.textContent = con ? (locked ? `${con.orbiter} · fix ±${Math.round(walk.sig)} m` : `${con.orbiter} · locking on`) : np ? `${np.orbiter} in ${fDur(np.start - walk.simT)}` : "none in view";
+    el.textContent = con ? (locked ? `${shortOrb(con.orbiter)} fix ±${Math.round(walk.sig)} m` : `${shortOrb(con.orbiter)} locking on`) : np ? `${shortOrb(np.orbiter)} in ${fDur(np.start - walk.simT)}` : "none in view";
     el.style.color = con ? "var(--ok)" : "var(--ink)";
     $("skipPass").hidden = !!con || !np;
+    const h = habNow(), hb = $("hudHab");
+    hb.textContent = h.ok ? `linked · ${fKm(h.d)}` : "hidden by terrain"; hb.style.color = h.ok ? "var(--ok)" : "var(--warn)";
+    if (walk.habOk !== undefined && walk.habOk !== h.ok && performance.now() - (walk.habSaid || 0) > 15000 && (walk.habSaid = performance.now())) toast(h.ok ? "Habitat link is back" : "Habitat link lost", h.ok ? "The habitat mast can see you again. Messages to the habitat go straight through." : `The ground between you and the habitat is in the way (${fKm(h.d)} away). Messages wait for the link or for a satellite.`, h.ok ? "#6EE7A8" : "#F5B85B");
+    walk.habOk = h.ok;
   }
   // "Wait here for the next satellite": jump the clock to just before the next pass. The astronaut stays where they are.
   function skipToPass() {
@@ -602,7 +659,7 @@
       const had = walk.fixKey === q.orbiter + q.start && walk.sig <= 24, fix = navFix(q, walk.mx, walk.my, 15);
       if (fix && !had && fix.sigma <= 12 && walk.rest.length) {                                // first solid fix of this pass: plan again from the real position
         chime(q.orbiter, true); walk.lastRe = now;
-        reroute([fix.x, fix.y], walk.rest, fixMsg(q.orbiter, { ...fix, jump: walk.lockJump ?? fix.jump }), ORB[q.orbiter].c); walk.lockJump = null;
+        reroute([fix.x, fix.y], walk.rest, fixMsg(q.orbiter, { ...fix, jump: walk.lockJump ?? fix.jump }), ORB[q.orbiter].c, { title: `${q.orbiter} position fix` }); walk.lockJump = null;
       } else if (fix && fix.first) walk.lockJump = fix.jump;                                   // remember how far out the suit was when the lock began
     } else if (walk.lock) { walk.lock = ""; }
     walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
@@ -637,9 +694,9 @@
     const tgt = walk.rest[0], dist = tgt ? Math.hypot(tgt[0] - bx, tgt[1] - by) : 0, brg = tgt ? Math.atan2(tgt[0] - bx, tgt[1] - by) : 0;
     $("arrow").style.transform = `rotate(${(brg - walk.hd) * 180 / Math.PI - 90}deg)`;
     $("hudNext").textContent = `${tgt === HAB ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - walk.rest.filter(w2 => w2 !== HAB).length + 1)} of ${S.stops.length}`} · ${fKm(dist)}`;
-    $("hudSub").textContent = off > Math.max(25, 1.5 * DX) ? `${Math.round(off)} m off the route${tracked ? "" : " · no satellite to replan"}` : `Slope here ${sl0.toFixed(0)}° · ${walk.rest.length} stop${walk.rest.length === 1 ? "" : "s"} left`;
+    $("hudSub").textContent = off > Math.max(25, 1.5 * DX) ? `${Math.round(off)} m off the route${tracked ? "" : " · no satellite to replan"}` : `${fLL(bx, by)} · slope ${sl0.toFixed(0)}°`;
     $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
-    hudRelay(con);
+    hudRelay(con, bx, by);
     $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
     if (S.view === "2d" && !map.getBounds().pad(-0.25).contains(ll(walk.mx, walk.my))) map.panTo(ll(walk.mx, walk.my), { animate: true, duration: 0.4 });
     T3.walker = { x: walk.mx, y: walk.my, z, rad, con, tracked, pass: con ? q : null, hdx: Math.sin(walk.hd), hdy: Math.cos(walk.hd), d: 0, still: walk.still, bx, by, manual: true };
@@ -679,7 +736,7 @@
         if (fix) {
           chime(con.orbiter, true);
           const k = r.stop_idx.slice(1).filter(i => i <= p.i).length, rest = r.stopsReq.slice(1 + k);
-          if (rest.length) reroute([fix.x, fix.y], rest, fixMsg(cq.orbiter, fix), ORB[cq.orbiter].c);
+          if (rest.length) reroute([fix.x, fix.y], rest, fixMsg(cq.orbiter, fix), ORB[cq.orbiter].c, { title: `${cq.orbiter} position fix` });
           else toast("Position fix", `${cq.orbiter} measured your position to ±${Math.round(2 * fix.sigma)} m.`, ORB[cq.orbiter].c);
         }
       } else if (!pq && walk.lock) walk.lock = "";
@@ -707,9 +764,9 @@
       const home = last && r.stopsReq.at(-1) === HAB;
       const left = total - k - (r.stopsReq.at(-1) === HAB ? 1 : 0);                          // science waypoints still to visit, this one included
       $("hudNext").textContent = dw ? "Collecting a sample" : `${home ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - left + 1)} of ${S.stops.length}`} · ${fKm(r.d[nxt] - p.d)}`;
-      $("hudSub").textContent = dw ? `${Math.ceil((dw.t + dw.min * 60 - el) / 60)} min of sampling left` : `${fDur(r.t[nxt] - el)} to go · home in ${fDur(r.time_s - el)}`;
+      $("hudSub").textContent = dw ? `${Math.ceil((dw.t + dw.min * 60 - el) / 60)} min of sampling left` : `${fLL(p.x, p.y)} · ${fDur(r.t[nxt] - el)} to go`;
       $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
-      hudRelay(con || (tracked ? { orbiter: pq.orbiter } : null));
+      hudRelay(con || (tracked ? { orbiter: pq.orbiter } : null), p.x, p.y);
       $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
       if (r.ground_c) $("hudGround").textContent = `${Math.round(r.ground_c[Math.min(p.i, r.ground_c.length - 1)])} °C`;
       // hazard look-ahead (150 m)
@@ -1009,6 +1066,7 @@
       hab.position.copy(P(HABM[0], HABM[1], 0)); hab.position.y = ground(HABM[0], HABM[1]); hab.rotation.y = Math.atan2(-hx, hy);
       habTag.position.copy(hab.position); habTag.position.y += 8.5; rockAt = null;
     }
+    const habLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]), new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.5 })); habLine.visible = false; habLine.frustumCulled = false; sc.add(habLine);
     const estTag = labelSprite("Suit's estimate", "#93B7E6"); estTag.visible = false; sc.add(estTag);
     const habTag = labelSprite("Habitat", "#ffffff"); habTag.position.copy(hab.position); habTag.position.y += 8.5; sc.add(habTag);
     // rocks at their real size (about 10 cm to 1.4 m) wherever you look closely. Each one is placed by a hash of its ground cell, so it is always in the same spot.
@@ -1164,12 +1222,14 @@
       const camH = cam.position.distanceTo(hab.position), nearHab = here.distanceTo(hab.position) < camH * 0.07;
       astroTag.position.copy(here); astroTag.position.y += 2.25; astroTag.visible = camD > 40 && !(nearHab && !walking);
       habTag.visible = camH > 110 && !(nearHab && walking);
+      habLine.visible = walking && habNow().ok && here.distanceTo(hab.position) > 25;      // the habitat radio link, drawn from the top of the mast
+      if (habLine.visible) habLine.geometry.setFromPoints([hab.localToWorld(new THREE.Vector3(0.45, 1.9, -0.25)), here.clone().setY(here.y + 1.75)]);
       wk.visible = walking;
       if (walking) {
         wk.position.copy(k.bx != null ? P(k.bx, k.by, 0).setY(ground(k.bx, k.by)) : here);
         const rr = Math.max(k.rad, 1.2); ring.scale.setScalar(rr); ring.position.y = 0.05 + rr * 0.012; ring.material.color.set(k.tracked ? 0x6EE7A8 : 0x93B7E6);
         beacon.visible = camD > 700;
-        estTag.position.copy(wk.position); estTag.position.y += 0.4; estTag.visible = !k.tracked && wk.position.distanceTo(here) > Math.max(4, camD * 0.06) && camD < 900;
+        estTag.position.copy(wk.position); estTag.position.y += 0.4; estTag.visible = !k.tracked && wk.position.distanceTo(here) > Math.max(4, camD * 0.14) && camD < 900;
       } else {
         estTag.visible = false;                                                 // a locator beam, only from far away
       }
@@ -1261,6 +1321,11 @@
     $("styleHint").textContent = st.hint;
     if (S.layers.has("cost")) syncLayers();
     if (replan && !walk.on) plan(0);
+    else if (replan && walk.on && !walk.busy && !walk.planning) {
+      const r = walk.route, w = T3.walker, from = w && w.bx != null ? [w.bx, w.by] : null; if (!from) return;
+      const rest = walk.manual ? walk.rest : (() => { const q = posOn(r, walk.simT - walk.t0), k = r.stop_idx.slice(1).filter(i => i <= q.i).length; return r.stopsReq.slice(1 + k); })();
+      if (rest.length) reroute(from, rest, `${POLICY()} route from your ${walk.lock === "fix" ? "satellite-fixed" : "estimated"} position.`, "#8ab8ff", { title: "Route policy changed" });
+    }
   }
   document.querySelectorAll(".style").forEach(b => b.onclick = () => applyStyle(b.dataset.s));
   function setDepart(min) {
@@ -1287,7 +1352,7 @@
   $("roundTrip").onclick = e => { S.roundTrip = !S.roundTrip; e.target.setAttribute("aria-pressed", S.roundTrip); if (!walk.on) plan(); };
   $("clearStops").onclick = () => { if (!walk.on) { S.stops = []; plan(); } };
   document.querySelectorAll(".base").forEach(b => b.onclick = () => { S.base = b.dataset.b; document.querySelectorAll(".base").forEach(x => x.setAttribute("aria-pressed", x === b)); syncLayers(); });
-  document.querySelectorAll(".lay").forEach(b => b.onclick = () => { const n = b.dataset.l; S.layers.has(n) ? S.layers.delete(n) : S.layers.add(n); b.setAttribute("aria-pressed", S.layers.has(n)); syncLayers(); });
+  document.querySelectorAll(".lay[data-l]").forEach(b => b.onclick = () => { const n = b.dataset.l; S.layers.has(n) ? S.layers.delete(n) : S.layers.add(n); b.setAttribute("aria-pressed", S.layers.has(n)); syncLayers(); });
   $("o-op").textContent = "80%";
   $("opacity").oninput = e => { S.opacity = +e.target.value; $("o-op").textContent = Math.round(S.opacity * 100) + "%"; syncLayers(); };
   { const spds = [...document.querySelectorAll(".spd")], setSpeed = b => { S.speed = +b.dataset.s; spds.forEach(x => x.setAttribute("aria-pressed", x === b)); };
@@ -1320,6 +1385,9 @@
   const comTime = () => walk.on ? walk.simT : Date.now() / 1000;                // the walker's clock (simulated during a walk)
   const mmss = s => { s = Math.max(0, Math.round(s)); return s >= 3600 ? fCD(s) : `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
   window.MW = { COM, S, walk, T3, tick };                                                  // debug handle: MW.COM.force = {orbiter, end} holds the link open for testing
+  const HABLK = { orbiter: "Habitat link", hab: true, end: Infinity };
+  const linkFor = dest => dest === "pod" && habNow().ok ? HABLK : linkNow();     // messages to the habitat go straight over its own radio when the mast can see you
+  const orbC = n => (ORB[n] || { c: "#6EE7A8" }).c;
   function linkNow() {                                                          // is a relay orbiter overhead right now?
     if (COM.practice) return { orbiter: "MRO", end: comTime() + 1800, practice: true };   // practice mode: the link is always open
     if (COM.force) return COM.force;
@@ -1340,7 +1408,7 @@
   }
   function queueMsg(m) {
     m.lid = ++COM.lid; m.to = COM.dest; m.status = "queued"; COM.q.push(m);
-    if (!linkNow()) toast("Message queued", `No relay orbiter overhead. It leaves on the next pass (${nextPassText().replace("next: ", "")}).`, "#93B7E6");
+    if (!linkFor(m.to)) toast("Message queued", m.to === "pod" ? `The habitat is hidden by terrain and no satellite is overhead. It leaves when either link returns (${nextPassText().replace("next: ", "")}).` : `No relay orbiter overhead. It leaves on the next pass (${nextPassText().replace("next: ", "")}).`, "#93B7E6");
     commsTick(true);
   }
   async function uplink(m, lk) {
@@ -1350,7 +1418,7 @@
         body: JSON.stringify({ sender: "astronaut", to: m.to, kind: m.kind, text: m.text || "", audio_b64: m.audio_b64 || null, mime: m.mime, via: lk.orbiter, speed: S.speed, secs: m.secs || null }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.detail || r.statusText);
       COM.q = COM.q.filter(x => x !== m); COM.srv.set(j.id, j); blip();
-      toast(`Uplinked via ${lk.orbiter}`, m.to === "earth" ? `On its way to Earth: ${mmss(j.light_min * 60)} of light time (×${S.speed}).` : "Relayed to the pod.", ORB[lk.orbiter].c);
+      toast(lk.hab ? "Sent to the habitat" : `Uplinked via ${lk.orbiter}`, m.to === "earth" ? `On its way to Earth: ${mmss(j.light_min * 60)} of light time (×${S.speed}).` : lk.hab ? "Straight over the habitat radio link. No satellite needed." : "Relayed to the habitat.", orbC(lk.orbiter));
     } catch (e) { m.status = "queued"; toast("Send failed", e.message, "#F0616B"); }
     renderMsgs();
   }
@@ -1370,22 +1438,20 @@
     try {
       const r = await fetch(`/api/comms/deliver/${m.id}`, { method: "POST" }); if (!r.ok) return;
       const v = await r.json(); COM.srv.set(v.id, { ...COM.srv.get(v.id), ...v }); blip();
-      toast(`Message from ${v.sender === "earth" ? "Earth" : "the pod"}`, v.text || "Voice message", "#6EE7A8"); playMsg(v);
+      toast(`Message from ${v.sender === "earth" ? "Earth" : "the habitat"}`, v.text || "Voice message", "#6EE7A8"); playMsg(v);
     } finally { COM.busy.delete(m.id); renderMsgs(); }
   }
   function commsTick(force) {
     const now = performance.now(); if (!force && now - COM.last < 1000) return; COM.last = now;
-    const lk = linkNow(), was = COM.wasOpen; COM.wasOpen = !!lk;
+    const lk = linkNow(), hb = habNow().ok, was = COM.wasOpen; COM.wasOpen = !!lk;
     if (lk && !was) {                                                           // a relay orbiter just came over: beep, buzz, open the mic
       if (!S.sound) chime(lk.orbiter, true, true);
       if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate([220, 110, 220]);
-      toast(`${lk.orbiter} is overhead`, COM.mic ? "Radio link open. Hold the talk button in Radio to send a voice message." : "Radio link open: queued messages are going now.", ORB[lk.orbiter].c);
+      toast(`${lk.orbiter} is overhead`, COM.mic ? "Link to Earth open. Hold the talk button in Radio to send a voice message." : "Link to Earth open: queued messages are going now.", orbC(lk.orbiter));
     }
-    if (!lk && was) { closeMic(); toast("Link closed", "Messages now wait for the next pass.", "#93B7E6"); }
-    if (lk) {
-      COM.q.filter(x => x.status === "queued").forEach(m => uplink(m, lk));                                  // leave as soon as the link opens
-      [...COM.srv.values()].filter(m => m.to === "astronaut" && !m.delivered && Date.now() / 1000 + COM.off >= m.arrive).forEach(deliverIncoming);   // replies come down
-    }
+    if (!lk && was) { if (!linkFor(COM.dest)) closeMic(); toast("Satellite has set", "Messages to Earth now wait for the next pass.", "#93B7E6"); }
+    COM.q.filter(x => x.status === "queued").forEach(m => { const l = m.to === "pod" && hb ? HABLK : lk; if (l) uplink(m, l); });      // leave as soon as a link is there
+    [...COM.srv.values()].filter(m => m.to === "astronaut" && !m.delivered && Date.now() / 1000 + COM.off >= m.arrive && (lk || (hb && m.sender === "pod"))).forEach(deliverIncoming);   // replies come down
     if (now - COM.polled > 2000) { COM.polled = now; pollComms(); }
     renderMsgs(lk);
   }
@@ -1396,7 +1462,7 @@
     if (!COM.mic || COM.ptt.stream) return;
     try { COM.ptt.stream = await navigator.mediaDevices.getUserMedia({ audio: true }); COM.ptt.denied = false; }
     catch (e) { COM.ptt.denied = true; toast("Microphone blocked", "Allow the microphone for this page, then hold the talk button.", "#F0616B"); }
-    if (COM.ptt.stream && !linkNow()) closeMic();                              // the link closed while the permission box was open
+    if (COM.ptt.stream && !linkFor(COM.dest)) closeMic();                              // the link closed while the permission box was open
     renderTalk();
   }
   function closeMic() {
@@ -1406,7 +1472,7 @@
   }
   async function pttDown(e) {
     if (e && e.cancelable) e.preventDefault();
-    if (!linkNow() || COM.ptt.mr) return;
+    if (!linkFor(COM.dest) || COM.ptt.mr) return;
     COM.ptt.held = true;
     if (!COM.ptt.stream) { await openMic(); if (COM.ptt.stream && !COM.ptt.held) return toast("Microphone ready", "Now hold the talk button and speak.", "#6EE7A8"); }
     if (!COM.ptt.stream || COM.ptt.mr) return;
@@ -1424,12 +1490,12 @@
   }
   function pttUp() { COM.ptt.held = false; if (COM.ptt.mr && COM.ptt.mr.state === "recording") COM.ptt.mr.stop(); }
   function renderTalk() {
-    const b = $("talkBtn"), lk = linkNow(), rec = !!(COM.ptt.mr && COM.ptt.mr.state === "recording"), dest = COM.dest === "earth" ? "Earth" : "the pod";
+    const b = $("talkBtn"), lk = linkFor(COM.dest), rec = !!(COM.ptt.mr && COM.ptt.mr.state === "recording"), dest = COM.dest === "earth" ? "Earth" : "the habitat";
     b.classList.toggle("ready", !!lk && !rec && COM.mic); b.classList.toggle("live", rec);
     if (!COM.mic) { b.disabled = true; $("talkMain").textContent = "Mic unavailable"; $("talkSub").textContent = "Needs https or localhost (see below)"; return; }
     b.disabled = !lk;
     $("talkMain").textContent = rec ? "Release to send" : lk ? "Hold to transmit" : "Link closed";
-    $("talkSub").textContent = rec ? `Sending to ${dest} via ${lk ? lk.orbiter : "the orbiter"}` : lk ? `${lk.orbiter} overhead · ${fDur(lk.end - comTime())} left` : `No relay orbiter overhead · ${nextPassText()}`;
+    $("talkSub").textContent = rec ? `Sending to ${dest} via ${lk ? lk.orbiter : "the orbiter"}` : lk ? (lk.hab ? `Habitat link · ${fKm(habNow().d)} away · direct radio` : `${lk.orbiter} overhead · ${fDur(lk.end - comTime())} left`) : COM.dest === "pod" ? `Habitat hidden by terrain · ${nextPassText()}` : `No relay orbiter overhead · ${nextPassText()}`;
   }
   const talk = $("talkBtn");
   talk.addEventListener("pointerdown", pttDown);
@@ -1440,14 +1506,15 @@
 
   const msgLabel = m => m.kind === "voice" ? `Voice message${m.secs ? ` (${Math.round(m.secs)} s)` : ""}` : (m.text || "");
   function renderMsgs(lk = linkNow()) {
-    const nowS = Date.now() / 1000 + COM.off, who = r => r === "earth" ? "Earth" : r === "pod" ? "the pod" : "you";
+    const nowS = Date.now() / 1000 + COM.off, who = r => r === "earth" ? "Earth" : r === "pod" ? "the habitat" : "you";
     const bar = $("linkBar"); bar.className = "linkbar " + (lk ? "open" : "closed");
-    bar.innerHTML = lk ? `<i class="dot" style="background:${ORB[lk.orbiter].c}"></i><b>${lk.orbiter} overhead</b><span>${lk.practice ? "Test link" : `Link open · ${fDur(lk.end - comTime())} left`}</span>`
+    bar.innerHTML = lk ? `<i class="dot" style="background:${orbC(lk.orbiter)}"></i><b>${lk.orbiter} overhead</b><span>${lk.practice ? "Test link" : `Link open · ${fDur(lk.end - comTime())} left`}</span>`
       : `<i class="dot"></i><b>Link closed</b><span>${nextPassText()}</span>`;
     const c = COM.cfg;
-    if (c) $("delayNote").textContent = `Earth is ${c.effective_min.toFixed(1)} light-minutes away (${c.override_min ? "demo setting" : c.source}). At ×${S.speed} the trip takes ${Math.max(1, Math.round(c.effective_min * 60 / S.speed))} s.`;
+    if (COM.dest === "pod") $("delayNote").textContent = "Direct radio to the habitat mast: instant, and always on while the ground does not block the line. If it is blocked, the message goes up through the next satellite.";
+    else if (c) $("delayNote").textContent = `Earth is ${c.effective_min.toFixed(1)} light-minutes away (${c.override_min ? "demo setting" : c.source}). At ×${S.speed} the trip takes ${Math.max(1, Math.round(c.effective_min * 60 / S.speed))} s.`;
     $("delayDemo").setAttribute("aria-pressed", !!(c && c.override_min));
-    const rows = COM.q.map(m => `<div class="msg out wait"><b>You to ${who(m.to)}</b><span>${msgLabel(m)}</span><em>Waiting for a relay pass · ${nextPassText()}</em><button type="button" data-cancel="${m.lid}" title="Cancel">×</button></div>`);
+    const rows = COM.q.map(m => `<div class="msg out wait"><b>You to ${who(m.to)}</b><span>${msgLabel(m)}</span><em>${m.to === "pod" ? "Waiting for the habitat link or a satellite" : "Waiting for a relay pass"} · ${nextPassText()}</em><button type="button" data-cancel="${m.lid}" title="Cancel">×</button></div>`);
     [...COM.srv.values()].sort((a, b) => b.id - a.id).forEach(m => {
       const rem = Math.max(0, m.arrive - nowS), left = `${mmss(rem * m.speed)} of light time left (${Math.ceil(rem)} s real)`;
       if (m.sender === "astronaut") rows.push(`<div class="msg out ${m.status === "in_flight" ? "fly" : "ok"}"><b>You to ${who(m.to)}${m.via ? ` via ${m.via}` : ""}</b><span>${msgLabel(m)}</span><em>${m.status === "in_flight" ? "On its way · " + left : "✓ Arrived"}</em></div>`);
@@ -1457,7 +1524,7 @@
       }
     });
     renderTalk();
-    $("msgs").innerHTML = rows.join("") || `<p class="hint">Messages you send leave when a relay orbiter is overhead. Replies from Earth wait at the orbiter until your next pass.</p>`;
+    $("msgs").innerHTML = rows.join("") || `<p class="hint">Messages to the habitat go straight over its radio link. Messages to Earth leave when a relay orbiter is overhead, and replies wait at the orbiter until your next pass.</p>`;
   }
   $("msgs").addEventListener("click", e => {
     const x = e.target.closest("[data-cancel]"), p = e.target.closest("[data-play]");
@@ -1468,7 +1535,7 @@
   $("quick").addEventListener("click", e => { const b = e.target.closest("button"); if (b) queueMsg({ kind: "text", text: b.textContent }); });
   const sendTyped = () => { const t = $("msgText").value.trim(); if (!t) return; $("msgText").value = ""; queueMsg({ kind: "text", text: t }); };
   $("msgSend").onclick = sendTyped; $("msgText").addEventListener("keydown", e => { if (e.key === "Enter") sendTyped(); });
-  document.querySelectorAll(".dest").forEach(b => b.onclick = () => { COM.dest = b.dataset.d; document.querySelectorAll(".dest").forEach(x => x.setAttribute("aria-pressed", x === b)); });
+  document.querySelectorAll(".dest").forEach(b => b.onclick = () => { COM.dest = b.dataset.d; document.querySelectorAll(".dest").forEach(x => x.setAttribute("aria-pressed", x === b)); renderMsgs(); });
   $("practice").onclick = e => {
     COM.practice = !COM.practice; e.currentTarget.setAttribute("aria-pressed", COM.practice); $("practiceNote").hidden = !COM.practice;
     audio().resume(); commsTick(true);

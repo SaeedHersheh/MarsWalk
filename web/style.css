@@ -266,7 +266,8 @@ details.more > * + :not(summary) { margin-top: 16px; }
 .hudcol { display: grid; padding-left: 20px; border-left: 1px solid var(--line-2); }
 .hudcol span { font-size: 11.5px; color: var(--faint); white-space: nowrap; }
 .hudcol b { font: 500 14px var(--f-mono); white-space: nowrap; color: var(--ink); }
-.hudcol:nth-child(n+3) { display: none; }
+.hudcol:nth-child(n+4) { display: none; }
+.hudcol span i { font: 400 11px var(--f-mono); font-style: normal; color: var(--dim); margin-left: 6px; }
 
 /* one quiet notification at a time; the rest lives behind the bell */
 .toasts { position: fixed; z-index: 700; top: calc(var(--bar) + 16px); left: calc(var(--sidew) + (100vw - var(--sidew)) / 2); transform: translateX(-50%); width: max-content; max-width: min(460px, calc(100vw - var(--sidew) - 40px)); pointer-events: none; }
@@ -398,3 +399,24 @@ body.walking #tbBest { display: none; }
 body.walking .hintpill { display: none; }
 @media (max-width: 980px) { .hintpill { left: 50%; bottom: calc(var(--nav) + var(--tbh) + 24px + env(safe-area-inset-bottom)); font-size: 12.5px; padding: 8px 14px; max-width: calc(100vw - 24px); white-space: normal; text-align: center; } body[data-sheet]:not([data-sheet=""]) .hintpill { display: none; } }
 .tools3d .chip { padding: 8px 14px; font-size: 13px; }
+
+.g-hab { background: linear-gradient(90deg, #3ddc97 0%, #3ddc97 55%, #1b2330 55%, #1b2330 100%); }
+/* phone HUD: where to go on the first row; position, habitat radio and satellite on the second */
+@media (max-width: 980px) {
+  .hud { flex-wrap: wrap; border-radius: 22px; padding: 8px 10px 10px 8px; gap: 8px 10px; }
+  .hudmain { flex: 1; min-width: 0; }
+  .hudskip { order: 2; }
+  .hudcols { order: 3; width: 100%; display: grid; grid-template-columns: 0.8fr 1.15fr 1.25fr; gap: 0; }
+  .hudcol, .hudcol:nth-child(2) { display: grid; padding: 0 0 0 10px; min-width: 0; }
+  .hudcol:first-child { border-left: 0; padding-left: 6px; }
+  .hudcol:nth-child(n+4) { display: none; }
+  .hudcol span { font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+  .hudcol span i { display: none; }
+  .hudcol b { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+  body.walking .toasts { top: calc(var(--bar) + 112px + env(safe-area-inset-top)); }
+}
+
+/* desktop: the walk HUD is wide now, so the 3D buttons sit under it; long text is cut, never overlapped */
+.hudmain { overflow: hidden; }
+.hudmain b, .hudmain span { overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 981px) { body.walking .tools3d { top: calc(var(--bar) + 86px); } }

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794588210">
+<link rel="stylesheet" href="style.css?v=1794606813">
 </head>
 <body>
 <div id="map"></div>
@@ -56,9 +56,9 @@
     <section class="sec">
       <h2><b>2</b>Route policy</h2>
       <div class="styles" id="styles" role="group" aria-label="Route policy">
-        <button type="button" class="style" data-s="safe" aria-pressed="true"><i class="sw safe"></i><b>Conservative</b><span>Minimise slope exposure</span></button>
-        <button type="button" class="style" data-s="balanced" aria-pressed="false"><i class="sw bal"></i><b>Balanced</b><span>Trade slope for time</span></button>
-        <button type="button" class="style" data-s="fast" aria-pressed="false"><i class="sw fast"></i><b>Direct</b><span>Shortest path</span></button>
+        <button type="button" class="style" data-s="safe" aria-pressed="true"><i class="sw safe"></i><b>Safest</b><span>Flattest ground, even if it is longer</span></button>
+        <button type="button" class="style" data-s="balanced" aria-pressed="false"><i class="sw bal"></i><b>Balanced</b><span>Some slope where it saves a lot of walking</span></button>
+        <button type="button" class="style" data-s="fast" aria-pressed="false"><i class="sw fast"></i><b>Fastest</b><span>Shortest way, steeper ground</span></button>
       </div>
       <p class="hint" id="styleHint"></p>
       <details class="more">
@@ -117,6 +117,7 @@
         <button type="button" class="lay" data-l="heat" aria-pressed="false"><i class="sw g-heat"></i><span><b>Ground temperature</b><small>Modelled, at the clock time</small></span></button>
         <button type="button" class="lay" data-l="sun" aria-pressed="false"><i class="sw g-sun"></i><span><b>Illumination</b><small>Sun and terrain shadow</small></span></button>
         <button type="button" class="lay" data-l="comms" aria-pressed="false"><i class="sw g-comms"></i><span><b>Relay obstruction</b><small>Line of sight to orbiters</small></span></button>
+        <button type="button" class="lay" data-l="hab" aria-pressed="false"><i class="sw g-hab"></i><span><b>Habitat radio</b><small>Where the habitat link reaches</small></span></button>
         <button type="button" class="lay" data-l="cost" aria-pressed="false"><i class="sw g-cost"></i><span><b>Traversal cost</b><small>Planner cost surface</small></span></button>
       </div>
       <label class="slider">Opacity <output id="o-op"></output><input type="range" id="opacity" min="0.2" max="1" step="0.05" value="0.8"></label>
@@ -128,13 +129,13 @@
     </section>
 
     <section class="sec relay-sec">
-      <h2>Relay orbiters</h2>
+      <h2>Satellites overhead</h2>
       <div class="next" id="nextPass"></div>
       <div class="passes" id="passList"></div>
     </section>
 
     <section class="sec relay-sec" id="radio">
-      <h2>Voice and text relay</h2>
+      <h2>Talk to Earth or the habitat</h2>
       <div class="linkbar closed" id="linkBar"></div>
       <div class="seg wide" role="group" aria-label="Destination">
         <button type="button" class="dest" data-d="earth" aria-pressed="true">Earth</button>
@@ -175,7 +176,7 @@
     <section class="sec about">
       <details class="more">
         <summary>Data sources and assumptions</summary>
-        <p class="credits">Terrain: USGS Astrogeology Mars 2020 CTX DTM 20 m and orthomosaic 6 m; slope hazard from HiRISE DTM 1 m where it exists. Orbiters and Sun: JPL Horizons. Ground temperature: THEMIS night IR, TES albedo and the Horizons Sun through a ground heat model. Radiation: Curiosity RAD measured 0.67 mSv/day at Gale (22 g/cm² of air above); scaled here by each spot's air column (MOLA elevation, scale height assumed) and by how much sky the terrain leaves open. Suit speed (half Tobler) and drift (2 % of distance) are assumptions.</p>
+        <p class="credits">Terrain: USGS Astrogeology Mars 2020 CTX DTM 20 m and orthomosaic 6 m; slope hazard from HiRISE DTM 1 m where it exists. Orbiters and Sun: JPL Horizons. Ground temperature: THEMIS night IR, TES albedo and the Horizons Sun through a ground heat model. Radiation: Curiosity RAD measured 0.67 mSv/day at Gale (22 g/cm² of air above); scaled here by each spot's air column (MOLA elevation, scale height assumed) and by how much sky the terrain leaves open. Suit speed (half Tobler) and drift (2 % of distance) are assumptions. Habitat radio: line of sight over the terrain from an 8 m mast to a 1.8 m suit antenna (heights assumed). Position fixes: least squares on simulated range and Doppler measurements to the real orbiter track.</p>
       </details>
     </section>
   </aside>
@@ -204,7 +205,8 @@
   <div class="arrow" id="arrow">➤</div>
   <div class="hudmain"><b id="hudNext">—</b><span id="hudSub">—</span></div>
   <div class="hudcols">
-    <div class="hudcol"><span>Position error</span><b id="hudPos">±3 m</b></div>
+    <div class="hudcol"><span>Position</span><b id="hudPos">±3 m</b></div>
+    <div class="hudcol"><span>Habitat radio</span><b id="hudHab">linked</b></div>
     <div class="hudcol"><span>Satellite</span><b id="hudLink">none</b></div>
     <div class="hudcol"><span>Dose</span><b id="hudDose">0</b></div>
     <div class="hudcol"><span>Ground</span><b id="hudGround">—</b></div>
@@ -259,7 +261,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="relayfix.js?v=1794588210"></script>
-<script src="app.js?v=1794588210"></script>
+<script src="relayfix.js?v=1794606813"></script>
+<script src="app.js?v=1794606813"></script>
 </body>
 </html>
