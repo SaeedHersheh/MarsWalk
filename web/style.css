@@ -420,3 +420,19 @@ body.walking .hintpill { display: none; }
 .hudmain { overflow: hidden; }
 .hudmain b, .hudmain span { overflow: hidden; text-overflow: ellipsis; }
 @media (min-width: 981px) { body.walking .tools3d { top: calc(var(--bar) + 86px); } }
+
+/* the guide: a bubble that says what just happened, with a voice switch */
+.toasts { max-width: min(560px, calc(100vw - var(--sidew) - 40px)); }
+.toast.guide { grid-template-columns: 36px minmax(0, 1fr) 36px; gap: 0 12px; align-items: start; padding: 12px 12px 13px 12px; border-radius: 18px; border-color: var(--c, var(--line-2)); pointer-events: auto; cursor: pointer; font-size: 14px; line-height: 1.5; color: var(--text); background: rgba(10, 14, 21, 0.95); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5); }
+.toast.guide .bot { width: 36px; height: 36px; margin: 0; display: grid; place-items: center; border-radius: 50%; background: var(--c, var(--accent)); color: #04060a; }
+.toast.guide .bot svg { width: 22px; height: 22px; }
+.toast.guide b { font-size: 14.5px; margin-bottom: 1px; }
+.toast.guide span { -webkit-line-clamp: 6; }
+.vox { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid var(--line-2); border-radius: 50%; background: transparent; color: var(--text); padding: 0; }
+.vox:hover { border-color: var(--accent); color: var(--ink); }
+.vox[aria-pressed="false"] { color: var(--faint); }
+.vox svg { width: 18px; height: 18px; }
+.misstip { background: #fc3d21; border: 0; color: #fff; font: 600 12px var(--f-mono); padding: 2px 7px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+@media (max-width: 980px) { .toasts { max-width: calc(100vw - 24px); width: calc(100vw - 24px); } .toast.guide { font-size: 13.5px; } .toast.guide span { -webkit-line-clamp: 6; } }
+
+@media (max-width: 980px) { .toast.guide span { -webkit-line-clamp: 9; } .toast.guide { grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 0 10px; padding: 11px 10px 12px 10px; } .toast.guide .bot { width: 32px; height: 32px; } .vox { width: 32px; height: 32px; } }

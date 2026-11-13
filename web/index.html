@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794607479">
+<link rel="stylesheet" href="style.css?v=1794610573">
 </head>
 <body>
 <div id="map"></div>
@@ -123,6 +123,7 @@
       <label class="slider">Opacity <output id="o-op"></output><input type="range" id="opacity" min="0.2" max="1" step="0.05" value="0.8"></label>
       <div class="layerlist">
         <button type="button" class="lay" id="t3lite" aria-pressed="false"><span><b>High-quality 3D</b><small>Shadows and reflections. Turn off if 3D is slow.</small></span></button>
+        <button type="button" class="lay" id="voiceLay" aria-pressed="true"><span><b>Spoken guide</b><small>Reads out satellite passes, position fixes and route changes.</small></span></button>
       </div>
       <div class="legend" id="legend"></div>
       <p class="hint" id="layerNote"></p>
@@ -261,7 +262,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="relayfix.js?v=1794607479"></script>
-<script src="app.js?v=1794607479"></script>
+<script src="relayfix.js?v=1794610573"></script>
+<script src="app.js?v=1794610573"></script>
 </body>
 </html>

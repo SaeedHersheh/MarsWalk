@@ -484,6 +484,58 @@
     $("toasts").replaceChildren(d);
     clearTimeout(toast.h); toast.h = setTimeout(() => d.remove(), 5200);
   }
+  /* ---------- the guide: says in plain words what just happened, on screen and out loud ---------- */
+  const VOICE = { on: true }; try { const v0 = localStorage.getItem("mw_voice"); if (v0 !== null) VOICE.on = v0 === "1"; } catch (e) { /* private mode */ }
+  const BOT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8.5" width="14" height="10" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8.5V5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="4.3" r="1.4" fill="currentColor"/><circle cx="9.2" cy="13.3" r="1.35" fill="currentColor"/><circle cx="14.8" cy="13.3" r="1.35" fill="currentColor"/></svg>';
+  const SPK = on => on ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4Z" fill="currentColor"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4Z" fill="currentColor"/><path d="M16 9.5l5 5M21 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const wDur = sec => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.round(sec % 3600 / 60); return h ? `${h} hour${h > 1 ? "s" : ""}${m ? ` ${m} minutes` : ""}` : m < 1 ? "under a minute" : `${m} minute${m > 1 ? "s" : ""}`; };
+  const wKm = m => m >= 1000 ? `${(m / 1000).toFixed(1)} km` : m >= 100 ? `${Math.round(m / 10) * 10} m` : `${Math.max(1, Math.round(m))} m`;
+  const compass = (dx, dy) => ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"][Math.round((Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360 / 45) % 8];
+  const speakable = t => t.replace(/±\s?/g, "plus or minus ").replace(/(\d)\s?km\b/g, "$1 kilometres").replace(/(\d)\s?m\b/g, "$1 metres").replace(/°/g, " degrees").replace(/µSv/g, "microsieverts").replace(/×/g, "times ").replace(/\bMRO\b/g, "M R O").replace(/\bTGO\b/g, "T G O");
+  function speak(text) {
+    if (!VOICE.on || !window.speechSynthesis) return;
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(speakable(text)); u.lang = "en-US"; u.rate = 1.03; speechSynthesis.speak(u); } catch (e) { /* no voice on this device */ }
+  }
+  function setVoice(on) {
+    VOICE.on = on; try { localStorage.setItem("mw_voice", on ? "1" : "0"); } catch (e) { /* private mode */ }
+    if (!on && window.speechSynthesis) speechSynthesis.cancel();
+    document.querySelectorAll(".vox").forEach(b => { b.innerHTML = SPK(on); b.setAttribute("aria-pressed", String(on)); b.title = on ? "Voice on. Tap to mute." : "Voice off. Tap to turn on."; });
+    $("voiceLay").setAttribute("aria-pressed", String(on));
+  }
+  // title: a few words. text: what happened, in plain words (this is what is read out). logText: extra detail kept in the log only.
+  function guide(title, text, color = "#8ab8ff", logText) {
+    LOG.unshift({ title, msg: logText ? `${text} ${logText}` : text, color, t: clockT() }); if (LOG.length > 40) LOG.pop();
+    if ($("logPanel").hidden) logNew++; renderLog();
+    const d = document.createElement("div"); d.className = "toast guide"; d.style.setProperty("--c", color);
+    d.innerHTML = `<i class="bot">${BOT_SVG}</i><div><b>${title}</b><span>${text}</span></div><button type="button" class="vox" aria-label="Guide voice" aria-pressed="${VOICE.on}" title="${VOICE.on ? "Voice on. Tap to mute." : "Voice off. Tap to turn on."}">${SPK(VOICE.on)}</button>`;
+    d.querySelector(".vox").onclick = e => { e.stopPropagation(); setVoice(!VOICE.on); };
+    d.onclick = () => d.remove();
+    $("toasts").replaceChildren(d);
+    clearTimeout(toast.h); toast.h = setTimeout(() => d.remove(), Math.min(18000, 6000 + text.length * 55));
+    speak(text);
+  }
+  $("voiceLay").onclick = () => setVoice(!VOICE.on); $("voiceLay").setAttribute("aria-pressed", String(VOICE.on));
+  // "you were this far off": a red dashed line from where the suit thought you were to where you really are, for a few seconds
+  let missLayer = null;
+  function showMiss(ox, oy, nx, ny) {
+    const d = Math.hypot(nx - ox, ny - oy); if (d < 3) return;
+    if (missLayer) map.removeLayer(missLayer);
+    const line = L.polyline([ll(ox, oy), ll(nx, ny)], { color: "#fc3d21", weight: 3, dashArray: "6 6", interactive: false });
+    missLayer = L.layerGroup([line, L.circleMarker(ll(ox, oy), { radius: 6, color: "#fc3d21", weight: 2, fill: false, interactive: false })]).addTo(map);
+    line.bindTooltip(`${Math.round(d)} m off`, { permanent: true, direction: "center", className: "misstip" }).openTooltip();
+    const mine = missLayer; setTimeout(() => { if (missLayer === mine) { map.removeLayer(mine); missLayer = null; } }, 14000);
+    T3.miss = { ox, oy, nx, ny, d, until: performance.now() + 14000, id: (T3.miss ? T3.miss.id : 0) + 1 };
+  }
+  // the new route in one or two sentences: how far to the next stop, how much in all, how it compares, what the ground is like
+  function routeWords(r, oldRem) {
+    const i1 = r.stop_idx[1] ?? r.x.length - 1, tgt = r.stopsReq[1], left = r.stopsReq.slice(1).filter(w => w !== HAB).length;
+    const name = tgt === HAB ? "the habitat" : `waypoint ${Math.max(1, S.stops.length - left + 1)}`, one = r.stopsReq.length <= 2;
+    const diff = oldRem == null ? null : r.distance_m - oldRem;
+    const cmp = diff == null ? "" : Math.abs(diff) < 30 ? ", about the same length as before" : diff > 0 ? `, ${wKm(diff)} longer than before` : `, ${wKm(-diff)} shorter than before`;
+    const mx = r.slope_mix || {}, ground = mx.steep > 0.5 ? `Careful: part of it is steep, up to ${r.max_slope.toFixed(0)}°.` : mx.yellow > 3 ? `Mostly flat, with slopes up to ${r.max_slope.toFixed(0)}°.` : "It stays on flat ground.";
+    return `New ${POLICY()} route: ${wKm(r.d[i1])} to ${name}, about ${wDur(r.t[i1])}${one ? cmp : `. ${wKm(r.distance_m)} left in all${cmp}`}. ${ground}`;
+  }
   $("logBtn").onclick = e => { e.stopPropagation(); const open = $("logPanel").hidden; $("logPanel").hidden = !open; $("logBtn").setAttribute("aria-expanded", String(open)); if (open) logNew = 0; renderLog(); };
   addEventListener("click", e => { if (!$("logPanel").hidden && !e.target.closest("#logPanel")) { $("logPanel").hidden = true; $("logBtn").setAttribute("aria-expanded", "false"); } });
 
@@ -501,7 +553,9 @@
     if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
     $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet();
     $("depart").disabled = true; drawStops();
-    { const np = DB.passes.find(q => q.end > walk.simT); toast("Walk started", np && np.start <= walk.simT ? `${np.orbiter} is overhead: it will fix your position.` : np ? `There is no GPS on Mars. The suit estimates its own position until ${np.orbiter} rises in ${fDur(np.start - walk.simT)}.` : "There is no GPS on Mars. The suit estimates its own position.", "#8ab8ff"); }
+    { const np = DB.passes.find(q => q.end > walk.simT);
+      guide("Walk started", np && np.start <= walk.simT ? `${np.orbiter} is overhead right now. In a moment it will measure exactly where you are.`
+        : `There is no GPS on Mars. Your suit counts steps to estimate where you are, and that estimate slowly drifts.${np ? ` ${np.orbiter} comes overhead in ${wDur(np.start - walk.simT)} and will tell you exactly where you are.` : ""}`, "#8ab8ff"); }
     audio().resume();                                  // the Start press is the tap browsers need before any beep
   }
   const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" fill="currentColor"/></svg>', STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
@@ -516,7 +570,7 @@
     walk.on = false; walk.manual = false; T3.pathHead = null; T3.dirty = true; syncDrive(); [me, unc, ghost].forEach(l => map.removeLayer(l));
     $("hud").hidden = true; $("homeBtn").disabled = true; syncWalk();
     $("depart").disabled = false; dopplerTone(null);
-    if (msg) toast("EVA complete", msg, "#6EE7A8");
+    if (msg) guide("Walk complete", msg, "#6EE7A8");
     drawStops(); showRoute();
   }
   function posOn(r, el) {
@@ -534,7 +588,8 @@
     try {
       const r = await requestRoute([from, ...stops], walk.simT);
       r.stopsReq = [from, ...stops]; walk.route = r; walk.t0 = walk.simT; walk._i = 0; walk._painted = -1; walk.dAlong = 0; walk.ri = 0; walk.px = null; walk.loose = false;
-      if (!opt.quiet) toast(opt.title || "Route updated", why, color); T3.dirty = true;
+      if (!opt.quiet) { if (opt.lead != null) guide(opt.title || "Route updated", opt.words === false ? opt.lead : `${opt.lead} ${routeWords(r, opt.oldRem)}`.trim(), color, opt.log); else toast(opt.title || "Route updated", why, color); }
+      T3.dirty = true;
     } catch (e) { if (!opt.soft) toast("Could not plan a route", e.message, "#F0616B"); }
     walk.busy = false; walk.planning = false;
   }
@@ -577,15 +632,20 @@
   // One step of the fix while pass q is in view. Returns the correction when the estimate was just updated, else null.
   function navFix(q, tx, ty, good) {
     const key = q.orbiter + q.start, bx = tx + walk.drift[0], by = ty + walk.drift[1];
-    if (walk.lockKey !== key) { walk.lockKey = key; walk.lock = "search"; walk.fxN = ""; walk.lockJump = null; }
+    if (walk.lockKey !== key) {
+      walk.lockKey = key; walk.lock = "search"; walk.fxN = ""; walk.lockDrift = null;
+      guide(`${q.orbiter} is overhead`, `${q.orbiter} is above you now. It measures how far away you are every 10 seconds, and in about half a minute it will know where you are. You can also talk to Earth while it is up.`, ORB[q.orbiter].c);
+    }
     const fx = relayFix(q, tx, ty, bx, by);
     if (!fx || walk.fxN === key + fx.n) return null;
     walk.fxN = key + fx.n;
     if (fx.sigma > good) return null;                                            // geometry still too weak: keep listening
-    const first = walk.fixKey !== key;
+    const first = walk.fixKey !== key; if (first) walk.lockDrift = [walk.drift[0], walk.drift[1]];      // how far out the suit was when this pass began
     walk.drift = [fx.x - tx, fx.y - ty]; walk.sig = Math.max(1.5, 2 * fx.sigma); walk.odoFix = walk.odo; walk.fixKey = key; walk.lock = "fix"; walk.src = "suit";
     return { ...fx, jump: Math.hypot(fx.x - bx, fx.y - by), first };
   }
+  // dx, dy: from where the suit thought you were to where you really are
+  const offWords = (who, dx, dy) => { const d = Math.hypot(dx, dy); return d < 3 ? `${who} has measured your position. Your suit had it right, to within ${Math.max(1, Math.round(d))} m.` : `${who} has measured your position. You were ${Math.round(d)} m ${compass(dx, dy)} of where your suit thought.`; };
   const fixMsg = (orb, f) => `${orb} gave your position: ${fLL(f.x, f.y)}, good to ±${Math.max(2, Math.round(2 * f.sigma))} m. The suit's own estimate was ${Math.round(f.jump)} m out. New ${POLICY()} route planned from there.`;
   const shortOrb = n => n.split(" ").pop();              // "Mars Odyssey" -> "Odyssey": the HUD is narrow on a phone
   const fLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${Math.abs(la).toFixed(4)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(4)}°${lo >= 0 ? "E" : "W"}`; };
@@ -597,7 +657,7 @@
     $("skipPass").hidden = !!con || !np;
     const h = habNow(), hb = $("hudHab");
     hb.textContent = h.ok ? `linked · ${fKm(h.d)}` : "hidden by terrain"; hb.style.color = h.ok ? "var(--ok)" : "var(--warn)";
-    if (walk.habOk !== undefined && walk.habOk !== h.ok && performance.now() - (walk.habSaid || 0) > 15000 && (walk.habSaid = performance.now())) toast(h.ok ? "Habitat link is back" : "Habitat link lost", h.ok ? "The habitat mast can see you again. Messages to the habitat go straight through." : `The ground between you and the habitat is in the way (${fKm(h.d)} away). Messages wait for the link or for a satellite.`, h.ok ? "#6EE7A8" : "#F5B85B");
+    if (walk.habOk !== undefined && walk.habOk !== h.ok && performance.now() - (walk.habSaid || 0) > 15000 && (walk.habSaid = performance.now())) guide(h.ok ? "Habitat link is back" : "Habitat link lost", h.ok ? "The habitat mast can see you again. You can talk to the habitat, and it can help place you." : `The ground between you and the habitat is in the way, ${wKm(h.d)} from home. Messages to the habitat wait until the link is back or a satellite passes.`, h.ok ? "#6EE7A8" : "#F5B85B");
     walk.habOk = h.ok;
     $("hudPosL").textContent = "Position · " + (locked ? "sat" : walk.src === "hab" ? "hab" : "suit"); $("hudPosL").title = locked ? "Position from the satellite fix" : walk.src === "hab" ? "Position from the habitat mast (range and bearing)" : "Position from the suit's own dead reckoning";
   }
@@ -607,9 +667,9 @@
     const np = DB.passes.find(q => q.start > walk.simT + 20); if (!np) return toast("No pass coming", "No relay pass in the next two days of data.", "#F5B85B");
     const dt = np.start - 12 - walk.simT; if (dt <= 0) return;
     walk.simT += dt; walk.dose += (walk.route.dose_msv / (walk.route.time_s || 1)) * dt; walk.alerted.add(np.orbiter + np.start + "a"); warm(np.start); warm(np.start + 600);
-    if (walk.manual) return toast(`Waited ${fDur(dt)}`, `${np.orbiter} rises in a few seconds. Keep walking: it will fix your position.`, ORB[np.orbiter].c);
+    if (walk.manual) return guide("Skipped the wait", `You waited ${wDur(dt)}. ${np.orbiter} rises in a few seconds and will measure where you are.`, ORB[np.orbiter].c);
     walk.t0 += dt; walk.loose = true;                                // this route's contact list was worked out for the old clock: use the pass itself until the next replan
-    toast(`Waited ${fDur(dt)}`, `${np.orbiter} rises in a few seconds and will fix your position.`, ORB[np.orbiter].c);
+    guide("Skipped the wait", `You waited ${wDur(dt)}. ${np.orbiter} rises in a few seconds and will measure where you are.`, ORB[np.orbiter].c);
   }
   // The planner works out sunlight, cold and radio cover for the time asked. Doing that ahead of a pass makes the replan at the fix take a fraction of a second.
   const warm = t => { requestRoute([HAB, [Math.min(M.width_m - DX, HAB[0] + 3 * DX), Math.min(M.height_m - DY, HAB[1] + 3 * DY)]], t).catch(() => {}); };
@@ -641,7 +701,7 @@
   async function releaseControl() {
     if (!walk.manual || walk.busy) return;
     const b = [walk.mx + walk.drift[0], walk.my + walk.drift[1]];
-    await reroute(b, walk.rest, "Autopilot on. Walking the best route from the suit's estimated position.");
+    await reroute(b, walk.rest, "", "#8ab8ff", { title: "Autopilot on", lead: "I will walk the rest from your estimated position." });
     walk.manual = false; T3.dirty = true; syncDrive();
   }
   const stick = { x: 0, y: 0 };
@@ -676,13 +736,16 @@
       const had = walk.fixKey === q.orbiter + q.start && walk.sig <= 24, fix = navFix(q, walk.mx, walk.my, 15);
       if (fix && !had && fix.sigma <= 12 && walk.rest.length) {                                // first solid fix of this pass: plan again from the real position
         chime(q.orbiter, true); walk.lastRe = now;
-        reroute([fix.x, fix.y], walk.rest, fixMsg(q.orbiter, { ...fix, jump: walk.lockJump ?? fix.jump }), ORB[q.orbiter].c, { title: `${q.orbiter} position fix` }); walk.lockJump = null;
-      } else if (fix && fix.first) walk.lockJump = fix.jump;                                   // remember how far out the suit was when the lock began
+        const ld = walk.lockDrift || [0, 0];                                                 // suit's estimate minus the real position, before this pass corrected it
+        showMiss(walk.mx + ld[0], walk.my + ld[1], walk.mx, walk.my);
+        reroute([fix.x, fix.y], walk.rest, fixMsg(q.orbiter, fix), ORB[q.orbiter].c, { title: `${q.orbiter} found you`, lead: offWords(q.orbiter, -ld[0], -ld[1]), oldRem: r.d.at(-1) - r.d[Math.min(walk.ri, r.d.length - 1)],
+          log: `Position ${fLL(fix.x, fix.y)}, good to ±${Math.max(2, Math.round(2 * fix.sigma))} m.` });
+      }
     } else if (walk.lock) { walk.lock = ""; }
     if (walk.lock !== "fix") {                           // between satellite passes: use the habitat's measurement whenever it is tighter than the suit's own estimate
       const hf = habFix(walk.mx, walk.my), radNow = (walk.sig || 1.5) + DRIFT * (walk.odo - walk.odoFix);
       if (hf && hf.rad < radNow * (walk.src === "hab" ? 1 : 0.85)) {
-        if (!walk.habPosSaid) { walk.habPosSaid = true; toast("Habitat radio is placing you", `${fKm(hf.r)} from the mast: ${fLL(hf.x, hf.y)}, good to ±${Math.round(hf.rad)} m. It gets better the closer you are to the habitat.`, "#3ddc97"); }
+        if (!walk.habPosSaid) { walk.habPosSaid = true; guide("The habitat can place you", `The habitat mast can see you, ${wKm(hf.r)} away, and knows where you are to within about ${Math.round(hf.rad)} m. It gets sharper the closer you are to the habitat.`, "#3ddc97", `Position ${fLL(hf.x, hf.y)}.`); }
         walk.drift = [hf.x - walk.mx, hf.y - walk.my]; walk.sig = hf.rad; walk.odoFix = walk.odo; walk.src = "hab";
       } else if (hf) {                                   // not tight enough to take over, but the distance is still good: keep the estimate at the measured range
         walk.src = "suit";
@@ -694,7 +757,7 @@
     for (const p2 of DB.passes) {
       if (p2.end < walk.simT || p2.start > walk.simT + 620) continue;
       const k10 = p2.orbiter + p2.start + "a";
-      if (walk.simT >= p2.start - 600 && walk.simT < p2.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); warm(p2.start); chime(p2.orbiter); toast(`${p2.orbiter} in ${Math.round((p2.start - walk.simT) / 60)} min`, "It will fix your position and open the radio.", ORB[p2.orbiter].c); }
+      if (walk.simT >= p2.start - 600 && walk.simT < p2.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); warm(p2.start); chime(p2.orbiter); guide(`${p2.orbiter} in ${Math.round((p2.start - walk.simT) / 60)} min`, `${p2.orbiter} comes overhead in ${wDur(p2.start - walk.simT)}. It will measure where you really are, and I will correct the route.`, ORB[p2.orbiter].c); }
     }
     dopplerTone(con ? q : null, walk.simT);
     const bx = walk.mx + walk.drift[0], by = walk.my + walk.drift[1], rad = (walk.sig || 1.5) + DRIFT * (walk.odo - walk.odoFix);
@@ -704,19 +767,19 @@
       if (Math.hypot(w[0] - x0 - ux * tt, w[1] - y0 - uy * tt) < (home ? REACH_HOME : REACH)) {
         walk.rest.shift();
         if (!walk.rest.length) { T3.walker = null; endWalk(`${home ? "Back at the airlock" : "Final waypoint reached"} under manual control. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`); return; }
-        toast("Waypoint reached", `${walk.rest.length} to go.`, "#6EE7A8"); walk.lastRe = 0;
+        { const nx2 = walk.rest[0], sci = walk.rest.filter(w2 => w2 !== HAB).length; guide("Waypoint reached", nx2 === HAB ? `That was the last one. Head back to the habitat, ${wKm(Math.hypot(nx2[0] - walk.mx, nx2[1] - walk.my))} away.` : `${sci} more to visit. The next one is ${wKm(Math.hypot(nx2[0] - walk.mx, nx2[1] - walk.my))} away.`, "#6EE7A8"); } walk.lastRe = 0;
       }
     }
     // the route always starts at the estimated position. While a satellite is tracking you, leaving the line plans a new one straight away.
     const off = nearAhead(r, bx, by);
     if (tracked && walk.sig <= 24 && !walk.busy && !walk.planning && now - (walk.lastRe || 0) > 2000 && walk.rest.length && off > Math.max(25, 1.5 * DX)) {
       walk.lastRe = now; const tk = q.orbiter + q.start;                                      // say it once per pass, then just keep the route under your feet
-      reroute([bx, by], walk.rest, `${q.orbiter} is tracking you to ±${Math.round(rad)} m. The route now follows you wherever you walk.`, ORB[q.orbiter].c, { soft: true, quiet: walk.trackSaid === tk });
+      reroute([bx, by], walk.rest, "", ORB[q.orbiter].c, { soft: true, quiet: walk.trackSaid === tk, title: `${q.orbiter} is tracking you`, words: false, lead: `${q.orbiter} can see where you are while it is overhead, so the route now follows you wherever you walk.` });
       walk.trackSaid = tk;
     }
     if (walk.src === "hab" && walk.lock !== "fix" && !walk.busy && !walk.planning && now - (walk.lastRe || 0) > 6000 && walk.rest.length && off > Math.max(30, 1.5 * DX, rad)) {
       walk.lastRe = now;                                 // clearly off the line even allowing for the habitat's error: plan again from its fix
-      reroute([bx, by], walk.rest, `The habitat mast places you ${Math.round(off)} m off the route (good to ±${Math.round(rad)} m). New ${POLICY()} route from there.`, "#3ddc97", { soft: true, quiet: walk.habReSaid, title: "Habitat radio position" });
+      reroute([bx, by], walk.rest, "", "#3ddc97", { soft: true, quiet: walk.habReSaid, title: "You left the route", lead: `The habitat radio places you ${wKm(off)} off the route.` });
       walk.habReSaid = true;
     }
     const from = Math.min(r.x.length - 1, walk.ri + 1);
@@ -769,8 +832,10 @@
         if (fix) {
           chime(con.orbiter, true);
           const k = r.stop_idx.slice(1).filter(i => i <= p.i).length, rest = r.stopsReq.slice(1 + k);
-          if (rest.length) reroute([fix.x, fix.y], rest, fixMsg(cq.orbiter, fix), ORB[cq.orbiter].c, { title: `${cq.orbiter} position fix` });
-          else toast("Position fix", `${cq.orbiter} measured your position to ±${Math.round(2 * fix.sigma)} m.`, ORB[cq.orbiter].c);
+          const lead = offWords(cq.orbiter, fix.x - p.x, fix.y - p.y), detail = `Position ${fLL(fix.x, fix.y)}, good to ±${Math.max(2, Math.round(2 * fix.sigma))} m.`;
+          showMiss(p.x, p.y, fix.x, fix.y);
+          if (rest.length) reroute([fix.x, fix.y], rest, fixMsg(cq.orbiter, fix), ORB[cq.orbiter].c, { title: `${cq.orbiter} found you`, lead, oldRem: r.d.at(-1) - p.d, log: detail });
+          else guide(`${cq.orbiter} found you`, lead, ORB[cq.orbiter].c, detail);
         }
       } else if (!pq && walk.lock) walk.lock = "";
       if (!tracked && walk.lock !== "fix" && !walk.busy) {
@@ -778,7 +843,10 @@
         if (hf && hf.rad < 0.5 * radNow) {                      // only when it halves the uncertainty, so a walk home is a few replans and not a dozen
           const jump = Math.hypot(hf.x - p.x, hf.y - p.y), k = r.stop_idx.slice(1).filter(i => i <= p.i).length, rest = r.stopsReq.slice(1 + k);
           walk.drift = [hf.x - tx, hf.y - ty]; walk.sig = hf.rad; walk.odoFix = walk.odo; walk.src = "hab";
-          if (rest.length) reroute([hf.x, hf.y], rest, habMsg(hf, jump), "#3ddc97", { title: "Habitat radio position", quiet: walk.habReSaid }); walk.habReSaid = true;
+          showMiss(p.x, p.y, hf.x, hf.y);
+          if (rest.length) reroute([hf.x, hf.y], rest, habMsg(hf, jump), "#3ddc97", { title: "The habitat found you", quiet: walk.habReSaid, oldRem: r.d.at(-1) - p.d,
+            lead: `${offWords("The habitat radio", hf.x - p.x, hf.y - p.y)} At ${wKm(hf.r)} from the mast it is good to about ${Math.round(hf.rad)} m, and it gets sharper as you come closer.`, log: `Position ${fLL(hf.x, hf.y)}.` });
+          walk.habReSaid = true;
         } else if (walk.src === "hab" && walk.odo - walk.odoFix > 250) walk.src = "suit";
       }
       walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
@@ -786,7 +854,7 @@
       for (const q of DB.passes) {
         if (q.end < walk.simT || q.start > walk.simT + 620) continue;
         const k10 = q.orbiter + q.start + "a", k0 = q.orbiter + q.start + "b";
-        if (walk.simT >= q.start - 600 && walk.simT < q.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); warm(q.start); chime(q.orbiter); toast(`${q.orbiter} in ${Math.round((q.start - walk.simT) / 60)} min`, `${Math.round((q.end - q.start) / 60)} min long, ${q.max_el}° max. Get clear of high ground.`, ORB[q.orbiter].c); }
+        if (walk.simT >= q.start - 600 && walk.simT < q.start && !walk.alerted.has(k10)) { walk.alerted.add(k10); warm(q.start); chime(q.orbiter); guide(`${q.orbiter} in ${Math.round((q.start - walk.simT) / 60)} min`, `${q.orbiter} comes overhead in ${wDur(q.start - walk.simT)} and stays for ${wDur(q.end - q.start)}. It will measure where you really are, and I will correct the route.`, ORB[q.orbiter].c); }
         if (walk.simT >= q.start && !walk.alerted.has(k0)) { walk.alerted.add(k0); if (!con) { chime(q.orbiter, true); toast(`${q.orbiter} rising`, r.contacts.some(k => k.orbiter === q.orbiter && !k.start) ? "Terrain is blocking the link from here." : "Above 10°.", ORB[q.orbiter].c); } }
       }
       dopplerTone(con ? currentPass(walk.simT) : null, walk.simT);
@@ -802,6 +870,7 @@
       const j = Math.min(r.x.length - 1, p.i + 3), brg = Math.atan2(r.x[j] - p.x, r.y[j] - p.y) * 180 / Math.PI;
       $("arrow").style.transform = `rotate(${brg - 90}deg)`;
       const dw = r.dwell.find(d => el >= d.t && el < d.t + d.min * 60);
+      if (dw && walk.dwellSaid !== dw.t) { walk.dwellSaid = dw.t; guide("Waypoint reached", `Collecting a sample here for ${wDur(dw.min * 60)}, then on to the next stop.`, "#6EE7A8"); }
       const home = last && r.stopsReq.at(-1) === HAB;
       const left = total - k - (r.stopsReq.at(-1) === HAB ? 1 : 0);                          // science waypoints still to visit, this one included
       $("hudNext").textContent = dw ? "Collecting a sample" : `${home ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - left + 1)} of ${S.stops.length}`} · ${fKm(r.d[nxt] - p.d)}`;
@@ -812,7 +881,7 @@
       if (r.ground_c) $("hudGround").textContent = `${Math.round(r.ground_c[Math.min(p.i, r.ground_c.length - 1)])} °C`;
       // hazard look-ahead (150 m)
       let hz = 0; for (let i = p.i; i < r.x.length && r.d[i] - p.d < 150; i++) hz = Math.max(hz, r.slope[i]);
-      if (hz >= 15 && !walk.hzOn) { walk.hzOn = true; toast("Steep ground ahead", `${hz.toFixed(0)}° within 150 m. Slow down.`, "#F0616B"); } else if (hz < 10) walk.hzOn = false;
+      if (hz >= 15 && !walk.hzOn) { walk.hzOn = true; guide("Steep ground ahead", `There is a ${hz.toFixed(0)}° slope within the next 150 m. Slow down.`, "#F0616B"); } else if (hz < 10) walk.hzOn = false;
       if (S.view === "2d" && walk.follow !== false && !map.getBounds().pad(-0.25).contains(ll(p.x, p.y))) map.panTo(ll(p.x, p.y), { animate: true, duration: 0.6 });
       T3.walker = { x: tx, y: ty, z: p.z, rad, con, tracked, pass: con ? currentPass(walk.simT) : null, hdx: r.x[j] - p.x, hdy: r.y[j] - p.y, d: p.d, bx: p.x, by: p.y, still: !!dw, src: walk.src };
       if (el >= r.time_s) endWalk(`${Math.hypot(r.x.at(-1) - HAB[0], r.y.at(-1) - HAB[1]) < 6 ? "Back at the airlock" : "At the last waypoint"} after ${fDur(walk.simT - (S.route.depart))}. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`);
@@ -961,56 +1030,86 @@
     // ---- models ----
     const mk = (parent, geom, mat, x, y, z) => { const o = new THREE.Mesh(geom, mat); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; parent.add(o); return o; };
     function makeAstronaut() {
-      const g = new THREE.Group(), ud = g.userData;
-      const suit = pbr({ color: 0xeceff2, roughness: 0.74, bumpMap: WEAVE, bumpScale: 0.004, envMapIntensity: 0.55 });
-      const dusty = pbr({ color: 0xcfc3b4, roughness: 0.88, bumpMap: WEAVE, bumpScale: 0.004, envMapIntensity: 0.4 });
-      const metal = pbr({ color: 0xb4bcc3, roughness: 0.32, metalness: 0.9, envMapIntensity: 1.2 });
-      const rubber = pbr({ color: 0x1d2024, roughness: 0.92 });
-      const visorM = pbr({ color: 0xd9a63b, roughness: 0.04, metalness: 1.0, envMapIntensity: 1.8 });
-      const led = pbr({ color: 0x5fb3a8, roughness: 0.4, emissive: 0x1f5a53, emissiveIntensity: 0.9 });
-      // hard upper torso, waist bearing, shoulder dome
-      mk(g, new THREE.CylinderGeometry(0.30, 0.265, 0.60, 32), suit, 0, 1.45, 0);
-      const dome = mk(g, new THREE.SphereGeometry(0.30, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), suit, 0, 1.75, 0); dome.scale.set(1, 0.5, 0.9);
-      mk(g, new THREE.CylinderGeometry(0.255, 0.24, 0.17, 28), suit, 0, 1.04, 0);
-      mk(g, new THREE.TorusGeometry(0.255, 0.03, 10, 32), metal, 0, 1.14, 0).rotation.x = Math.PI / 2;
-      mk(g, new THREE.TorusGeometry(0.195, 0.032, 10, 28), metal, 0, 1.89, 0).rotation.x = Math.PI / 2;
-      // helmet: shell, gold visor, brow lamps, camera
-      mk(g, new THREE.SphereGeometry(0.265, 40, 28), suit, 0, 2.08, 0);
-      mk(g, new THREE.SphereGeometry(0.273, 40, 28, Math.PI / 2 - 0.95, 1.9, Math.PI * 0.30, Math.PI * 0.40), visorM, 0, 2.08, 0);
-      for (const sx of [-1, 1]) mk(g, new THREE.CylinderGeometry(0.03, 0.03, 0.05, 12), metal, sx * 0.17, 2.27, 0.15).rotation.x = Math.PI / 2.6;
-      mk(g, new THREE.BoxGeometry(0.06, 0.05, 0.07), rubber, 0.21, 2.2, 0.08);
-      // chest control unit and life-support backpack
-      mk(g, new THREE.BoxGeometry(0.25, 0.17, 0.07), metal, 0, 1.52, 0.30);
-      mk(g, new THREE.BoxGeometry(0.17, 0.04, 0.012), led, 0, 1.56, 0.337);
-      mk(g, new THREE.BoxGeometry(0.46, 0.64, 0.25), suit, 0, 1.50, -0.33);
-      mk(g, new THREE.BoxGeometry(0.40, 0.17, 0.05), metal, 0, 1.68, -0.47);
-      for (const sx of [-1, 1]) mk(g, new THREE.CylinderGeometry(0.06, 0.06, 0.42, 16), metal, sx * 0.13, 1.40, -0.49);
-      mk(g, new THREE.CylinderGeometry(0.008, 0.008, 0.46, 6), metal, 0.18, 1.98, -0.38);
-      // arms: shoulder -> upper arm -> elbow -> forearm -> glove
-      const arm = (sx, name) => {
-        const sh = new THREE.Group(); sh.position.set(sx * 0.37, 1.70, 0); g.add(sh);
-        mk(sh, new THREE.SphereGeometry(0.115, 18, 14), suit, 0, 0, 0);
-        mk(sh, new THREE.CylinderGeometry(0.097, 0.083, 0.30, 18), suit, 0, -0.17, 0);
-        const el = new THREE.Group(); el.position.y = -0.33; sh.add(el);
-        mk(el, new THREE.SphereGeometry(0.088, 16, 12), metal, 0, 0, 0);
-        mk(el, new THREE.CylinderGeometry(0.083, 0.072, 0.27, 18), suit, 0, -0.15, 0);
-        mk(el, new THREE.TorusGeometry(0.075, 0.017, 8, 18), metal, 0, -0.29, 0).rotation.x = Math.PI / 2;
-        mk(el, new THREE.BoxGeometry(0.11, 0.13, 0.08), rubber, 0, -0.38, 0);
-        ud["arm" + name] = sh; ud["elbow" + name] = el;
-      };
-      arm(-1, "L"); arm(1, "R");
-      // legs: hip -> thigh -> knee -> shin -> boot
+      // A pressure suit, 1.88 m tall, built in metres: hard upper torso, life-support backpack, ribbed joints,
+      // gold sun visor, helmet lights, chest controls, gloves and dusty boots. Arms stand away from the body the way pressurised arms do.
+      const g = new THREE.Group(), ud = g.userData; g.rotation.order = "YXZ";
+      const fabric = pbr({ color: 0xe9e7e2, roughness: 0.9, bumpMap: WEAVE, bumpScale: 0.003, envMapIntensity: 0.35 });
+      const dusty = pbr({ color: 0xc8ae96, roughness: 0.96, bumpMap: WEAVE, bumpScale: 0.003, envMapIntensity: 0.2 });        // shins and boots carry the red dust
+      const joint = pbr({ color: 0xb7b3ab, roughness: 0.88, envMapIntensity: 0.25 });
+      const hard = pbr({ color: 0xf3f2ef, roughness: 0.5, envMapIntensity: 0.6, side: THREE.DoubleSide });
+      const metal = pbr({ color: 0xaab2b9, roughness: 0.34, metalness: 0.9, envMapIntensity: 1.1 });
+      const rubber = pbr({ color: 0x23262a, roughness: 0.95 });
+      const glove = pbr({ color: 0x8a8e94, roughness: 0.82 });
+      const stripe = pbr({ color: 0xb3261e, roughness: 0.8 });
+      const visor = pbr({ color: 0xdba640, roughness: 0.05, metalness: 1, envMapIntensity: 1.9, emissive: 0x3d2807, emissiveIntensity: 0.7 });
+      const glass = pbr({ color: 0x0a0d11, roughness: 0.18, metalness: 0.5 });
+      const lamp = pbr({ color: 0xfff3d6, emissive: 0xffe2a8, emissiveIntensity: 1.2, roughness: 0.3 });
+      const led = pbr({ color: 0x5fd0c0, emissive: 0x1f8d80, emissiveIntensity: 1.0, roughness: 0.4 });
+      const cyl = (rt, rb, h, seg = 22) => new THREE.CylinderGeometry(rt, rb, h, seg);
+      const ribs = (parent, r, y, n) => { for (let i = 0; i < n; i++) mk(parent, new THREE.TorusGeometry(r, 0.015, 8, 22), joint, 0, y + (i - (n - 1) / 2) * 0.03, 0).rotation.x = Math.PI / 2; };
+      // legs: hip -> thigh (red stripe) -> ribbed knee -> shin -> boot
       const leg = (sx, name) => {
-        const hip = new THREE.Group(); hip.position.set(sx * 0.14, 0.96, 0); g.add(hip);
-        mk(hip, new THREE.CylinderGeometry(0.138, 0.112, 0.43, 20), suit, 0, -0.215, 0);
-        const kn = new THREE.Group(); kn.position.y = -0.43; hip.add(kn);
-        mk(kn, new THREE.SphereGeometry(0.108, 16, 12), metal, 0, 0, 0);
-        mk(kn, new THREE.CylinderGeometry(0.112, 0.097, 0.43, 20), dusty, 0, -0.215, 0);
-        mk(kn, new THREE.BoxGeometry(0.165, 0.115, 0.32), dusty, 0, -0.475, 0.06);
-        mk(kn, new THREE.BoxGeometry(0.17, 0.03, 0.33), rubber, 0, -0.53, 0.06);
+        const hip = new THREE.Group(); hip.position.set(sx * 0.105, 0.93, 0); g.add(hip);
+        mk(hip, new THREE.SphereGeometry(0.115, 18, 12), fabric, 0, 0, 0).scale.set(1, 0.9, 1);
+        mk(hip, cyl(0.108, 0.094, 0.36), fabric, 0, -0.2, 0);
+        mk(hip, cyl(0.111, 0.107, 0.04), stripe, 0, -0.1, 0);
+        const kn = new THREE.Group(); kn.position.y = -0.41; hip.add(kn);
+        mk(kn, new THREE.SphereGeometry(0.095, 16, 12), joint, 0, 0, 0); ribs(kn, 0.093, 0, 3);
+        mk(kn, cyl(0.09, 0.08, 0.34), dusty, 0, -0.19, 0);
+        mk(kn, cyl(0.088, 0.094, 0.09), dusty, 0, -0.395, 0.005);
+        mk(kn, new THREE.BoxGeometry(0.128, 0.1, 0.25), dusty, 0, -0.455, 0.04);
+        mk(kn, new THREE.SphereGeometry(0.066, 14, 10), dusty, 0, -0.46, 0.16).scale.set(0.97, 0.76, 1.05);
+        mk(kn, new THREE.BoxGeometry(0.138, 0.03, 0.31), rubber, 0, -0.505, 0.045);
         ud["leg" + name] = hip; ud["knee" + name] = kn;
       };
       leg(-1, "L"); leg(1, "R");
+      // lower torso, waist bearing, hard upper torso, shoulder bearings, neck ring
+      mk(g, new THREE.SphereGeometry(0.19, 22, 14), fabric, 0, 0.98, 0).scale.set(1.08, 0.72, 0.86);
+      const waist = mk(g, new THREE.TorusGeometry(0.184, 0.02, 10, 30), metal, 0, 1.085, 0); waist.rotation.x = Math.PI / 2; waist.scale.set(1, 0.86, 1);
+      mk(g, cyl(0.205, 0.186, 0.4, 30), hard, 0, 1.29, 0).scale.z = 0.84;
+      mk(g, new THREE.SphereGeometry(0.205, 30, 12, 0, Math.PI * 2, 0, Math.PI / 2), hard, 0, 1.488, 0).scale.set(1, 0.4, 0.84);
+      for (const sx of [-1, 1]) mk(g, new THREE.TorusGeometry(0.088, 0.016, 8, 22), metal, sx * 0.218, 1.45, 0).rotation.y = Math.PI / 2;
+      mk(g, new THREE.TorusGeometry(0.124, 0.018, 10, 28), metal, 0, 1.56, 0).rotation.x = Math.PI / 2;
+      // helmet: dark bubble, gold sun visor in front, white shell over the top, back and chin, lights and a camera
+      const hy = 1.7, PH = Math.PI / 2;
+      mk(g, new THREE.SphereGeometry(0.15, 26, 18), glass, 0, hy, 0);
+      mk(g, new THREE.SphereGeometry(0.162, 34, 20, PH - 1.2, 2.4, 0.5, 1.3), visor, 0, hy, 0);
+      mk(g, new THREE.SphereGeometry(0.168, 34, 20, PH + 1.2, Math.PI * 2 - 2.4), hard, 0, hy, 0);
+      mk(g, new THREE.SphereGeometry(0.168, 34, 8, 0, Math.PI * 2, 0, 0.5), hard, 0, hy, 0);
+      mk(g, new THREE.SphereGeometry(0.168, 34, 6, PH - 1.2, 2.4, 1.8, 0.75), hard, 0, hy, 0);
+      for (const sx of [-1, 1]) { mk(g, new THREE.BoxGeometry(0.045, 0.06, 0.085), hard, sx * 0.178, hy + 0.055, 0.035); mk(g, new THREE.CircleGeometry(0.017, 14), lamp, sx * 0.178, hy + 0.055, 0.079); }
+      mk(g, new THREE.BoxGeometry(0.04, 0.035, 0.06), rubber, 0.115, hy + 0.15, 0.045);
+      // life-support backpack with its red stripe, oxygen pack underneath, and the radio whip
+      mk(g, new THREE.BoxGeometry(0.5, 0.66, 0.19), hard, 0, 1.33, -0.225);
+      mk(g, new THREE.BoxGeometry(0.44, 0.09, 0.15), hard, 0, 1.705, -0.225);
+      mk(g, new THREE.BoxGeometry(0.46, 0.15, 0.17), hard, 0, 0.94, -0.215);
+      mk(g, new THREE.BoxGeometry(0.503, 0.035, 0.193), stripe, 0, 1.6, -0.225);
+      for (const sx of [-1, 1]) mk(g, new THREE.BoxGeometry(0.02, 0.5, 0.012), metal, sx * 0.13, 1.3, -0.325);
+      mk(g, cyl(0.005, 0.005, 0.32, 6), metal, 0.2, 1.9, -0.25);
+      // chest: display and control module, coloured knobs, tool bar
+      mk(g, new THREE.BoxGeometry(0.25, 0.19, 0.09), hard, 0, 1.31, 0.205);
+      mk(g, new THREE.BoxGeometry(0.12, 0.035, 0.006), led, -0.04, 1.36, 0.252);
+      [0xc0392b, 0x2e6fd0, 0xd9b23a].forEach((c, i) => { mk(g, cyl(0.014, 0.014, 0.02, 12), pbr({ color: c, roughness: 0.6 }), 0.075, 1.365 - i * 0.05, 0.258).rotation.x = Math.PI / 2; });
+      mk(g, cyl(0.011, 0.011, 0.3, 10), metal, 0, 1.185, 0.2).rotation.z = Math.PI / 2;
+      { const patch = new THREE.TextureLoader().load("img/brand/logo-192.png"); patch.encoding = THREE.sRGBEncoding;                 // team patch on the chest
+        const pm = mk(g, new THREE.CircleGeometry(0.036, 24), new THREE.MeshStandardMaterial({ map: patch, roughness: 0.8 }), -0.115, 1.435, 0.179); pm.castShadow = false; }
+      // arms: shoulder -> upper arm -> ribbed elbow -> forearm -> wrist ring -> glove
+      const arm = (sx, name) => {
+        const sh = new THREE.Group(); sh.position.set(sx * 0.255, 1.45, 0); g.add(sh);
+        const ab = new THREE.Group(); ab.rotation.z = sx * 0.2; sh.add(ab);
+        mk(ab, new THREE.SphereGeometry(0.098, 18, 12), fabric, 0, 0, 0); ribs(ab, 0.089, -0.075, 2);
+        mk(ab, cyl(0.082, 0.072, 0.24), fabric, 0, -0.19, 0);
+        mk(ab, cyl(0.084, 0.081, 0.03), stripe, 0, -0.15, 0);
+        const el = new THREE.Group(); el.position.y = -0.32; ab.add(el);
+        mk(el, new THREE.SphereGeometry(0.075, 16, 12), joint, 0, 0, 0); ribs(el, 0.073, 0, 3);
+        mk(el, cyl(0.07, 0.06, 0.23), fabric, 0, -0.135, 0);
+        mk(el, new THREE.TorusGeometry(0.058, 0.014, 8, 20), metal, 0, -0.255, 0).rotation.x = Math.PI / 2;
+        mk(el, new THREE.BoxGeometry(0.085, 0.1, 0.055), glove, 0, -0.315, 0);
+        mk(el, new THREE.BoxGeometry(0.08, 0.065, 0.05), glove, 0, -0.39, 0.008).rotation.x = -0.25;
+        mk(el, new THREE.BoxGeometry(0.03, 0.06, 0.035), glove, -sx * 0.05, -0.33, 0.03);
+        ud["arm" + name] = sh; ud["elbow" + name] = el;
+      };
+      arm(-1, "L"); arm(1, "R");
       return g;
     }
     function makeHab() {
@@ -1087,9 +1186,12 @@
     // Real sizes. The suited astronaut is 1.9 m, the habitat dome 8.4 m across with a 2.3 m airlock.
     // From far away they are smaller than a pixel, so labels and the beacon mark where they are (the way NASA Eyes marks spacecraft).
     // The orbiter is the one exception: it is hundreds of km away, so it is drawn as a sky marker and its label gives the real range.
-    const AS = 1.9 / 2.35, HS = 4.2, SSC = 430 * K, IDLE = HAB, HABM = [HAB[0], Math.min(M.height_m - 1, HAB[1] + 9.6)];   // the walk starts and ends at the habitat point, which is the ground in front of the airlock; the dome stands just north of it
+    const AS = 1, HS = 4.2, SSC = 430 * K, IDLE = HAB, HABM = [HAB[0], Math.min(M.height_m - 1, HAB[1] + 9.6)];   // the walk starts and ends at the habitat point, which is the ground in front of the airlock; the dome stands just north of it
     const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro);
     const astroTag = labelSprite("Astronaut", "#8ab8ff"); sc.add(astroTag);
+    const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 28), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: 0.34, map: (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })() }));
+    blob.rotation.x = -Math.PI / 2; blob.renderOrder = 2; sc.add(blob);
+    let missLine = null, missTag = null, missId = 0;
     const hab = makeHab(); hab.scale.setScalar(HS); hab.position.copy(P(HABM[0], HABM[1], 0)); hab.position.y = ground(HABM[0], HABM[1]); sc.add(hab);
     // The dome stands 9.6 m from the start point with its airlock facing it, on the side the planned route does not use, so nobody walks through a wall.
     function placeHab() {
@@ -1250,18 +1352,34 @@
       const k = T3.walker, walking = walk.on && !!k, u = astro.userData;
       const here = walking ? P(k.x, k.y, 0) : P(IDLE[0], IDLE[1], 0); here.y = ground(walking ? k.x : IDLE[0], walking ? k.y : IDLE[1]);
       astro.position.copy(here);
+      blob.position.copy(here); blob.position.y += 0.035;
       if (walking) {
         if (Math.hypot(k.hdx, k.hdy) > 1e-6) astro.rotation.y = Math.atan2(k.hdx, -k.hdy);
-        if (!walk.busy && !k.still) T3.phase = (T3.phase || 0) + dtr * 6.2;
-        const sw = k.still ? 0 : Math.sin(T3.phase);
-        u.legL.rotation.x = sw * 0.62; u.legR.rotation.x = -sw * 0.62;
-        u.kneeL.rotation.x = Math.max(0, sw) * 0.95; u.kneeR.rotation.x = Math.max(0, -sw) * 0.95;
-        u.armL.rotation.x = -sw * 0.5; u.armR.rotation.x = sw * 0.5; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.45;
-        if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.04;
-      } else { astro.rotation.y = hab.rotation.y + 0.35; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
+        if (!walk.busy && !k.still) T3.phase = (T3.phase || 0) + dtr * 5.6;
+        const sw = k.still ? 0 : Math.sin(T3.phase), go = k.still ? 0 : 1;            // a suited walk: short stride, bent arms held out, a slight lean
+        u.legL.rotation.x = sw * 0.42; u.legR.rotation.x = -sw * 0.42;
+        u.kneeL.rotation.x = Math.max(0, sw) * 0.75 + 0.06 * go; u.kneeR.rotation.x = Math.max(0, -sw) * 0.75 + 0.06 * go;
+        u.armL.rotation.x = -sw * 0.26; u.armR.rotation.x = sw * 0.26; u.elbowL.rotation.x = -0.5 - Math.max(0, -sw) * 0.2; u.elbowR.rotation.x = -0.5 - Math.max(0, sw) * 0.2;
+        astro.rotation.x = 0.07 * go; astro.rotation.z = Math.sin(T3.phase) * 0.025 * go;
+        if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.035;
+      } else {
+        astro.rotation.set(0, hab.rotation.y + 0.35, 0);
+        for (const n of ["legL", "legR", "kneeL", "kneeR"]) u[n].rotation.x = 0;
+        u.armL.rotation.x = u.armR.rotation.x = 0.04; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.32;
+      }
+      // the miss: a red line from where the suit thought you were to where you really are
+      const ms = T3.miss && now < T3.miss.until ? T3.miss : null;
+      if (ms && ms.id !== missId) {
+        missId = ms.id; if (missTag) { sc.remove(missTag); missTag.material.map.dispose(); }
+        missTag = labelSprite(`${Math.round(ms.d)} m off`, "#fc3d21"); sc.add(missTag);
+        if (!missLine) { missLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xfc3d21, depthTest: false, transparent: true })); missLine.renderOrder = 8; missLine.frustumCulled = false; sc.add(missLine); }
+        const a = P(ms.ox, ms.oy, 0).setY(ground(ms.ox, ms.oy) + 0.3), b = P(ms.nx, ms.ny, 0).setY(ground(ms.nx, ms.ny) + 0.3);
+        missLine.geometry.setFromPoints([a, b]); missTag.position.copy(a).lerp(b, 0.5); missTag.position.y += 1.2;
+      }
+      if (missLine) missLine.visible = !!ms; if (missTag) missTag.visible = !!ms;
       const camD = cam.position.distanceTo(here);
       const camH = cam.position.distanceTo(hab.position), nearHab = here.distanceTo(hab.position) < camH * 0.07;
-      astroTag.position.copy(here); astroTag.position.y += 2.25; astroTag.visible = camD > 40 && !(nearHab && !walking);
+      astroTag.position.copy(here); astroTag.position.y += 2.1; astroTag.visible = camD > 40 && !(nearHab && !walking);
       habTag.visible = camH > 110 && !(nearHab && walking);
       habLine.visible = walking && habNow().ok && here.distanceTo(hab.position) > 25;      // the habitat radio link, drawn from the top of the mast
       if (habLine.visible) habLine.geometry.setFromPoints([hab.localToWorld(new THREE.Vector3(0.45, 1.9, -0.25)), here.clone().setY(here.y + 1.75)]);
@@ -1365,7 +1483,8 @@
     else if (replan && walk.on && !walk.busy && !walk.planning) {
       const r = walk.route, w = T3.walker, from = w && w.bx != null ? [w.bx, w.by] : null; if (!from) return;
       const rest = walk.manual ? walk.rest : (() => { const q = posOn(r, walk.simT - walk.t0), k = r.stop_idx.slice(1).filter(i => i <= q.i).length; return r.stopsReq.slice(1 + k); })();
-      if (rest.length) reroute(from, rest, `${POLICY()} route from your ${walk.lock === "fix" ? "satellite-fixed" : "estimated"} position.`, "#8ab8ff", { title: "Route policy changed" });
+      const oldRem = walk.manual ? r.d.at(-1) - r.d[Math.min(walk.ri, r.d.length - 1)] : r.d.at(-1) - posOn(r, walk.simT - walk.t0).d;
+      if (rest.length) reroute(from, rest, "", "#8ab8ff", { title: `Switched to ${POLICY()}`, lead: `Planned again from your ${walk.lock === "fix" ? "satellite-fixed" : "estimated"} position.`, oldRem });
     }
   }
   document.querySelectorAll(".style").forEach(b => b.onclick = () => applyStyle(b.dataset.s));
@@ -1488,9 +1607,13 @@
     if (lk && !was) {                                                           // a relay orbiter just came over: beep, buzz, open the mic
       if (!S.sound) chime(lk.orbiter, true, true);
       if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) navigator.vibrate([220, 110, 220]);
-      toast(`${lk.orbiter} is overhead`, COM.mic ? "Link to Earth open. Hold the talk button in Radio to send a voice message." : "Link to Earth open: queued messages are going now.", orbC(lk.orbiter));
+      if (!walk.on) toast(`${lk.orbiter} is overhead`, COM.mic ? "Link to Earth open. Hold the talk button in Radio to send a voice message." : "Link to Earth open: queued messages are going now.", orbC(lk.orbiter));   // during a walk the guide says it
+      COM.wasOrb = lk.orbiter;
     }
-    if (!lk && was) { if (!linkFor(COM.dest)) closeMic(); toast("Satellite has set", "Messages to Earth now wait for the next pass.", "#93B7E6"); }
+    if (!lk && was) { if (!linkFor(COM.dest)) closeMic();
+      const np = walk.on ? DB.passes.find(q => q.start > walk.simT) : null;
+      if (walk.on) guide(`${COM.wasOrb || "The satellite"} has set`, `${COM.wasOrb || "The satellite"} has gone below the horizon. From here your suit estimates your position again, and the error grows by about 2 m for every 100 m you walk.${np ? ` Next satellite: ${np.orbiter} in ${wDur(np.start - walk.simT)}.` : ""}`, "#93B7E6");
+      else toast("Satellite has set", "Messages to Earth now wait for the next pass.", "#93B7E6"); }
     COM.q.filter(x => x.status === "queued").forEach(m => { const l = m.to === "pod" && hb ? HABLK : lk; if (l) uplink(m, l); });      // leave as soon as a link is there
     [...COM.srv.values()].filter(m => m.to === "astronaut" && !m.delivered && Date.now() / 1000 + COM.off >= m.arrive && (lk || (hb && m.sender === "pod"))).forEach(deliverIncoming);   // replies come down
     if (now - COM.polled > 2000) { COM.polled = now; pollComms(); }
