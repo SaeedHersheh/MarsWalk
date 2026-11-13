@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794606813">
+<link rel="stylesheet" href="style.css?v=1794607479">
 </head>
 <body>
 <div id="map"></div>
@@ -176,7 +176,7 @@
     <section class="sec about">
       <details class="more">
         <summary>Data sources and assumptions</summary>
-        <p class="credits">Terrain: USGS Astrogeology Mars 2020 CTX DTM 20 m and orthomosaic 6 m; slope hazard from HiRISE DTM 1 m where it exists. Orbiters and Sun: JPL Horizons. Ground temperature: THEMIS night IR, TES albedo and the Horizons Sun through a ground heat model. Radiation: Curiosity RAD measured 0.67 mSv/day at Gale (22 g/cm² of air above); scaled here by each spot's air column (MOLA elevation, scale height assumed) and by how much sky the terrain leaves open. Suit speed (half Tobler) and drift (2 % of distance) are assumptions. Habitat radio: line of sight over the terrain from an 8 m mast to a 1.8 m suit antenna (heights assumed). Position fixes: least squares on simulated range and Doppler measurements to the real orbiter track.</p>
+        <p class="credits">Terrain: USGS Astrogeology Mars 2020 CTX DTM 20 m and orthomosaic 6 m; slope hazard from HiRISE DTM 1 m where it exists. Orbiters and Sun: JPL Horizons. Ground temperature: THEMIS night IR, TES albedo and the Horizons Sun through a ground heat model. Radiation: Curiosity RAD measured 0.67 mSv/day at Gale (22 g/cm² of air above); scaled here by each spot's air column (MOLA elevation, scale height assumed) and by how much sky the terrain leaves open. Suit speed (half Tobler) and drift (2 % of distance) are assumptions. Habitat radio: line of sight over the terrain from an 8 m mast to a 1.8 m suit antenna (heights assumed). While it holds, the mast also places the suit: range to 5 m and bearing to 1 degree (assumed), so that fix is tight near the habitat and loose far away. Position fixes: least squares on simulated range and Doppler measurements to the real orbiter track.</p>
       </details>
     </section>
   </aside>
@@ -205,7 +205,7 @@
   <div class="arrow" id="arrow">➤</div>
   <div class="hudmain"><b id="hudNext">—</b><span id="hudSub">—</span></div>
   <div class="hudcols">
-    <div class="hudcol"><span>Position</span><b id="hudPos">±3 m</b></div>
+    <div class="hudcol"><span id="hudPosL">Position</span><b id="hudPos">±3 m</b></div>
     <div class="hudcol"><span>Habitat radio</span><b id="hudHab">linked</b></div>
     <div class="hudcol"><span>Satellite</span><b id="hudLink">none</b></div>
     <div class="hudcol"><span>Dose</span><b id="hudDose">0</b></div>
@@ -261,7 +261,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="relayfix.js?v=1794606813"></script>
-<script src="app.js?v=1794606813"></script>
+<script src="relayfix.js?v=1794607479"></script>
+<script src="app.js?v=1794607479"></script>
 </body>
 </html>

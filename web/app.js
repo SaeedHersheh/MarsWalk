@@ -495,7 +495,7 @@
     if (!S.route || S.route.x.length < 2) return;
     Object.assign(walk, { on: true, route: S.route, t0: departT(), simT: departT(), odo: 0, odoFix: 0, theta: Math.random() * 6.28,
       drift: [0, 0], dAlong: 0, _i: 0, ri: 0, lock: "", lockKey: "", px: null, follow: true, busy: false, hzOn: false, zNow: S.route.z[0], inContact: false, alerted: new Set(), dose: 0, lastSun: 0, last: performance.now(), dwellSaid: -1 });
-    Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 1.5, rest: [], hd: 0, still: true, keys: {}, lastRe: 0, ri: 0, lock: "", lockKey: "", loose: false, habOk: undefined }); HL.t = 0; T3.pathHead = null; syncDrive();
+    Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 1.5, rest: [], hd: 0, still: true, keys: {}, lastRe: 0, ri: 0, lock: "", lockKey: "", loose: false, habOk: undefined, hb: null, src: "suit", habPosSaid: false, habReSaid: false }); HL.t = 0; T3.pathHead = null; syncDrive();
     me.addTo(map); unc.addTo(map); if (S.truth) ghost.addTo(map);
     walk._painted = -1;
     if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
@@ -558,6 +558,22 @@
     walk.theta += (Math.random() - 0.5) * 0.12 * Math.sqrt(step);               // the heading bias wanders slowly, so the error builds one way and then curves
     walk.drift[0] += Math.cos(walk.theta) * 0.7 * DRIFT * step; walk.drift[1] += Math.sin(walk.theta) * 0.7 * DRIFT * step;
   }
+  /* Habitat radio positioning. While the mast can see the suit it measures how far away it is (two-way ranging)
+     and in which direction (direction finding), a little like an airport beacon. Assumed accuracy, one sigma:
+     5 m in range and 1 degree in bearing. So the fix is tight near the habitat and loose far away, and it is
+     the range that is good, not the direction. The errors wander slowly instead of jumping at every measurement. */
+  const HAB_SR = 5, HAB_SB = Math.PI / 180;
+  function habFix(tx, ty) {                              // one new measurement every FIX_STEP seconds; null in between or when the mast cannot see you
+    if (!habNow().ok) { walk.hb = null; return null; }
+    const ep = Math.floor(walk.simT / FIX_STEP); if (walk.hb && walk.hb.ep === ep) return null;
+    const o = walk.hb || { er: 0, eb: 0 }, n = walk.hb ? Math.max(1, ep - walk.hb.ep) : 60, rho = Math.exp(-n * FIX_STEP / 300), g = RelayFix.seeded((Math.imul(ep, 2654435761) >>> 0) || 7), q = Math.sqrt(1 - rho * rho);
+    const er = o.er * rho + HAB_SR * q * g(), eb = o.eb * rho + HAB_SB * q * g();
+    walk.hb = { ep, er, eb };
+    const dx = tx - HAB[0], dy = ty - HAB[1], d = Math.hypot(dx, dy); if (d < 15) return null;
+    const r = Math.max(1, d + er), b = Math.atan2(dx, dy) + eb;
+    return { x: HAB[0] + Math.sin(b) * r, y: HAB[1] + Math.cos(b) * r, r, d, rad: 2 * Math.hypot(HAB_SR, r * HAB_SB) };      // rad: 95 % bound, like the ring
+  }
+  const habMsg = (f, jump) => `The habitat mast measured you ${fKm(f.r)} away and gave your position: ${fLL(f.x, f.y)}, good to ±${Math.round(f.rad)} m. The suit's own estimate was ${Math.round(jump)} m out. New ${POLICY()} route planned from there.`;
   // One step of the fix while pass q is in view. Returns the correction when the estimate was just updated, else null.
   function navFix(q, tx, ty, good) {
     const key = q.orbiter + q.start, bx = tx + walk.drift[0], by = ty + walk.drift[1];
@@ -567,7 +583,7 @@
     walk.fxN = key + fx.n;
     if (fx.sigma > good) return null;                                            // geometry still too weak: keep listening
     const first = walk.fixKey !== key;
-    walk.drift = [fx.x - tx, fx.y - ty]; walk.sig = Math.max(1.5, 2 * fx.sigma); walk.odoFix = walk.odo; walk.fixKey = key; walk.lock = "fix";
+    walk.drift = [fx.x - tx, fx.y - ty]; walk.sig = Math.max(1.5, 2 * fx.sigma); walk.odoFix = walk.odo; walk.fixKey = key; walk.lock = "fix"; walk.src = "suit";
     return { ...fx, jump: Math.hypot(fx.x - bx, fx.y - by), first };
   }
   const fixMsg = (orb, f) => `${orb} gave your position: ${fLL(f.x, f.y)}, good to ±${Math.max(2, Math.round(2 * f.sigma))} m. The suit's own estimate was ${Math.round(f.jump)} m out. New ${POLICY()} route planned from there.`;
@@ -583,6 +599,7 @@
     hb.textContent = h.ok ? `linked · ${fKm(h.d)}` : "hidden by terrain"; hb.style.color = h.ok ? "var(--ok)" : "var(--warn)";
     if (walk.habOk !== undefined && walk.habOk !== h.ok && performance.now() - (walk.habSaid || 0) > 15000 && (walk.habSaid = performance.now())) toast(h.ok ? "Habitat link is back" : "Habitat link lost", h.ok ? "The habitat mast can see you again. Messages to the habitat go straight through." : `The ground between you and the habitat is in the way (${fKm(h.d)} away). Messages wait for the link or for a satellite.`, h.ok ? "#6EE7A8" : "#F5B85B");
     walk.habOk = h.ok;
+    $("hudPosL").textContent = "Position · " + (locked ? "sat" : walk.src === "hab" ? "hab" : "suit"); $("hudPosL").title = locked ? "Position from the satellite fix" : walk.src === "hab" ? "Position from the habitat mast (range and bearing)" : "Position from the suit's own dead reckoning";
   }
   // "Wait here for the next satellite": jump the clock to just before the next pass. The astronaut stays where they are.
   function skipToPass() {
@@ -662,6 +679,17 @@
         reroute([fix.x, fix.y], walk.rest, fixMsg(q.orbiter, { ...fix, jump: walk.lockJump ?? fix.jump }), ORB[q.orbiter].c, { title: `${q.orbiter} position fix` }); walk.lockJump = null;
       } else if (fix && fix.first) walk.lockJump = fix.jump;                                   // remember how far out the suit was when the lock began
     } else if (walk.lock) { walk.lock = ""; }
+    if (walk.lock !== "fix") {                           // between satellite passes: use the habitat's measurement whenever it is tighter than the suit's own estimate
+      const hf = habFix(walk.mx, walk.my), radNow = (walk.sig || 1.5) + DRIFT * (walk.odo - walk.odoFix);
+      if (hf && hf.rad < radNow * (walk.src === "hab" ? 1 : 0.85)) {
+        if (!walk.habPosSaid) { walk.habPosSaid = true; toast("Habitat radio is placing you", `${fKm(hf.r)} from the mast: ${fLL(hf.x, hf.y)}, good to ±${Math.round(hf.rad)} m. It gets better the closer you are to the habitat.`, "#3ddc97"); }
+        walk.drift = [hf.x - walk.mx, hf.y - walk.my]; walk.sig = hf.rad; walk.odoFix = walk.odo; walk.src = "hab";
+      } else if (hf) {                                   // not tight enough to take over, but the distance is still good: keep the estimate at the measured range
+        walk.src = "suit";
+        const ex = walk.mx + walk.drift[0] - HAB[0], ey = walk.my + walk.drift[1] - HAB[1], L = Math.hypot(ex, ey);
+        if (L > 20) walk.drift = [HAB[0] + ex / L * hf.r - walk.mx, HAB[1] + ey / L * hf.r - walk.my];
+      } else if (!habNow().ok && walk.src === "hab") walk.src = "suit";
+    }
     walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
     for (const p2 of DB.passes) {
       if (p2.end < walk.simT || p2.start > walk.simT + 620) continue;
@@ -686,6 +714,11 @@
       reroute([bx, by], walk.rest, `${q.orbiter} is tracking you to ±${Math.round(rad)} m. The route now follows you wherever you walk.`, ORB[q.orbiter].c, { soft: true, quiet: walk.trackSaid === tk });
       walk.trackSaid = tk;
     }
+    if (walk.src === "hab" && walk.lock !== "fix" && !walk.busy && !walk.planning && now - (walk.lastRe || 0) > 6000 && walk.rest.length && off > Math.max(30, 1.5 * DX, rad)) {
+      walk.lastRe = now;                                 // clearly off the line even allowing for the habitat's error: plan again from its fix
+      reroute([bx, by], walk.rest, `The habitat mast places you ${Math.round(off)} m off the route (good to ±${Math.round(rad)} m). New ${POLICY()} route from there.`, "#3ddc97", { soft: true, quiet: walk.habReSaid, title: "Habitat radio position" });
+      walk.habReSaid = true;
+    }
     const from = Math.min(r.x.length - 1, walk.ri + 1);
     T3.pathHead = { i: from, x: bx, y: by };
     me.setLatLng(ll(bx, by)); unc.setLatLng(ll(bx, by)); unc.setRadius(rad); ghost.setLatLng(ll(walk.mx, walk.my));
@@ -694,12 +727,12 @@
     const tgt = walk.rest[0], dist = tgt ? Math.hypot(tgt[0] - bx, tgt[1] - by) : 0, brg = tgt ? Math.atan2(tgt[0] - bx, tgt[1] - by) : 0;
     $("arrow").style.transform = `rotate(${(brg - walk.hd) * 180 / Math.PI - 90}deg)`;
     $("hudNext").textContent = `${tgt === HAB ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - walk.rest.filter(w2 => w2 !== HAB).length + 1)} of ${S.stops.length}`} · ${fKm(dist)}`;
-    $("hudSub").textContent = off > Math.max(25, 1.5 * DX) ? `${Math.round(off)} m off the route${tracked ? "" : " · no satellite to replan"}` : `${fLL(bx, by)} · slope ${sl0.toFixed(0)}°`;
+    $("hudSub").textContent = off > Math.max(25, 1.5 * DX) ? `${Math.round(off)} m off the route${tracked || walk.src === "hab" ? "" : " · waiting for a fix to replan"}` : `${fLL(bx, by)} · slope ${sl0.toFixed(0)}°`;
     $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
     hudRelay(con, bx, by);
     $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
     if (S.view === "2d" && !map.getBounds().pad(-0.25).contains(ll(walk.mx, walk.my))) map.panTo(ll(walk.mx, walk.my), { animate: true, duration: 0.4 });
-    T3.walker = { x: walk.mx, y: walk.my, z, rad, con, tracked, pass: con ? q : null, hdx: Math.sin(walk.hd), hdy: Math.cos(walk.hd), d: 0, still: walk.still, bx, by, manual: true };
+    T3.walker = { x: walk.mx, y: walk.my, z, rad, con, tracked, pass: con ? q : null, hdx: Math.sin(walk.hd), hdy: Math.cos(walk.hd), d: 0, still: walk.still, bx, by, manual: true, src: walk.src };
   }
   addEventListener("keydown", e => {
     const k = e.key.toLowerCase(); if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
@@ -740,6 +773,14 @@
           else toast("Position fix", `${cq.orbiter} measured your position to ±${Math.round(2 * fix.sigma)} m.`, ORB[cq.orbiter].c);
         }
       } else if (!pq && walk.lock) walk.lock = "";
+      if (!tracked && walk.lock !== "fix" && !walk.busy) {
+        const hf = habFix(tx, ty), radNow = (walk.sig || 1.5) + DRIFT * (walk.odo - walk.odoFix);
+        if (hf && hf.rad < 0.5 * radNow) {                      // only when it halves the uncertainty, so a walk home is a few replans and not a dozen
+          const jump = Math.hypot(hf.x - p.x, hf.y - p.y), k = r.stop_idx.slice(1).filter(i => i <= p.i).length, rest = r.stopsReq.slice(1 + k);
+          walk.drift = [hf.x - tx, hf.y - ty]; walk.sig = hf.rad; walk.odoFix = walk.odo; walk.src = "hab";
+          if (rest.length) reroute([hf.x, hf.y], rest, habMsg(hf, jump), "#3ddc97", { title: "Habitat radio position", quiet: walk.habReSaid }); walk.habReSaid = true;
+        } else if (walk.src === "hab" && walk.odo - walk.odoFix > 250) walk.src = "suit";
+      }
       walk.inContact = !!con; walk.link = con ? { orbiter: con.orbiter, end: con.end } : null;
       // pass alerts: T-10 min and at rise
       for (const q of DB.passes) {
@@ -773,7 +814,7 @@
       let hz = 0; for (let i = p.i; i < r.x.length && r.d[i] - p.d < 150; i++) hz = Math.max(hz, r.slope[i]);
       if (hz >= 15 && !walk.hzOn) { walk.hzOn = true; toast("Steep ground ahead", `${hz.toFixed(0)}° within 150 m. Slow down.`, "#F0616B"); } else if (hz < 10) walk.hzOn = false;
       if (S.view === "2d" && walk.follow !== false && !map.getBounds().pad(-0.25).contains(ll(p.x, p.y))) map.panTo(ll(p.x, p.y), { animate: true, duration: 0.6 });
-      T3.walker = { x: tx, y: ty, z: p.z, rad, con, tracked, pass: con ? currentPass(walk.simT) : null, hdx: r.x[j] - p.x, hdy: r.y[j] - p.y, d: p.d, bx: p.x, by: p.y, still: !!dw };
+      T3.walker = { x: tx, y: ty, z: p.z, rad, con, tracked, pass: con ? currentPass(walk.simT) : null, hdx: r.x[j] - p.x, hdy: r.y[j] - p.y, d: p.d, bx: p.x, by: p.y, still: !!dw, src: walk.src };
       if (el >= r.time_s) endWalk(`${Math.hypot(r.x.at(-1) - HAB[0], r.y.at(-1) - HAB[1]) < 6 ? "Back at the airlock" : "At the last waypoint"} after ${fDur(walk.simT - (S.route.depart))}. Dose ${(walk.dose * 1000).toFixed(0)} µSv (model).`);
       }
     }
@@ -1067,7 +1108,7 @@
       habTag.position.copy(hab.position); habTag.position.y += 8.5; rockAt = null;
     }
     const habLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]), new THREE.LineBasicMaterial({ color: 0x3ddc97, transparent: true, opacity: 0.5 })); habLine.visible = false; habLine.frustumCulled = false; sc.add(habLine);
-    const estTag = labelSprite("Suit's estimate", "#93B7E6"); estTag.visible = false; sc.add(estTag);
+    const estTag = labelSprite("Estimated position", "#93B7E6"); estTag.visible = false; sc.add(estTag);
     const habTag = labelSprite("Habitat", "#ffffff"); habTag.position.copy(hab.position); habTag.position.y += 8.5; sc.add(habTag);
     // rocks at their real size (about 10 cm to 1.4 m) wherever you look closely. Each one is placed by a hash of its ground cell, so it is always in the same spot.
     const RN = lite ? 280 : 720, RCELL = 6, v3 = new THREE.Vector3();
@@ -1227,7 +1268,7 @@
       wk.visible = walking;
       if (walking) {
         wk.position.copy(k.bx != null ? P(k.bx, k.by, 0).setY(ground(k.bx, k.by)) : here);
-        const rr = Math.max(k.rad, 1.2); ring.scale.setScalar(rr); ring.position.y = 0.05 + rr * 0.012; ring.material.color.set(k.tracked ? 0x6EE7A8 : 0x93B7E6);
+        const rr = Math.max(k.rad, 1.2); ring.scale.setScalar(rr); ring.position.y = 0.05 + rr * 0.012; ring.material.color.set(k.tracked ? 0x6EE7A8 : k.src === "hab" ? 0x3ddc97 : 0x93B7E6);
         beacon.visible = camD > 700;
         estTag.position.copy(wk.position); estTag.position.y += 0.4; estTag.visible = !k.tracked && wk.position.distanceTo(here) > Math.max(4, camD * 0.14) && camD < 900;
       } else {
