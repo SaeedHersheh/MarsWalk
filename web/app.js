@@ -514,7 +514,8 @@
     walk.mx = q.x + walk.drift[0]; walk.my = q.y + walk.drift[1];           // the true position
     walk.drift = [-walk.drift[0], -walk.drift[1]];                          // believed = true + drift
     const j = Math.min(r.x.length - 1, q.i + 3); walk.hd = Math.atan2(r.x[j] - q.x, r.y[j] - q.y) || 0;
-    walk.manual = true; walk.still = true; walk.blocked = 0; syncDrive();
+    walk.manual = true; walk.still = true; walk.blocked = 0; syncDrive(); T3.dirty = true;
+    if (S.speed > 30) { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
     if (S.view === "3d") { T3.chase = true; T3.skyLook = false; $("t3follow").setAttribute("aria-pressed", "true"); }
     toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#8ab8ff");
   }
@@ -522,7 +523,7 @@
     if (!walk.manual || walk.busy) return;
     const b = [walk.mx + walk.drift[0], walk.my + walk.drift[1]];
     await reroute(b, walk.rest, "Autopilot: route from your last known position.");
-    walk.manual = false; walk.dAlong = 0; walk.drift = [-walk.drift[0], -walk.drift[1]]; syncDrive();
+    walk.manual = false; T3.dirty = true; walk.dAlong = 0; walk.drift = [-walk.drift[0], -walk.drift[1]]; syncDrive();
   }
   const stick = { x: 0, y: 0 };
   function driveInput() {
@@ -699,7 +700,7 @@
   /* ---------- 3D terrain ---------- */
   const T3 = { dirty: true, ready: false, walker: null, sun: { az: 180, el: 45 } };
   T3.init = function () {
-    const cv = $("view3d"), EX = 2, K = M.width_m / 30276;      // K: everything is sized for Jezero (30 km) and scaled to this map
+    const cv = $("view3d"), EX = 1, K = M.width_m / 30276;      // K: everything is sized for Jezero (30 km) and scaled to this map
     const small = innerWidth < 900;
     let lite = small; try { const v0 = localStorage.getItem("mw_lite"); if (v0 !== null) lite = v0 === "1"; } catch (e) { /* private mode */ }
     T3.lite = lite; let rocksRef = null, envTex = null;
@@ -751,6 +752,14 @@
       pos.setY(iy * (nx + 1) + ix, (ELEV[r * W + c] * M.elev_scale - M.zmin) * EX);
     }
     geo.computeVertexNormals();
+    // height of the drawn surface at a map point: the same triangles the mesh uses, so feet never sink or float
+    const ground = (x, y) => {
+      const fx = Math.min(nx - 1e-6, Math.max(0, x / M.width_m * nx)), fy = Math.min(ny - 1e-6, Math.max(0, (1 - y / M.height_m) * ny));
+      const ix = Math.floor(fx), iy = Math.floor(fy), u = fx - ix, v = fy - iy, i0 = iy * (nx + 1) + ix;
+      const ha = pos.getY(i0), hd = pos.getY(i0 + 1), hb = pos.getY(i0 + nx + 1), hc = pos.getY(i0 + nx + 2);
+      return u + v <= 1 ? ha + u * (hd - ha) + v * (hb - ha) : hc + (1 - u) * (hb - hc) + (1 - v) * (hd - hc);
+    };
+    T3.ground = ground;
     const tc = document.createElement("canvas"); tc.width = 2660; tc.height = 2520;
     const tex = new THREE.CanvasTexture(tc); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = rn.capabilities.getMaxAnisotropy();
     const terrain = new THREE.Mesh(geo, pbr({ map: tex, color: 0xd0d0d0, roughness: 1, metalness: 0, envMapIntensity: 0.12 })); terrain.receiveShadow = true; terrain.castShadow = true; sc.add(terrain);
@@ -896,7 +905,7 @@
     }
     const skyDir = (az, el) => { const a = az * Math.PI / 180, e = el * Math.PI / 180; return new THREE.Vector3(Math.sin(a) * Math.cos(e), Math.sin(e), -Math.cos(a) * Math.cos(e)); };
 
-    const ASC = 95 * K, HSC = 150 * K, SSC = 1500 * K;
+    const ASC = 95 * K, HSC = 150 * K, SSC = 1500 * K, AMAN = Math.max(12, 0.2 * M.width_m / nx); let as = ASC;   // AMAN: astronaut size under manual control (about 30 m on Jezero; the terrain mesh is 57 m per facet, so true 2 m would stand on one flat triangle)
     const astro = makeAstronaut(); astro.scale.setScalar(ASC); sc.add(astro);
     const astroTag = labelSprite("Astronaut", "#8ab8ff"); astroTag.scale.set(0.17, 0.037, 1); astroTag.center.set(0.5, 0); sc.add(astroTag);
     const hab = makeHab(); hab.scale.setScalar(HSC); hab.position.copy(P(HAB[0], HAB[1], hz)); sc.add(hab);
@@ -939,9 +948,10 @@
       const r = walk.on ? walk.route : S.route;
       if (r && r.x.length > 2) {
         const step = Math.max(1, Math.floor(r.x.length / 500)), pts = [], idx = [];
-        for (let i = 0; i < r.x.length; i += step) { pts.push(P(r.x[i], r.y[i], r.z[i] + 12 * K)); idx.push(i); }
-        pts.push(P(r.x.at(-1), r.y.at(-1), r.z.at(-1) + 12 * K)); idx.push(r.x.length - 1);
-        const segs = pts.length * 2, rad = 6, g3 = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), segs, 11 * K, rad, false);
+        const tr = (walk.on && walk.manual ? 2.5 : 11) * K, lift = tr * 1.1;                // a footpath when you walk it yourself
+        for (let i = 0; i < r.x.length; i += step) { pts.push(P(r.x[i], r.y[i], 0).setY(ground(r.x[i], r.y[i]) + lift)); idx.push(i); }
+        pts.push(P(r.x.at(-1), r.y.at(-1), 0).setY(ground(r.x.at(-1), r.y.at(-1)) + lift)); idx.push(r.x.length - 1);
+        const segs = pts.length * 2, rad = 6, g3 = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), segs, tr, rad, false);
         const cols = new Float32Array(g3.attributes.position.count * 3), cc = new THREE.Color();
         for (let i = 0; i <= segs; i++) {
           const node = idx[Math.min(idx.length - 1, Math.round(i / segs * (idx.length - 1)))];
@@ -1011,7 +1021,8 @@
       // the astronaut: walks along the route; waits by the habitat otherwise
       const k = T3.walker, walking = walk.on && !!k, u = astro.userData;
       const idle = P(HAB[0] + 330 * K, HAB[1] - 260 * K, 0); idle.y = (( elevAt(HAB[0] + 330 * K, HAB[1] - 260 * K) ?? hz) - M.zmin) * EX;
-      const here = walking ? P(k.x, k.y, k.z) : idle;
+      const here = walking ? P(k.x, k.y, k.z) : idle; here.y = ground(walking ? k.x : HAB[0] + 330 * K, walking ? k.y : HAB[1] - 260 * K);
+      as += ((walking && k.manual ? AMAN : ASC) - as) * 0.08; astro.scale.setScalar(as); hab.scale.setScalar(HSC * as / ASC); hab.position.y = ground(HAB[0], HAB[1]); beacon.visible = !(walking && k.manual); ctl.minDistance = Math.min(120 * K, 4 * as);
       astro.position.copy(here);
       if (walking) {
         if (Math.hypot(k.hdx, k.hdy) > 1e-6) astro.rotation.y = Math.atan2(k.hdx, -k.hdy);
@@ -1020,11 +1031,11 @@
         u.legL.rotation.x = sw * 0.62; u.legR.rotation.x = -sw * 0.62;
         u.kneeL.rotation.x = Math.max(0, sw) * 0.95; u.kneeR.rotation.x = Math.max(0, -sw) * 0.95;
         u.armL.rotation.x = -sw * 0.5; u.armR.rotation.x = sw * 0.5; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.45;
-        if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.05 * ASC;
+        if (!k.still) astro.position.y += Math.abs(Math.cos(T3.phase)) * 0.05 * as;
       } else { astro.rotation.y = 0.7; for (const n of ["legL", "legR", "kneeL", "kneeR", "armL", "armR"]) u[n].rotation.x = 0; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.18; }
-      astroTag.position.copy(astro.position); astroTag.position.y += 2.95 * ASC;
+      astroTag.position.copy(astro.position); astroTag.position.y += 2.95 * as;
       wk.visible = walking;
-      if (walking) { wk.position.copy(k.bx != null ? P(k.bx, k.by, elevAt(k.bx, k.by) ?? k.z) : here); ring.scale.setScalar(Math.max(k.rad, 25 * K)); ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6); }
+      if (walking) { wk.position.copy(k.bx != null ? P(k.bx, k.by, 0).setY(ground(k.bx, k.by)) : here); ring.scale.setScalar(Math.max(k.rad, 25 * K)); ring.material.color.set(k.con ? 0x6EE7A8 : 0x93B7E6); }
 
       // a satellite appears in the sky while one is above the horizon from here
       const t = walk.on ? walk.simT : Date.now() / 1000;
@@ -1047,7 +1058,7 @@
           if (trailKey !== key) { trailKey = key; trail.geometry.setFromPoints(ap.samples.filter(s2 => s2[2] > 0).map(s2 => skyDir(s2[1], s2[2]).multiplyScalar(far))); trail.material.color.set(ORB[orb].c); }
           trail.material.fog = false; trail.position.copy(cam.position); trail.visible = true;
         } else trail.visible = false;
-        if (walking && k.con) { beamG.setFromPoints([here.clone().setY(here.y + ASC * 2.2), spos]); beam.material.color.set(ORB[orb].c); beam.visible = true; }
+        if (walking && k.con) { beamG.setFromPoints([here.clone().setY(here.y + as * 2.2), spos]); beam.material.color.set(ORB[orb].c); beam.visible = true; }
       } else { satHolder.visible = false; trail.visible = false; T3.satPos = null; }
       const showFind = !!T3.satPos; if ($("t3sat").hidden === showFind) $("t3sat").hidden = !showFind;
 
@@ -1055,11 +1066,11 @@
       if (T3.chase && !T3.drag) {
         if (walking) {
           const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; }
-          if (T3.dir) { const cl = cam.aspect < 1 ? 1.7 : 1, want = here.clone().addScaledVector(T3.dir, -1000 * K * cl); want.y += 480 * K * cl; cam.position.lerp(want, k.manual ? 0.09 : 0.06); }
+          if (T3.dir) { const cl = (cam.aspect < 1 ? 1.7 : 1) * as, want = here.clone().addScaledVector(T3.dir, -10.5 * cl); want.y += 5 * cl; cam.position.lerp(want, k.manual ? 0.09 : 0.06); }
         } else {
           const fwd = new THREE.Vector3(Math.sin(0.7), 0, Math.cos(0.7)), want = here.clone().addScaledVector(fwd, 1100 * K); want.y += 420 * K; cam.position.lerp(want, 0.06);
         }
-        ctl.target.lerp(here.clone().setY(here.y + 150 * K), 0.12);
+        ctl.target.lerp(here.clone().setY(here.y + 1.6 * as), 0.12);
       } else if (walking && walk.follow !== false && !T3.drag) ctl.target.lerp(here, 0.05);
       ctl.maxPolarAngle = T3.skyLook ? Math.PI * 0.95 : Math.PI * 0.49;
       ctl.update(); rn.render(sc, cam);
