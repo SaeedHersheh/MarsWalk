@@ -531,3 +531,13 @@ body.mode-explore .timebar { left: auto; right: 20px; width: auto; grid-template
   .modelink span { display: none; }
 }
 @media (pointer: fine) { body.mode-explore .stick { display: none !important; } }   /* keyboard on a computer: the touch stick is not needed */
+
+/* ---------- crew rover ---------- */
+.sec h2.sub { margin-top: 10px; }
+.exbtns .go.rov { background: #ff9a6b; color: #04060a; }
+.exbtns .go.rov:hover { background: #ffb08a; }
+/* from the driver's seat: windscreen pillars and the dashboard edge instead of the helmet rim */
+body.veh-rover.walking.fp .visor { background:
+  linear-gradient(180deg, rgba(10, 14, 21, 0.92) 0, rgba(10, 14, 21, 0.92) 7%, transparent 9%, transparent 80%, rgba(10, 14, 21, 0.95) 83%),
+  linear-gradient(100deg, rgba(10, 14, 21, 0.95) 0, rgba(10, 14, 21, 0.95) 6%, transparent 8%, transparent 92%, rgba(10, 14, 21, 0.95) 94%); box-shadow: none; }
+body.veh-rover.walking .jumpbtn { display: none !important; }

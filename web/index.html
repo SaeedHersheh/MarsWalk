@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794667915">
+<link rel="stylesheet" href="style.css?v=1794668540">
 </head>
 <body>
 <div id="map"></div>
@@ -56,7 +56,13 @@
     </section>
 
     <section class="sec">
-      <h2><b>2</b>Route policy</h2>
+      <h2><b>2</b>How you travel</h2>
+      <div class="seg wide" role="group" aria-label="How you travel">
+        <button type="button" class="veh" data-v="foot" aria-pressed="true">On foot</button>
+        <button type="button" class="veh" data-v="rover" aria-pressed="false">Crew rover</button>
+      </div>
+      <p class="hint" id="vehHint"></p>
+      <h2 class="sub">Route policy</h2>
       <div class="styles" id="styles" role="group" aria-label="Route policy">
         <button type="button" class="style" data-s="safe" aria-pressed="true"><i class="sw safe"></i><b>Safest</b><span>Flattest ground, even if it is longer</span></button>
         <button type="button" class="style" data-s="balanced" aria-pressed="false"><i class="sw bal"></i><b>Balanced</b><span>Some slope where it saves a lot of walking</span></button>
@@ -238,7 +244,7 @@
     <p class="exfacts" id="exFacts"></p>
     <p>You are at the airlock of a habitat, on real terrain from NASA orbiters, at true scale. Walk anywhere. Mars has no GPS, so the guide tells you how the habitat radio and passing satellites keep track of you.</p>
     <ul class="exhow" id="exHow"></ul>
-    <div class="exbtns"><button type="button" class="go" id="exGo">Step outside</button><a class="chip" href="globe.html?mode=explore">Pick another place</a></div>
+    <div class="exbtns"><button type="button" class="go" id="exGo">Step outside</button><button type="button" class="go rov" id="exRover">Take the rover</button><a class="chip" href="globe.html?mode=explore">Pick another place</a></div>
   </div>
 </div>
 <div class="maplegend" id="mapLegend" hidden></div>
@@ -287,6 +293,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="relayfix.js?v=1794663000"></script>
-<script src="app.js?v=1794667915"></script>
+<script src="app.js?v=1794668540"></script>
 </body>
 </html>

@@ -55,6 +55,18 @@ def slope_pen(s):
     return np.interp(s, [a for a, _ in SLOPE_COST], [b for _, b in SLOPE_COST]).astype("float32")
 
 
+# ASSUMPTIONS for the crew rover (a pressurised rover in the class of NASA's Space Exploration Vehicle / Lunar Terrain Vehicle studies):
+ROVER_V = 2.8        # cruise on flat ground, m/s (about 10 km/h)
+ROVER_MAX = 20.0     # steepest slope it is planned over, degrees
+ROVER_SLOW = 0.6     # at the slope limit it runs at 40 % of cruise
+
+
+def rover_ms(s):
+    """Rover speed, m/s, s = signed slope (rise/run): slower the steeper it is, up or down."""
+    deg = np.degrees(np.arctan(np.abs(s)))
+    return (ROVER_V * (1 - ROVER_SLOW * np.clip(deg / ROVER_MAX, 0, 1))).astype("float32")
+
+
 def tobler_ms(s):
     """Tobler hiking function, m/s, s = signed slope (rise/run)."""
     return 6.0 * np.exp(-3.5 * np.abs(s + 0.05)) / 3.6 * SUIT
@@ -135,6 +147,7 @@ class Site:
             self.HEAT_META = json.load(open(os.path.join(d, "heat_meta.json")))
 
         self.PACE_ISO = (1.0 / tobler_ms(np.tan(np.radians(self.SLOPE)))).astype("float32")   # s per metre
+        self.PACE_ROVER = (1.0 / rover_ms(np.tan(np.radians(self.SLOPE)))).astype("float32")
         self.bottom = M["eqc_top"] - H * M["eqc_res"]
         self.HAB = (float(np.clip((M["R"] * np.radians(self.info["lon_e"]) - M["eqc_left"]) * np.cos(np.radians(M["lat0"])), 0, W * DX - 1)),
                     float(np.clip(M["R"] * np.radians(self.info["lat"]) - self.bottom, 0, H * DY - 1)))
@@ -274,11 +287,11 @@ class Site:
             "shadow": (sun < 0.05).astype("float32") if sun_el > 0 else np.zeros((self.H, self.W), "float32"),
         }
 
-    def cost_grid(self, weights, t, max_slope):
+    def cost_grid(self, weights, t, max_slope, vehicle="foot"):
         mult = np.ones((self.H, self.W), "float32")
         for k, p in self.penalties(t).items():
             mult += (1.0 if k == "slope" else 6.0) * float(weights.get(k, 0)) * p
-        return self.PACE_ISO * mult, self.nogo(max_slope)
+        return (self.PACE_ROVER if vehicle == "rover" else self.PACE_ISO) * mult, self.nogo(max_slope)
 
     def nogo(self, max_slope):
         return (self.HAZ > max_slope) | ~self.VALID
@@ -382,6 +395,7 @@ class RouteReq(BaseModel):
     max_slope: float = 25.0
     dwell_min: float = 15.0                  # science time at each intermediate stop
     round_trip: bool = True
+    vehicle: str = "foot"                    # "foot" (suited walk) or "rover" (crew rover)
 
 
 class SiteReq(BaseModel):
@@ -533,7 +547,10 @@ def route(q: RouteReq):
     if len(q.stops) < 2 and not (q.round_trip and len(q.stops) == 1):
         raise HTTPException(400, "need at least two stops")
     t_dep = q.depart or time.time()
-    cost, _ = S.cost_grid(q.weights, t_dep, q.max_slope)
+    rover = q.vehicle == "rover"
+    if rover:
+        q.max_slope = min(q.max_slope, ROVER_MAX)
+    cost, _ = S.cost_grid(q.weights, t_dep, q.max_slope, q.vehicle)
     stops = [tuple(s) for s in q.stops]
     seq = stops + ([stops[0]] if q.round_trip and len(stops) > 1 else [])
     for used in (q.max_slope, q.max_slope + 4, q.max_slope + 8):      # strict first; relax only if there is no way through
@@ -551,7 +568,7 @@ def route(q: RouteReq):
         if ok:
             break
     else:
-        raise HTTPException(422, "no walkable path between two of the stops (terrain too steep)")
+        raise HTTPException(422, f"no {'drivable' if rover else 'walkable'} path between two of the stops (terrain too steep)")
     rr = np.array([c[0] for c in cells]); cc = np.array([c[1] for c in cells])
     x = (cc + 0.5) * DX; y = (H - 1 - rr + 0.5) * DY
     for i, sxy in zip(stop_idx, seq):                     # start, waypoints and end sit on the exact point asked for, not the middle of its cell
@@ -568,7 +585,7 @@ def route(q: RouteReq):
     z = S.Z[rr, cc].astype("float64")
     seg = np.hypot(np.diff(x), np.diff(y))
     s = np.divide(np.diff(z), seg, out=np.zeros_like(seg), where=seg > 0)
-    dt = seg / tobler_ms(s)                               # real direction-aware Tobler time
+    dt = seg / (rover_ms(s) if rover else tobler_ms(s))   # rover speed, or real direction-aware Tobler time on foot
     d = np.concatenate([[0], np.cumsum(seg)])
     t = np.concatenate([[0], np.cumsum(dt)])
     dwell = []
@@ -605,7 +622,7 @@ def route(q: RouteReq):
     sun_el = [S.sun_at(t_dep + k)[1] for k in np.linspace(0, total_t, 12)]
     warn = []
     if total_t > 8 * 3600:
-        warn.append(f"EVA is {total_t/3600:.1f} h, over the 8 h suit limit")
+        warn.append(f"EVA is {total_t/3600:.1f} h, over the 8 h {'shift' if rover else 'suit'} limit")
     if min(sun_el) <= 0:
         warn.append("part of this EVA is in darkness")
     if not in_contact:
@@ -641,7 +658,7 @@ def route(q: RouteReq):
         "dose_msv": dose, "max_slope": float(HAZ[rr, cc].max()), "slope_mix": mix, "slope_limit_used": used,
         "career_pct": dose / CAREER_MSV * 100, "rad_day_avg": float(S.RAD[rr, cc].mean()),
         "contacts": contacts, "contact_min": len(in_contact), "longest_gap_s": float(gap),
-        "sun_el": [round(v, 1) for v in sun_el], "depart": t_dep, "warnings": warn,
+        "sun_el": [round(v, 1) for v in sun_el], "depart": t_dep, "warnings": warn, "vehicle": q.vehicle,
     }
 
 

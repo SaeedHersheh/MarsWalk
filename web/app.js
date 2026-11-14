@@ -90,7 +90,7 @@
   /* ---------- state ---------- */
   const S = {
     stops: SITE === "jezero" ? [[15100, 16000], [12700, 16300]] : [],     // science stops (x east, y north, metres)
-    roundTrip: true, style: "safe", weights: { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, maxSlope: 18,
+    roundTrip: true, vehicle: "foot", style: "safe", weights: { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, maxSlope: 18,
     departOff: 0,                                 // minutes after "now"
     base: "ortho", layers: new Set(), opacity: 0.8,
     route: null, view: "2d", speed: 120, sound: false, doppler: false, truth: true,
@@ -244,7 +244,7 @@
   function plan(delay = 0) { clearTimeout(planTimer); planTimer = setTimeout(doPlan, delay); }
   async function requestRoute(stops, depart) {
     return J("/api/route", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site: SITE, stops, weights: S.weights, depart, max_slope: S.maxSlope, round_trip: false }) });
+      body: JSON.stringify({ site: SITE, stops, weights: S.weights, depart, max_slope: S.maxSlope, round_trip: false, vehicle: S.vehicle }) });
   }
   async function doPlan() {
     drawStops();
@@ -276,7 +276,7 @@
     const st = (k, v, u, cls = "") => `<div class="stat ${cls}"><span>${k}</span><b>${v}<small>${u}</small></b></div>`;
     $("stats").innerHTML =
       st("Distance", (r.distance_m / 1000).toFixed(1), "km") +
-      st("Walking time", (r.time_s / 3600).toFixed(1), "h", r.time_s > 8 * 3600 ? "bad" : "") +
+      st(S.vehicle === "rover" ? "Driving time" : "Walking time", (r.time_s / 3600).toFixed(1), "h", r.time_s > 8 * 3600 ? "bad" : "") +
       st("Radiation", (r.dose_msv * 1000).toFixed(0), "µSv") +
       st("Radio contact", r.contact_min, "min", r.contact_min ? "ok" : "bad");
     $("moreStats").innerHTML =
@@ -620,8 +620,8 @@
     $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet(); navLine.clearLayers();
     $("depart").disabled = true; drawStops();
     { const np = DB.passes.find(q => q.end > walk.simT);
-      guide("Walk started", np && np.start <= walk.simT ? `${np.orbiter} is overhead right now. In a moment it will measure exactly where you are.`
-        : `There is no GPS on Mars. Your suit counts steps to estimate where you are, and that estimate slowly drifts.${np ? ` ${np.orbiter} comes overhead in ${wDur(np.start - walk.simT)} and will tell you exactly where you are.` : ""}`, "#8ab8ff"); }
+      guide(S.vehicle === "rover" ? "Drive started" : "Walk started", np && np.start <= walk.simT ? `${np.orbiter} is overhead right now. In a moment it will measure exactly where you are.`
+        : `There is no GPS on Mars. ${S.vehicle === "rover" ? "The rover counts wheel turns" : "Your suit counts steps"} to estimate where you are, and that estimate slowly drifts.${np ? ` ${np.orbiter} comes overhead in ${wDur(np.start - walk.simT)} and will tell you exactly where you are.` : ""}`, "#8ab8ff"); }
     audio().resume();                                  // the Start press is the tap browsers need before any beep
   }
   const PLAY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4.5v15l12-7.5z" fill="currentColor"/></svg>', STOP_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor"/></svg>';
@@ -638,7 +638,7 @@
     if (UI.autoHid && !mq.matches) showPanel(true); UI.autoHid = false; document.body.classList.remove("showui"); syncPanelTog();
     $("depart").disabled = false; dopplerTone(null);
     if (msg) guide("Walk complete", msg, "#6EE7A8");
-    if (MODE === "explore" && $("explore")) { $("exGo").textContent = "Walk again"; setTimeout(() => { $("explore").hidden = false; }, msg ? 2500 : 0); }
+    if (MODE === "explore" && $("explore")) { $("exGo").textContent = "Walk again"; $("exRover").textContent = "Drive again"; setTimeout(() => { $("explore").hidden = false; }, msg ? 2500 : 0); }
     drawStops(); showRoute();
   }
   function posOn(r, el) {
@@ -713,7 +713,7 @@
     return { ...fx, jump: Math.hypot(fx.x - bx, fx.y - by), first };
   }
   // dx, dy: from where the suit thought you were to where you really are
-  const offWords = (who, dx, dy) => { const d = Math.hypot(dx, dy); return d < 3 ? `${who} has measured your position. Your suit had it right, to within ${Math.max(1, Math.round(d))} m.` : `${who} has measured your position. You were ${Math.round(d)} m ${compass(dx, dy)} of where your suit thought.`; };
+  const offWords = (who, dx, dy) => { const d = Math.hypot(dx, dy), me = S.vehicle === "rover" && walk.on ? "the rover" : "your suit"; return d < 3 ? `${who} has measured your position. ${me[0].toUpperCase() + me.slice(1)} had it right, to within ${Math.max(1, Math.round(d))} m.` : `${who} has measured your position. You were ${Math.round(d)} m ${compass(dx, dy)} of where ${me} thought.`; };
   const fixMsg = (orb, f) => `${orb} gave your position: ${fLL(f.x, f.y)}, good to ±${Math.max(2, Math.round(2 * f.sigma))} m. The suit's own estimate was ${Math.round(f.jump)} m out. New ${POLICY()} route planned from there.`;
   const shortOrb = n => n.split(" ").pop();              // "Mars Odyssey" -> "Odyssey": the HUD is narrow on a phone
   const fLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${Math.abs(la).toFixed(4)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(4)}°${lo >= 0 ? "E" : "W"}`; };
@@ -797,15 +797,16 @@
   function offRoute(r, x, y) { let m = 1e12; for (let i = 0; i < r.x.length; i += 2) { const d = (r.x[i] - x) ** 2 + (r.y[i] - y) ** 2; if (d < m) m = d; } return Math.sqrt(m); }
   function manualStep(dt, now) {
     const r = walk.route, [turn, fwd] = driveInput(), simDt = dt * S.speed;
-    walk.hd += turn * 1.9 * dt * (fwd < 0 ? -1 : 1);
+    walk.hd += turn * (S.vehicle === "rover" ? 0.9 : 1.9) * dt * (fwd < 0 ? -1 : 1);
     const sl0 = slopeAt(walk.mx, walk.my) ?? 0, x0 = walk.mx, y0 = walk.my;
     let step = 0; walk.still = Math.abs(fwd) < 0.05;
     if (!walk.still) {
-      const v = 1.25 * (T3.vr ? 1.5 : 1) * Math.max(0.2, 1 - sl0 / 32) * (fwd < 0 ? 0.5 : 1);     // VR: a brisk 1.9 m/s on the flat                   // m/s in a suit, slower on slope
+      const v = S.vehicle === "rover" ? 2.8 * (1 - 0.6 * Math.min(1, sl0 / 20)) * (fwd < 0 ? 0.4 : 1)        // rover: about 10 km/h on the flat (assumed)
+        : 1.25 * (T3.vr ? 1.5 : 1) * Math.max(0.2, 1 - sl0 / 32) * (fwd < 0 ? 0.5 : 1);     // VR: a brisk 1.9 m/s on the flat                   // m/s in a suit, slower on slope
       step = v * Math.abs(fwd) * simDt;
       const sg = Math.sign(fwd), nx = walk.mx + Math.sin(walk.hd) * step * sg, ny = walk.my + Math.cos(walk.hd) * step * sg, sl = slopeAt(nx, ny);
       if (sl == null || nx < DX * 2 || ny < DY * 2 || nx > M.width_m - DX * 2 || ny > M.height_m - DY * 2) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Edge of the mapped area", "Turn back.", "#F5B85B"); } }
-      else if (sl > 34 && sl > sl0) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Too steep", `${sl.toFixed(0)}° ahead. A suited astronaut cannot climb that. Go around.`, "#F0616B"); } }
+      else if (sl > (S.vehicle === "rover" ? 25 : 34) && sl > sl0) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Too steep", `${sl.toFixed(0)}° ahead. ${S.vehicle === "rover" ? "The rover cannot climb that" : "A suited astronaut cannot climb that"}. Go around.`, "#F0616B"); } }
       else { walk.mx = nx; walk.my = ny; }
       if (!step) walk.still = true;
     }
@@ -999,7 +1000,7 @@
     const ctl = new THREE.OrbitControls(cam, cv); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.49; ctl.minDistance = 2.5; ctl.maxDistance = 45000 * K;
     ctl.addEventListener("start", () => { T3.drag = true; }); ctl.addEventListener("end", () => { T3.drag = false; if (T3.chase) T3.chaseK = Math.min(14, Math.max(0.35, cam.position.distanceTo(ctl.target) / chaseBase())); });
     // following distance: close in real time, further back the faster time runs, so the ground never streaks past
-    function chaseBase() { return 6.5 * Math.pow(walk.on ? Math.max(1, S.speed) : 1, 0.55) * (cam.aspect < 1 ? 1.25 : 1); }
+    function chaseBase() { return (S.vehicle === "rover" ? 1.4 : 1) * 6.5 * Math.pow(walk.on ? Math.max(1, S.speed) : 1, 0.55) * (cam.aspect < 1 ? 1.25 : 1); }
     const P = (x, y, z) => new THREE.Vector3(x - M.width_m / 2, (z - M.zmin) * EX, -(y - M.height_m / 2));
     const hz = elevAt(...HAB);
     const homeCam = () => { ctl.target.copy(P(HAB[0] - 500 * K, HAB[1] + 700 * K, hz)); cam.position.copy(P(HAB[0] + 2200 * K, HAB[1] - 3600 * K, hz + 1300 * K)); };
@@ -1195,6 +1196,41 @@
       arm(-1, "L"); arm(1, "R");
       return g;
     }
+    /* A pressurised crew rover in the spirit of NASA's Space Exploration Vehicle: 4.6 m long, 2.7 m wide, six wheels of 1 m,
+       a cabin with a wraparound windscreen, two suitports at the back (the crew climb into their suits from inside), solar panel,
+       mast and high-gain dish on the roof. Built in metres, facing +Z. */
+    function makeRover() {
+      const g = new THREE.Group(), ud = g.userData; g.rotation.order = "YXZ";
+      const shell = pbr({ color: 0xf2f1ec, roughness: 0.5, metalness: 0.05, envMapIntensity: 0.6 });
+      const frame = pbr({ color: 0x3a4048, roughness: 0.55, metalness: 0.6, envMapIntensity: 0.8 });
+      const glass = pbr({ color: 0x0b1420, roughness: 0.08, metalness: 0.9, envMapIntensity: 1.6 });
+      const tyre = pbr({ color: 0x2a2724, roughness: 0.95, bumpMap: NOISE, bumpScale: 0.04 });
+      const hub = pbr({ color: 0xb9bec4, roughness: 0.35, metalness: 0.85 });
+      const red = pbr({ color: 0xfc3d21, roughness: 0.5 }), cells = pbr({ map: CELLS, roughness: 0.3, metalness: 0.5, envMapIntensity: 1.4 });
+      const lamp = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
+      const box = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
+      box(2.3, 0.32, 4.4, frame, 0, 0.78, 0);                                         // chassis
+      box(2.25, 1.55, 3.0, shell, 0, 1.75, -0.35);                                    // cabin
+      const nose = box(2.25, 0.95, 1.1, shell, 0, 1.35, 1.6); nose.rotation.x = 0;    // lower front
+      const ws = box(2.1, 0.9, 0.08, glass, 0, 2.05, 1.18); ws.rotation.x = -0.55;      // windscreen, raked back
+      box(2.27, 0.42, 1.6, glass, 0, 2.05, 0.35);                                     // side windows (a band through the cabin)
+      box(2.28, 0.09, 3.0, red, 0, 1.12, -0.35);                                      // stripe
+      box(2.2, 0.05, 2.6, cells, 0, 2.6, -0.4);                                       // solar panel on the roof
+      for (const x of [-0.55, 0.55]) { const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.12, 32), hub); sp.rotation.x = Math.PI / 2; sp.position.set(x, 1.75, -1.9); sp.castShadow = true; g.add(sp); }   // suitports
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 10), hub); mast.position.set(0.8, 3.05, -1.4); g.add(mast);
+      const dish = new THREE.Mesh(new THREE.SphereGeometry(0.32, 24, 12, 0, Math.PI * 2, 0, 0.9), shell); dish.material.side = THREE.DoubleSide; dish.rotation.x = -2.3; dish.position.set(0.8, 3.5, -1.4); g.add(dish);
+      for (const x of [-0.75, 0.75]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.12, 0.04), lamp); l.position.set(x, 1.55, 2.16); g.add(l); }
+      ud.wheels = [];
+      for (const z of [-1.5, 0, 1.5]) for (const x of [-1.32, 1.32]) {
+        const w = new THREE.Group(); w.position.set(x, 0.5, z);
+        const t = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.34, 28), tyre); t.rotation.z = Math.PI / 2; t.castShadow = true; w.add(t);
+        const h = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.36, 16), hub); h.rotation.z = Math.PI / 2; w.add(h);
+        for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.06, 0.85), hub); sp.rotation.x = k * Math.PI / 4; w.add(sp); }      // spokes, so the turning shows
+        g.add(w); ud.wheels.push(w);
+        box(0.42, 0.06, 1.15, frame, x, 1.06, z);                                     // fender
+      }
+      return g;
+    }
     function makeHab() {
       const g = new THREE.Group();
       const shell = pbr({ color: 0xffffff, map: DOMETEX, bumpMap: DOMETEX, bumpScale: 0.015, roughness: 0.6, envMapIntensity: 0.6 });
@@ -1272,6 +1308,8 @@
     const AS = 1, HS = 4.2, SSC = 430 * K, IDLE = HAB, HABM = [HAB[0], Math.min(M.height_m - 1, HAB[1] + 9.6)];   // the walk starts and ends at the habitat point, which is the ground in front of the airlock; the dome stands just north of it
     const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro);
     const astroTag = labelSprite("Astronaut", "#8ab8ff"); sc.add(astroTag);
+    const rover = makeRover(); rover.visible = false; sc.add(rover);
+    const roverTag = labelSprite("Crew rover", "#8ab8ff"); roverTag.visible = false; sc.add(roverTag);
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 28), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: 0.34, map: (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })() }));
     blob.rotation.x = -Math.PI / 2; blob.renderOrder = 2; sc.add(blob);
     let missLine = null, missTag = null, missId = 0;
@@ -1493,7 +1531,7 @@
       if (V.yaw0 == null) { vF.set(0, 0, -1).applyQuaternion(V.q); V.yaw0 = Math.atan2(-vF.x, -vF.z); V.calib = Math.atan2(-fd.x, -fd.z) - V.yaw0; }   // recenter: straight ahead = the way you face now
       const gp = padAxes(); if (gp && Math.abs(gp[0]) > 0.15) V.calib -= gp[0] * 1.6 * (T3.vrDt || 0.016);
       qY.setFromAxisAngle(UP, V.calib); qF.copy(qY).multiply(V.q);
-      cam.position.copy(here); cam.position.y = here.y + 1.68 + jy; cam.quaternion.copy(qF);
+      cam.position.copy(here); cam.position.y = here.y + (S.vehicle === "rover" && walk.on ? 2.15 : 1.68) + jy; cam.quaternion.copy(qF);
       ctl.target.copy(cam.position).add(vF.set(0, 0, -3).applyQuaternion(qF));
       const hv = new THREE.Vector3(0, 0, -1).applyQuaternion(qF);
       const side = new THREE.Vector3(fd.x, 0, fd.z).normalize().applyAxisAngle(UP, CARD_YAW);
@@ -1588,6 +1626,22 @@
         astro.position.y += jy;
       }
       blob.material.opacity = 0.34 * Math.max(0.35, 1 - Math.max(0, jy) * 1.6);
+      const RV = S.vehicle === "rover";
+      rover.visible = RV && !(T3.fp && walking); roverTag.visible = false;
+      if (RV) {
+        // driving: the crew are inside. Parked: beside the airlock, nose out
+        const hvx = hab.position.x + M.width_m / 2 - IDLE[0], hvy = M.height_m / 2 - hab.position.z - IDLE[1], hl = Math.hypot(hvx, hvy) || 1;   // from the airlock to the dome
+        const hy = walking && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                    // parked nose away from the dome
+        const fx = Math.sin(hy), fy = Math.cos(hy), mx0 = walking ? k.x : IDLE[0] - hvy / hl * 7, my0 = walking ? k.y : IDLE[1] + hvx / hl * 7;       // 7 m to the side of the airlock
+        const gz = (a, b) => ground(Math.min(M.width_m, Math.max(0, mx0 + a * fx - b * fy)), Math.min(M.height_m, Math.max(0, my0 + a * fy + b * fx)));
+        const zf = gz(1.6, 0), zb = gz(-1.6, 0), zl = gz(0, 1.3), zr = gz(0, -1.3);
+        rover.position.copy(P(mx0, my0, 0)); rover.position.y = (zf + zb + zl + zr) / 4;
+        rover.rotation.set(-Math.atan2(zf - zb, 3.2), Math.atan2(fx, -fy), Math.atan2(zl - zr, 2.6));
+        const lp = T3.rvLast || [mx0, my0], dd = Math.hypot(mx0 - lp[0], my0 - lp[1]); T3.rvLast = [mx0, my0];
+        if (dd < 50) { T3.rvRoll = (T3.rvRoll || 0) + dd / 0.5; rover.userData.wheels.forEach(w => { w.rotation.x = T3.rvRoll; }); }
+        if (walking) { astro.visible = false; blob.visible = false; astroTag.visible = false; }
+        const camR = cam.position.distanceTo(rover.position); roverTag.visible = camR > 60 && !T3.fp; roverTag.position.copy(rover.position); roverTag.position.y += 3.6;
+      }
       // the miss: a red line from where the suit thought you were to where you really are
       const ms = T3.miss && now < T3.miss.until ? T3.miss : null;
       if (ms && ms.id !== missId) {
@@ -1648,7 +1702,8 @@
       const showFind = !!T3.satPos; if ($("t3sat").hidden === showFind) $("t3sat").hidden = !showFind;
 
       // camera: first person through the visor, free, or following from behind at a distance that suits the time rate
-      astro.visible = !T3.fp; blob.visible = !T3.fp; if (T3.fp) astroTag.visible = false;
+      const inRover = S.vehicle === "rover" && walking;
+      astro.visible = !T3.fp && !inRover; blob.visible = !T3.fp && !inRover; if (T3.fp || inRover) astroTag.visible = false;
       if (T3.fp) {
         ctl.enabled = false;
         const d = walking ? new THREE.Vector3(k.hdx, 0, -k.hdy) : new THREE.Vector3(Math.sin(astro.rotation.y), 0, Math.cos(astro.rotation.y));
@@ -1657,7 +1712,8 @@
         if (moving && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8);                // the head drifts back to face the way you walk
         const f = T3.fpDir.clone().applyAxisAngle(UP, L.yaw), right = new THREE.Vector3(-f.z, 0, f.x);
         const bob = moving ? Math.abs(Math.cos(T3.phase)) * 0.05 : 0, sway = moving ? Math.sin(T3.phase) * 0.03 : 0;
-        cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob;
+        if (inRover) { cam.position.copy(here).addScaledVector(T3.fpDir, 1.3).addScaledVector(right, 0.45); cam.position.y = rover.position.y + 2.15; }   // driver's seat, behind the windscreen
+        else { cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob; }
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
         if (T3.vr && T3.vr.q) { T3.vrDt = dtr; vrDraw(here, jy); return; }
         vrHud.visible = false; reticle.visible = false;
@@ -1797,7 +1853,7 @@
   $("vrExit").onclick = vrExit;
   $("vrCenter").onclick = () => { if (T3.vr) T3.vr.yaw0 = null; $("vrBar").hidden = true; };
   // a standing jump in Mars gravity (3.71 m/s2): about 40 cm up and nearly a second in the air
-  function jump() { if (S.view !== "3d" || T3.jmp || MODE === "plan") return; T3.jmp = { t: 0 }; }
+  function jump() { if (S.view !== "3d" || T3.jmp || MODE === "plan" || (S.vehicle === "rover" && walk.on)) return; T3.jmp = { t: 0 }; }
   T3.vrTest = { enter: () => vrEnter(), exit: () => vrExit() };
 
   /* ---------- controls ---------- */
@@ -1841,6 +1897,14 @@
     }
   }
   document.querySelectorAll(".style").forEach(b => b.onclick = () => applyStyle(b.dataset.s));
+  function setVehicle(v, replan = true) {
+    S.vehicle = v === "rover" ? "rover" : "foot"; document.body.classList.toggle("veh-rover", S.vehicle === "rover");
+    document.querySelectorAll(".veh").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === S.vehicle)));
+    $("vehHint").textContent = S.vehicle === "rover" ? "The crew ride in a pressurised rover at about 10 km/h on flat ground, on slopes up to 20° (assumed), and suit up through the suitports at each stop." : "Two astronauts walk in suits at about 2 to 4 km/h, on slopes up to the policy's limit.";
+    T3.dirty = true; if (replan && !walk.on) plan(0);
+  }
+  document.querySelectorAll(".veh").forEach(b => b.onclick = () => setVehicle(b.dataset.v));
+  setVehicle(new URLSearchParams(location.search).get("vehicle") === "rover" ? "rover" : "foot", false);
   function setDepart(min) {
     S.departOff = Math.max(0, Math.min(1440, min)); $("depart").value = S.departOff;
     $("departTxt").textContent = S.departOff === 0 ? "Departure: now" : `Departure in ${fDur(S.departOff * 60)}`;
@@ -2166,19 +2230,19 @@
       }
       return best || [HAB[0] + 1200, HAB[1] + 900];
     }
-    async function stepOut() {
-      ex.hidden = true; audio().resume();
+    async function stepOut(veh) {
+      ex.hidden = true; audio().resume(); if (!walk.on) setVehicle(veh === "rover" ? "rover" : "foot", false);
       if (!walk.on) {
         const poi = lookout(); S.stops = [poi]; S.roundTrip = true; plan(0);
         for (let i = 0; i < 80 && !(S.route && S.route.stop_idx.length >= 2 && S.stops[0] === poi); i++) await new Promise(r => setTimeout(r, 100));
         if (!S.route) return toast("Could not set the walk up", "Try another place on the globe.", "#F0616B");
         const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click();
         startWalk(); takeControl(); setCam("fp", true);
-        guide("You are outside", `The lookout is the highest ground near the habitat, ${wKm(Math.hypot(poi[0] - HAB[0], poi[1] - HAB[1]))} away. Walk there yourself and back to the airlock. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.`, "#8ab8ff");
+        guide(S.vehicle === "rover" ? "You are at the wheel" : "You are outside", `The lookout is the highest ground near the habitat, ${wKm(Math.hypot(poi[0] - HAB[0], poi[1] - HAB[1]))} away. ${S.vehicle === "rover" ? "Drive" : "Walk"} there yourself and back to the airlock. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.`, "#8ab8ff");
       }
       try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
     }
-    $("exGo").onclick = stepOut;
+    $("exGo").onclick = () => stepOut("foot"); $("exRover").onclick = () => stepOut("rover");
     ex.hidden = false;
   }
 
