@@ -125,6 +125,16 @@
   .badge .orb { inset: -10%; width: 120%; height: 120%; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .who p { margin: 0 0 16px; font-size: 17px; color: var(--text); max-width: 640px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
+  .facts span { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .facts i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
+  .who p.lead { font-size: clamp(19px, 2vw, 23px); line-height: 1.45; color: var(--ink); }
+  .who p.lead b { background: linear-gradient(100deg, #8ab8ff, #3ddc97); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .who p em { font-style: normal; color: var(--ink); }
+  .visit { display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; padding: 13px 22px; border-radius: 999px; background: var(--blue); color: #fff; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 0 34px -8px var(--blue-hi); transition: transform 0.3s, box-shadow 0.3s; }
+  .visit svg { width: 16px; height: 16px; transition: transform 0.3s; }
+  .visit:hover { transform: translateY(-2px); box-shadow: 0 0 44px -6px var(--blue-hi); }
+  .visit:hover svg { transform: translate(2px, -2px); }
   .stack { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
   .stack span { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line-2); font-size: 13.5px; color: var(--text); }
   /* end */
@@ -506,9 +516,11 @@
       <div>
         <span class="eyebrow reveal">Who we are</span>
         <h2 class="reveal">AirAwareNetwork</h2>
-        <p class="reveal">We are a team at the NASA Space Apps Challenge 2026. Marswalk is our answer to a simple question: when people walk on Mars, how will they plan a safe route and know where they are without GPS?</p>
-        <p class="reveal">We built it as a working tool, not a slideshow: a route planner that weighs slope, radiation, cold, darkness and radio cover, a position model with the habitat radio and real satellite passes, and a true-scale 3D world you can walk in, down to phone VR.</p>
-        <div class="stack reveal"><span>Python · FastAPI</span><span>NumPy · SciPy route search</span><span>PostgreSQL</span><span>Leaflet</span><span>three.js</span><span>Phone VR with the gyroscope</span><span>Speech for the guide</span></div>
+        <div class="facts reveal"><span><i style="--c:#3ddc97"></i>Based in Palestine</span><span><i style="--c:#8ab8ff"></i>IoT air-quality network</span><span><i style="--c:#ff9a6b"></i>NASA Space Apps 2026</span></div>
+        <p class="reveal lead"><b>AirAwareNetwork</b> is a Palestinian, community-led air quality monitoring network built on Internet of Things technologies.</p>
+        <p class="reveal">At home we connect sensors across a region and get their readings back in real time. For the NASA Space Apps Challenge 2026 we took that same question to Mars: <em>how do you keep someone connected and found where there is no network and no GPS?</em></p>
+        <p class="reveal">Marswalk is our answer. The habitat's radio and the relay satellites overhead take turns finding the astronaut, and the route is planned so they are never out of reach for long.</p>
+        <a class="visit reveal" href="https://airaware.network/" target="_blank" rel="noopener">Visit airaware.network <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
       </div>
     </div>
   </section>
