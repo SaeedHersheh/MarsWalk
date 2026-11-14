@@ -231,10 +231,11 @@
   if (SHORT) {
     ACTS.splice(0, ACTS.length, { name: "Marswalk", c: "#ff9a6b" });
     CH.splice(0, CH.length,
-      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 7.5, title: "1 · Choose where to go", sub: "Marswalk is an expedition planner for Mars. Start on the globe and pick any place: here, the twin calderas on top of Pavonis Mons." },
-      { a: 0, page: "pav", scene: "layers", t: 9, title: "2 · Read the ground", sub: "The place opens as a map built from NASA data. Switch layers: slope, radiation, relay-satellite cover and the habitat's radio." },
-      { a: 0, page: "pav", scene: "plan3d", t: 8.5, title: "3 · Plan it in 3D", sub: "Tap your stops on the true-scale terrain. Marswalk finds the safest route round the steep walls shown in red." },
-      { a: 0, page: "pav", scene: "vrsat", t: 10, title: "4 · Stand there, in VR", sub: "Look up: a real relay satellite passes overhead and fixes your position, because Mars has no GPS. The card tells you how far off you were." });
+      { a: 0, page: "globe", globeDo: "layers", t: 6.5, title: "1 · Explore the planet", sub: "Marswalk is an expedition planner for Mars. On the globe, the layers show NASA data for the whole planet: elevation, then radiation." },
+      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 5.5, title: "2 · Choose where to go", sub: "Turn to any place and pick it. Here: the twin calderas on top of Pavonis Mons." },
+      { a: 0, page: "pav", scene: "layers", t: 7.5, title: "3 · Read the ground", sub: "The place opens as a detailed map, and the same kind of layers work here: slope, radiation, relay-satellite cover and the habitat's radio." },
+      { a: 0, page: "pav", scene: "plan3d", t: 8, title: "4 · Plan it in 3D", sub: "Tap your stops on the true-scale terrain. Marswalk finds the safest route round the steep walls shown in red." },
+      { a: 0, page: "pav", scene: "vrsat", t: 10, title: "5 · Stand there, in VR", sub: "Look up: a real relay satellite passes overhead and fixes your position, because Mars has no GPS. The card tells you how far off you were." });
   }
   const PIPE = [
     { c: "#8ab8ff", b: "QGIS", p: "Clip, reproject and check the NASA and USGS rasters: CTX 20 m, HiRISE 1 m, MOLA 463 m.", ic: '<path d="M4 6l8-3 8 3-8 3zM4 12l8 3 8-3M4 18l8 3 8-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' },
@@ -287,6 +288,7 @@
     if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.offsetTop - 40 : 0, behavior: "smooth" }); }
     if (c.scene) send(c.scene, c.arg);
     if (c.globe && w && w.GLOBE) w.GLOBE.pick(c.globe);
+    if (c.globeDo && w && w.GLOBE) w.GLOBE[c.globeDo]();
     if (c.pipe) { $("pipe").classList.add("on"); document.querySelectorAll(".node").forEach((n, k) => setTimeout(() => { if (tok === T.token) n.classList.add("on"); }, 300 + k * 1500)); }
     $("capAct").textContent = ACTS[c.a].name; $("capN").textContent = `${String(i + 1).padStart(2, "0")} / ${CH.length}`;
     $("cap").classList.toggle("right", !!c.right);
@@ -308,17 +310,17 @@
   if (SHORT) {
     document.title = "Marswalk · short demo"; document.body.classList.add("short");
     document.querySelector(".start h1").innerHTML = 'Marswalk <em>in under 40 seconds.</em>';
-    document.querySelector(".start .lede").textContent = "The short demo: choose a place on the globe, read its ground with the layers, plan the route in 3D, then stand there in VR while a satellite finds you.";
+    document.querySelector(".start .lede").textContent = "The short demo: explore Mars with the layers, choose a place, read its ground, plan the route in 3D, then stand there in VR while a satellite finds you.";
     $("acts").hidden = true; $("end").querySelector("h2").textContent = "Marswalk";
     const pb = $("play"); pb.disabled = true; pb.lastChild.textContent = "Loading Pavonis Mons…"; pb.style.opacity = 0.6;
-    document.querySelector(".startrow span").textContent = "About 35 seconds · pause any time with the button or Space · F11 for full screen";
+    document.querySelector(".startrow span").textContent = "About 40 seconds · pause any time with the button or Space · F11 for full screen";
     // load both places before Play: the globe in the main frame, the site in a second one behind it
     const f2 = frame.cloneNode(); f2.id = "scene2"; f2.style.visibility = "hidden"; frame.after(f2);
     FR.globe = frame; FR.pav = f2;
     (async () => {
       frame = FR.pav; await load("pav"); FR.pav.style.visibility = "hidden";
-      frame = FR.globe; await load("globe");
-      $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (35 s)";
+      frame = FR.globe; await load("globe"); try { FR.globe.contentWindow.GLOBE.lit(); } catch (e) { /* fine */ }
+      $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (40 s)";
     })();
   }
   $("play").onclick = () => begin(0);

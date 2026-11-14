@@ -919,8 +919,14 @@ details.more[open] > summary::after { content: "–"; }
   }
   // the short demo picks a place the way a person would: turn to it, select it, and the card's button lights up
   window.GLOBE = {
+    lit() { if (S.sun) setToggle("sun", false); setPanel(false); if (S.view !== "globe") setView("globe"); },       // the whole planet in daylight for the demo, no night side
+    async layers() {                                                   // open the layers and show elevation, then radiation, on the whole planet
+      this.lit(); await new Promise(r => setTimeout(r, 700)); setPanel(true);
+      await new Promise(r => setTimeout(r, 900)); setBase("elevation");
+      await new Promise(r => setTimeout(r, 2600)); setBase("radiation");
+    },
     async pick(siteId) {
-      setPanel(false); if (S.view !== "globe") setView("globe");
+      setPanel(false); setBase("natural"); if (S.sun) setToggle("sun", false); if (S.view !== "globe") setView("globe");
       let p = null; for (let i = 0; i < 40 && !(p = PLACES.find(q => q.siteId === siteId)); i++) await new Promise(r => setTimeout(r, 150));
       if (!p) p = PLACES.find(q => /Pavonis/i.test(q.name)) || PLACES[0];
       select(p, true); setTimeout(() => $("cPlan").classList.add("pulse"), 2600);

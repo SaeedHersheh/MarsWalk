@@ -2400,7 +2400,7 @@
         ui(); T3.tourOrbit = 0; T3.fly = null; setView("2d"); document.body.classList.add("tour-legend");
         if (S.stops.length) { S.stops = []; plan(0); }
         map.fitBounds(L.latLngBounds([ll(HAB[0] - 26000, HAB[1] + 14000), ll(HAB[0] + 26000, HAB[1] - 30000)]), { animate: false });
-        for (const n of ["slope", "radiation", "comms", "hab"]) { S.layers.clear(); S.layers.add(n); S.opacity = 0.8; syncLayers(); await wait(2100); }
+        for (const n of ["slope", "radiation", "comms", "hab"]) { S.layers.clear(); S.layers.add(n); S.opacity = 0.8; syncLayers(); await wait(1950); }
       },
       async plan3d() {
         ui(); S.layers.clear(); S.layers.add("slope"); S.opacity = 0.55; syncLayers();
