@@ -1532,12 +1532,55 @@
       x.fillStyle = "#627087"; x.font = "500 28px Inter, sans-serif"; x.fillText(paused ? "Hold the dot on a button for 2 seconds · look away to walk on" : "Look at this card to pause", L, H - 30);
       hudT.needsUpdate = true;
     }
+    /* The radio card stands on your right, the mirror of the info card: who you are talking to, the latest messages
+       and quick replies. Same gaze buttons, same 2 s hold; it reuses the Radio tab's message queue. */
+    const radC = document.createElement("canvas"); radC.width = 1200; radC.height = 1030;
+    const radT = new THREE.CanvasTexture(radC); radT.encoding = THREE.sRGBEncoding; radT.anisotropy = hudT.anisotropy;
+    const vrRad = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.90125), new THREE.MeshBasicMaterial({ map: radT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    vrRad.renderOrder = 20; vrRad.visible = false; sc.add(vrRad);
+    const RAD_BTNS = [
+      { id: "r:earth", x: 60, y: 120, w: 532, h: 96, label: "Earth", sub: () => { const s = linkNow(); return s ? `via ${s.orbiter}` : "waits for a relay pass"; } },
+      { id: "r:pod", x: 608, y: 120, w: 532, h: 96, label: "Habitat", sub: () => habNow().ok ? "direct radio" : "hidden by terrain" },
+      ...QUICK.map((t, i) => ({ id: "r:q" + i, x: 60 + (i % 2) * 548, y: 720 + Math.floor(i / 2) * 120, w: 532, h: 104, label: t, sub: () => `send to ${COM.dest === "earth" ? "Earth" : "the habitat"}` }))];
+    function drawVrRad(hov) {
+      const x = radC.getContext("2d"), W = radC.width, H = radC.height, L = 60;
+      const rr = (X, Y, w, h, r) => { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); };
+      const fit = (t, w) => { t = String(t); while (x.measureText(t).width > w && t.length > 3) t = t.slice(0, -2) + "…"; return t; };
+      x.clearRect(0, 0, W, H);
+      rr(6, 6, W - 12, H - 12, 44); x.fillStyle = "rgba(5, 8, 13, 0.9)"; x.fill(); x.lineWidth = 6; x.strokeStyle = "rgba(138, 184, 255, 0.6)"; x.stroke();
+      x.font = "700 30px Inter, sans-serif"; x.fillStyle = "#8f9cb1"; x.fillText("RADIO", L, 82);
+      const lk = linkFor(COM.dest), st = lk ? [lk.hab ? "HABITAT LINK" : lk.orbiter + " OVERHEAD", "#3ddc97"] : ["LINK CLOSED", "#f2b84b"];
+      const bw = x.measureText(st[0]).width + 48; rr(W - L - bw, 46, bw, 50, 25); x.fillStyle = st[1]; x.fill(); x.fillStyle = "#04060a"; x.fillText(st[0], W - L - bw + 24, 82);
+      // the latest messages, newest first
+      const nowS = Date.now() / 1000 + COM.off, who = r => r === "earth" ? "Earth" : r === "pod" ? "Habitat" : "you", rows = [];
+      COM.q.slice().reverse().forEach(m => rows.push([`You → ${who(m.to)}`, msgLabel(m), "queued", "#f2b84b"]));
+      [...COM.srv.values()].sort((a, b) => b.id - a.id).forEach(m => {
+        if (m.sender === "astronaut") rows.push([`You → ${who(m.to)}`, msgLabel(m), m.status === "in_flight" ? "on its way" : "arrived", m.status === "in_flight" ? "#8ab8ff" : "#4fd1a1"]);
+        else { const d = m.delivered; rows.push([`From ${who(m.sender)}`, d ? msgLabel(m) : "Incoming message", d ? "received" : nowS >= m.arrive ? "at the orbiter" : "in flight", d ? "#ff9a6b" : "#8f9cb1"]); }
+      });
+      if (!rows.length) { x.fillStyle = "#8f9cb1"; x.font = "400 36px Inter, sans-serif"; x.fillText("No messages yet. Pick who to talk to,", L, 320); x.fillText("then hold the dot on a quick reply.", L, 370); }
+      rows.slice(0, 4).forEach(([t, body, s, c], i) => {
+        const Y = 244 + i * 116; rr(L, Y, W - 2 * L, 104, 20); x.fillStyle = "#111723"; x.fill();
+        x.fillStyle = c; x.fillRect(L, Y + 18, 6, 68);
+        x.font = "600 30px Inter, sans-serif"; x.fillStyle = "#8f9cb1"; x.fillText(t, L + 30, Y + 40);
+        x.font = "500 28px 'IBM Plex Mono', monospace"; x.fillStyle = c; const sw = x.measureText(s).width; x.fillText(s, W - L - 26 - sw, Y + 40);
+        x.font = "500 36px Inter, sans-serif"; x.fillStyle = "#ffffff"; x.fillText(fit(body, W - 2 * L - 60), L + 30, Y + 86);
+      });
+      RAD_BTNS.forEach(b => {
+        const sel = b.id === "r:" + COM.dest, on = hov === b.id;
+        rr(b.x, b.y, b.w, b.h, 20); x.fillStyle = on ? "#1a66e8" : sel ? "#16305e" : "#19212f"; x.fill(); x.lineWidth = 4; x.strokeStyle = on || sel ? "#8ab8ff" : "#2b3649"; x.stroke();
+        x.fillStyle = "#ffffff"; x.font = "700 34px Inter, sans-serif"; x.fillText(fit(b.label, b.w - 44), b.x + 22, b.y + 46);
+        x.fillStyle = on ? "#dbe8ff" : "#8f9cb1"; x.font = "500 26px Inter, sans-serif"; x.fillText(fit(b.sub(), b.w - 44), b.x + 22, b.y + 80);
+      });
+      x.fillStyle = "#627087"; x.font = "500 28px Inter, sans-serif"; x.fillText("Hold the dot on a button for 2 seconds", L, H - 30);
+      radT.needsUpdate = true;
+    }
     // tour: the head angles (yaw, pitch) that put the dot on a card button
     T3.vrAimDir = dir => { const d = dir.clone().normalize().applyQuaternion(qY.clone().invert()); return [Math.atan2(-d.x, -d.z), Math.asin(Math.max(-1, Math.min(1, d.y)))]; };
     T3.vrAimCard = () => { vrHud.updateMatrixWorld(); const d = new THREE.Vector3(0, 0.18, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert()); return [Math.atan2(-d.x, -d.z), Math.asin(d.y)]; };
     T3.vrAim = id => {
-      const b = VR_BTNS.find(v => v.id === id); vrHud.updateMatrixWorld();
-      const d = new THREE.Vector3(((b.x + b.w / 2) / hudC.width - 0.5) * 1.05, (0.5 - (b.y + b.h / 2) / hudC.height) * 0.90125, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert());
+      const r = id.startsWith("r:"), b = (r ? RAD_BTNS : VR_BTNS).find(v => v.id === id), card = r ? vrRad : vrHud; card.updateMatrixWorld();
+      const d = new THREE.Vector3(((b.x + b.w / 2) / hudC.width - 0.5) * 1.05, (0.5 - (b.y + b.h / 2) / hudC.height) * 0.90125, 0).applyMatrix4(card.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert());
       return [Math.atan2(-d.x, -d.z), Math.asin(d.y)];
     };
     function vrDraw(here, jy) {
@@ -1550,18 +1593,22 @@
       const hv = new THREE.Vector3(0, 0, -1).applyQuaternion(qF);
       const side = new THREE.Vector3(fd.x, 0, fd.z).normalize().applyAxisAngle(UP, CARD_YAW);
       vrHud.position.set(cam.position.x, here.y + 1.68 + CARD_DY, cam.position.z).addScaledVector(side, CARD_D); vrHud.lookAt(cam.position); vrHud.visible = true;
-      vrHud.updateMatrixWorld(); gazeRay.set(cam.position, hv); const gHit = gazeRay.intersectObject(vrHud)[0];
-      const atCard = !!gHit || hv.dot(vF.copy(vrHud.position).sub(cam.position).normalize()) > CARD_GAZE;      // anywhere on the card
+      const rside = new THREE.Vector3(fd.x, 0, fd.z).normalize().applyAxisAngle(UP, -CARD_YAW);
+      vrRad.position.set(cam.position.x, here.y + 1.68 + CARD_DY, cam.position.z).addScaledVector(rside, CARD_D); vrRad.lookAt(cam.position); vrRad.visible = true;
+      vrHud.updateMatrixWorld(); vrRad.updateMatrixWorld(); gazeRay.set(cam.position, hv);
+      const gHit = gazeRay.intersectObject(vrHud)[0], rHit = gHit ? null : gazeRay.intersectObject(vrRad)[0];
+      const atCard = !!gHit || !!rHit || hv.dot(vF.copy(vrHud.position).sub(cam.position).normalize()) > CARD_GAZE || hv.dot(vF.copy(vrRad.position).sub(cam.position).normalize()) > CARD_GAZE;
       T3.vrHead = { hd: Math.atan2(hv.x, -hv.z), pitch: Math.asin(Math.max(-1, Math.min(1, hv.y))), atCard };
       if (atCard !== V.paused) { V.paused = atCard; V.hudAt = 0; }
       let hov = null;
-      if (atCard) { const hit = gHit; if (hit && hit.uv) { const px = hit.uv.x * hudC.width, py = (1 - hit.uv.y) * hudC.height; hov = VR_BTNS.find(b2 => px >= b2.x && px <= b2.x + b2.w && py >= b2.y && py <= b2.y + b2.h) || null; } }
+      const pick = (hit, list) => { if (!hit || !hit.uv) return null; const px = hit.uv.x * hudC.width, py = (1 - hit.uv.y) * hudC.height; return list.find(b2 => px >= b2.x && px <= b2.x + b2.w && py >= b2.y && py <= b2.y + b2.h) || null; };
+      if (atCard) hov = pick(gHit, VR_BTNS) || pick(rHit, RAD_BTNS);
       const DW = V.dwell || (V.dwell = { id: null, t: 0, done: false });
       if ((hov && hov.id) !== DW.id) { DW.id = hov ? hov.id : null; DW.t = 0; DW.done = false; V.hudAt = 0; }
       else if (hov && !DW.done) { DW.t += T3.vrDt || 0.016; if (DW.t >= 2) { DW.done = true; V.hudAt = 0; setTimeout(() => vrAction(hov.id), 0); } }
       reticle.position.copy(cam.position).addScaledVector(hv, 1.2); reticle.quaternion.copy(qF); reticle.visible = true;
       drawReticle(!!hov, hov && !DW.done ? Math.min(1, DW.t / 2) : 0);
-      const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; drawVrHud(V.paused, V.dwell && !V.dwell.done ? V.dwell.id : null); }
+      const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; const dh = V.dwell && !V.dwell.done ? V.dwell.id : null; drawVrHud(V.paused, dh); drawVrRad(dh); }
       const W = cv.clientWidth, H = cv.clientHeight, half = W / 2, rt = new THREE.Vector3(1, 0, 0).applyQuaternion(qF);
       camE.fov = 80; camE.aspect = half / H; camE.near = 0.1; camE.far = cam.far; camE.updateProjectionMatrix();
       rn.setScissorTest(true);
@@ -1730,12 +1777,12 @@
         else { cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob; }
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
         if (T3.vr && T3.vr.q) { T3.vrDt = dtr; vrDraw(here, jy); return; }
-        vrHud.visible = false; reticle.visible = false;
+        vrHud.visible = false; vrRad.visible = false; reticle.visible = false;
         cam.lookAt(ctl.target); cam.rotateZ(-sway * 0.5);
         rn.render(sc, cam);
         return;
       }
-      ctl.enabled = true; vrHud.visible = false; reticle.visible = false;
+      ctl.enabled = true; vrHud.visible = false; vrRad.visible = false; reticle.visible = false;
       if (T3.chase && !T3.drag) {
         const dist = chaseBase() * (T3.chaseK || 1);
         if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; } }
@@ -1820,7 +1867,7 @@
     T3.vr = { q: null, yaw0: null }; addEventListener("deviceorientation", onOri);
     document.body.classList.add("vr"); T3.dirty = true;
     setTimeout(() => { if (T3.vr && !T3.vr.q) { vrExit(); toast("No gyroscope data", "This browser gave no motion data. Open the page over https (the 8443 server) in Chrome on the phone.", "#F0616B"); } }, 2000);
-    if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look: small head turns steer, and looking further to the side just looks around. Your info card is on your left: look at it to pause and read, look away to walk on.", "#8ab8ff");
+    if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look: small head turns steer, and looking further to the side just looks around. Your info card is on your left and your radio is on your right: look at either to pause, look away to walk on.", "#8ab8ff");
     else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
     T3.vr.go = setTimeout(() => { if (!T3.vr || !S.route) return; if (!walk.on) startWalk(); takeControl(); if (S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); } }, 5000);
   }
@@ -1835,6 +1882,8 @@
   async function vrAction(id) {
     if (S.sound) chime("MRO");
     if (id === "exit") return vrExit();
+    if (id === "r:earth" || id === "r:pod") { setDest(id.slice(2)); return toast(id === "r:earth" ? "Talking to Earth" : "Talking to the habitat", "Quick replies now go there.", "#8ab8ff"); }
+    if (id.startsWith("r:q")) { const t = QUICK[+id.slice(3)]; if (t) { queueMsg({ kind: "text", text: t }); if (T3.vr) T3.vr.hudAt = 0; } return; }
     if (!walk.on) return;
     if (id === "sat") return skipToPass();
     if (id === "speed") {                                 // ×1 → ×5 → ×30 → ×1: real time, a brisk look, a quick crossing
