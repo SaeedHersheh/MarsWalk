@@ -720,7 +720,7 @@
   function driveInput() {
     if (T3.vr && T3.vrHead) {                             // VR: walk where you look at a steady pace; look down at the panel to stop
       const h = T3.vrHead, gp = padAxes(); let e = h.hd - walk.hd; e = Math.atan2(Math.sin(e), Math.cos(e));
-      const f = gp && Math.abs(gp[1]) > 0.15 ? gp[1] : h.pitch < -0.55 ? 0 : 1, t = Math.max(-1, Math.min(1, e * 1.4));
+      const f = gp && Math.abs(gp[1]) > 0.15 ? gp[1] : h.atCard || h.pitch < -0.55 ? 0 : 1, t = h.atCard || Math.abs(e) > 0.32 ? 0 : Math.max(-1, Math.min(1, e * 3));      // small head turns steer; look further aside to look around without turning
       return [t * (f < 0 ? -1 : 1), f];
     }
     const k = walk.keys || {};
@@ -1352,31 +1352,46 @@
        and the phone's gyroscope turns the view. The body still faces the way the astronaut walks; your head looks around from there.
        A panel below eye level carries the HUD: look down to read it. No lens distortion correction. */
     const camE = new THREE.PerspectiveCamera(80, 1, 0.1, 130000 * K), qF = new THREE.Quaternion(), qY = new THREE.Quaternion(), vF = new THREE.Vector3();
-    const hudC = document.createElement("canvas"); hudC.width = 1024; hudC.height = 520;
-    const hudT = new THREE.CanvasTexture(hudC); hudT.encoding = THREE.sRGBEncoding;
-    const vrHud = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.508), new THREE.MeshBasicMaterial({ map: hudT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    /* The info card stands to your left, a little below eye level, 1.3 m away, and turns with the way you walk
+       (like a screen beside a driver). Looking at it pauses the walk and holds your direction, so you can read in peace. */
+    const hudC = document.createElement("canvas"); hudC.width = 1200; hudC.height = 820;
+    const hudT = new THREE.CanvasTexture(hudC); hudT.encoding = THREE.sRGBEncoding; hudT.anisotropy = Math.min(8, rn.capabilities.getMaxAnisotropy());
+    const vrHud = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.718), new THREE.MeshBasicMaterial({ map: hudT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
     vrHud.renderOrder = 20; vrHud.visible = false; sc.add(vrHud);
-    function drawVrHud() {
-      const x = hudC.getContext("2d"), W = hudC.width, H = hudC.height, tx = id => ($(id) && $(id).textContent) || "";
-      x.clearRect(0, 0, W, H); x.fillStyle = "rgba(6, 9, 14, 0.86)"; x.beginPath(); x.roundRect ? x.roundRect(4, 4, W - 8, H - 8, 36) : x.rect(4, 4, W - 8, H - 8); x.fill();
-      x.strokeStyle = "rgba(138, 184, 255, 0.55)"; x.lineWidth = 4; x.stroke();
-      x.fillStyle = "#ffffff"; x.font = "600 54px Inter, sans-serif"; x.fillText(walk.on ? tx("hudNext") : "Starting the walk…", 44, 92);
-      x.fillStyle = "#8ab8ff"; x.font = "500 30px Inter, sans-serif"; x.fillText("Stopped while you read this · look up to walk", 44, H - 34);
-      x.fillStyle = "#ffffff";
-      x.font = "500 38px 'IBM Plex Mono', monospace";
-      if (walk.on) {
-        x.fillStyle = "#8f9cb1"; x.fillText("Position", 44, 160); x.fillText("Habitat", 360, 160); x.fillText("Satellite", 660, 160);
-        x.fillStyle = $("hudPos").style.color && $("hudPos").style.color.startsWith("var") ? "#ffffff" : "#ffffff";
-        x.fillText(tx("hudPos"), 44, 210); x.fillText(tx("hudHab").replace("linked · ", "ok ").replace("hidden by terrain", "blocked"), 360, 210); x.fillText(tx("hudLink").slice(0, 16), 660, 210);
-      }
+    const CARD_YAW = 0.75, CARD_D = 1.3, CARD_DY = -0.22, CARD_GAZE = Math.cos(0.3);
+    function drawVrHud(paused) {
+      const x = hudC.getContext("2d"), W = hudC.width, H = hudC.height, tx = id => ($(id) && $(id).textContent) || "", L = 60;
+      const rr = (X, Y, w, h, r) => { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); };
+      x.clearRect(0, 0, W, H);
+      rr(6, 6, W - 12, H - 12, 44); x.fillStyle = "rgba(5, 8, 13, 0.9)"; x.fill(); x.lineWidth = 6; x.strokeStyle = paused ? "#f2b84b" : "rgba(138, 184, 255, 0.6)"; x.stroke();
+      // header: what is happening right now
+      x.font = "700 30px Inter, sans-serif"; x.fillStyle = "#8f9cb1"; x.fillText("MARSWALK", L, 72);
+      const badge = !walk.on ? ["STARTING", "#8ab8ff"] : paused ? ["PAUSED", "#f2b84b"] : ["WALKING", "#3ddc97"];
+      x.font = "700 30px Inter, sans-serif"; const bw = x.measureText(badge[0]).width + 48;
+      rr(W - L - bw, 38, bw, 50, 25); x.fillStyle = badge[1]; x.fill(); x.fillStyle = "#04060a"; x.fillText(badge[0], W - L - bw + 24, 74);
+      // where to go
+      const nx = walk.on ? tx("hudNext").split(" · ") : ["Getting ready", ""];
+      x.fillStyle = "#ffffff"; x.font = "600 58px Inter, sans-serif"; x.fillText(nx[0] || "", L, 168);
+      x.fillStyle = "#8ab8ff"; x.font = "500 76px 'IBM Plex Mono', monospace"; x.fillText(nx[1] || "", L, 256);
+      // three readings
+      const pos = tx("hudPos"), pn = +pos.replace(/[^0-9]/g, "") || 0, hab = tx("hudHab"), sat = tx("hudLink");
+      const tiles = [["Position", pos || "—", pn > 60 ? "#ff6b55" : pn > 25 ? "#f2b84b" : "#4fd1a1"], ["Habitat", hab.startsWith("linked") ? "linked" : hab ? "blocked" : "—", hab.startsWith("linked") ? "#4fd1a1" : "#f2b84b"], ["Satellite", (sat || "—").replace("none in view", "none"), sat && !/none|in /.test(sat) ? "#4fd1a1" : "#ffffff"]];
+      const tw = (W - 2 * L - 2 * 24) / 3;
+      tiles.forEach(([k, v, c], i) => {
+        const X = L + i * (tw + 24); rr(X, 300, tw, 132, 22); x.fillStyle = "#111723"; x.fill();
+        x.fillStyle = "#8f9cb1"; x.font = "500 30px Inter, sans-serif"; x.fillText(k, X + 24, 346);
+        x.fillStyle = c; x.font = "600 40px 'IBM Plex Mono', monospace"; let t = v; while (x.measureText(t).width > tw - 44 && t.length > 3) t = t.slice(0, -2) + "…"; x.fillText(t, X + 24, 404);
+      });
+      // the guide's latest words
       const g = LOG[0];
       if (g) {
-        x.fillStyle = g.color || "#8ab8ff"; x.font = "600 40px Inter, sans-serif"; x.fillText(g.title.slice(0, 40), 44, 290);
-        x.fillStyle = "#d6dce7"; x.font = "400 34px Inter, sans-serif";
-        const words = String(g.msg).split(" "); let line = "", y = 340, n = 0;
-        for (const w of words) { const t = line ? line + " " + w : w; if (x.measureText(t).width > W - 90) { x.fillText(line, 44, y); y += 46; line = w; if (++n === 3) { line = ""; break; } } else line = t; }
-        if (line) x.fillText(line, 44, y);
+        x.fillStyle = g.color || "#8ab8ff"; x.font = "600 42px Inter, sans-serif"; x.fillText(g.title.slice(0, 44), L, 500);
+        x.fillStyle = "#d6dce7"; x.font = "400 36px Inter, sans-serif";
+        const words = String(g.msg).split(" "); let line = "", y = 552, n = 0;
+        for (const w of words) { const t = line ? line + " " + w : w; if (x.measureText(t).width > W - 2 * L) { x.fillText(n === 3 ? line + " …" : line, L, y); y += 48; line = w; if (++n === 4) { line = ""; break; } } else line = t; }
+        if (line) x.fillText(line, L, y);
       }
+      x.fillStyle = "#627087"; x.font = "500 28px Inter, sans-serif"; x.fillText(paused ? "Look away from this card to walk on" : "Look at this card to pause", L, H - 40);
       hudT.needsUpdate = true;
     }
     function vrDraw(here, jy) {
@@ -1384,12 +1399,15 @@
       if (V.yaw0 == null) { vF.set(0, 0, -1).applyQuaternion(V.q); V.yaw0 = Math.atan2(-vF.x, -vF.z); V.calib = Math.atan2(-fd.x, -fd.z) - V.yaw0; }   // recenter: straight ahead = the way you face now
       const gp = padAxes(); if (gp && Math.abs(gp[0]) > 0.15) V.calib -= gp[0] * 1.6 * (T3.vrDt || 0.016);
       qY.setFromAxisAngle(UP, V.calib); qF.copy(qY).multiply(V.q);
-      { const hv = vF.set(0, 0, -1).applyQuaternion(qF); T3.vrHead = { hd: Math.atan2(hv.x, -hv.z), pitch: Math.asin(Math.max(-1, Math.min(1, hv.y))) }; }
       cam.position.copy(here); cam.position.y = here.y + 1.68 + jy; cam.quaternion.copy(qF);
       ctl.target.copy(cam.position).add(vF.set(0, 0, -3).applyQuaternion(qF));
-      const fl = new THREE.Vector3(Math.sin(T3.vrHead.hd), 0, -Math.cos(T3.vrHead.hd));
-      vrHud.position.copy(cam.position).addScaledVector(fl, 0.95); vrHud.position.y -= 0.68; vrHud.lookAt(cam.position); vrHud.visible = true;
-      const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; drawVrHud(); }
+      const hv = new THREE.Vector3(0, 0, -1).applyQuaternion(qF);
+      const side = new THREE.Vector3(fd.x, 0, fd.z).normalize().applyAxisAngle(UP, CARD_YAW);
+      vrHud.position.set(cam.position.x, here.y + 1.68 + CARD_DY, cam.position.z).addScaledVector(side, CARD_D); vrHud.lookAt(cam.position); vrHud.visible = true;
+      const atCard = hv.dot(vF.copy(vrHud.position).sub(cam.position).normalize()) > CARD_GAZE;
+      T3.vrHead = { hd: Math.atan2(hv.x, -hv.z), pitch: Math.asin(Math.max(-1, Math.min(1, hv.y))), atCard };
+      if (atCard !== V.paused) { V.paused = atCard; V.hudAt = 0; }
+      const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; drawVrHud(V.paused); }
       const W = cv.clientWidth, H = cv.clientHeight, half = W / 2, rt = new THREE.Vector3(1, 0, 0).applyQuaternion(qF);
       camE.fov = 80; camE.aspect = half / H; camE.near = 0.1; camE.far = cam.far; camE.updateProjectionMatrix();
       rn.setScissorTest(true);
@@ -1620,7 +1638,7 @@
     T3.vr = { q: null, yaw0: null }; addEventListener("deviceorientation", onOri);
     document.body.classList.add("vr"); T3.dirty = true;
     setTimeout(() => { if (T3.vr && !T3.vr.q) { vrExit(); toast("No gyroscope data", "This browser gave no motion data. Open the page over https (the 8443 server) in Chrome on the phone.", "#F0616B"); } }, 2000);
-    if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look, so turn your head to steer. Look down at the panel to stop and read it, look up to walk on.", "#8ab8ff");
+    if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look: small head turns steer, and looking further to the side just looks around. Your info card is on your left: look at it to pause and read, look away to walk on.", "#8ab8ff");
     else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
     T3.vr.go = setTimeout(() => { if (!T3.vr || !S.route) return; if (!walk.on) startWalk(); takeControl(); if (S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); } }, 5000);
   }
