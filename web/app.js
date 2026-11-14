@@ -2313,6 +2313,7 @@
     const wait = ms => new Promise(r => setTimeout(r, ms)), tell = m => parent !== window && parent.postMessage({ marswalkTour: m }, location.origin);
     const ease = (from, to, ms) => new Promise(res => { const t0 = performance.now(), st = () => { const k = Math.min(1, (performance.now() - t0) / ms), e2 = k * k * (3 - 2 * k); const h = T3.vr && T3.vr.head; if (h) { h.yaw = from[0] + (to[0] - from[0]) * e2; h.pitch = from[1] + (to[1] - from[1]) * e2; } k < 1 ? setTimeout(st, 16) : res(); }; st(); });
     VOICE.on = false; document.body.classList.add("tour", "nopanel"); if (!["sat", "pavonis"].includes(TOUR)) document.body.classList.add("tour-quiet");
+    if (TOUR === "lab") S.stops = [];                                  // the layers chapter: a clean map, no route on top
     $("hint").hidden = true; $("coach").hidden = true; map.invalidateSize();
     T3.testSun = { az: 165, el: 48 };                                  // the tour is filmed in daylight, whatever the clock says
     setView("3d"); await wait(400);
@@ -2332,7 +2333,13 @@
         S.layers.delete("slope"); syncLayers(); setView("3d"); { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
         startWalk(); setCam("follow", true); T3.chaseK = 0.45;
       },
-      async sat() { skipToPass(); await wait(900); if (T3.api) T3.api.lookSat(); await wait(3600); setCam("follow", true); T3.chaseK = 0.45; },
+      async sat() {
+        // show a pass by one of the low orbiters (MRO, Odyssey, TGO): they cross the sky in minutes, so the geometry is good for a fix within seconds.
+        // Mars Express is high and slow; it does fix you, but over a much longer pass than a tour chapter.
+        { const b = document.querySelector('.spd[data-s="120"]'); if (b) b.click(); }
+        for (let n = 0; n < 8; n++) { const np = DB.passes.find(q => q.start > walk.simT + 20); if (!np || np.orbiter !== "Mars Express") break; const dt = np.end + 30 - walk.simT; walk.simT += dt; if (!walk.manual) walk.t0 += dt; }     // wait in place, the way Skip does
+        skipToPass(); await wait(900); if (T3.api) T3.api.lookSat(); await wait(3600); setCam("follow", true); T3.chaseK = 0.45;
+      },
       async vr() {
         // stand on the floor of the deep caldera, facing the 3 km wall you came down, and look round through the headset
         if (!walk.manual) takeControl();
@@ -2348,18 +2355,47 @@
         await ease([T3.vr.head.yaw, T3.vr.head.pitch], [0, 0.03], 1000);
       },
       async end() { vrDemo(false); },
+      // ---- chapters for the full tour (tour.html) ----
+      async layer(n) {                                                  // one data layer on the map, with its legend
+        ui(); T3.tourOrbit = 0; setView("2d"); document.body.classList.add("tour-legend");
+        S.layers.clear(); if (n) S.layers.add(n); S.opacity = 0.85; S.base = "ortho"; syncLayers();
+        if (n === "hab") map.setView(ll(HAB[0], HAB[1] + 1500), -3.2, { animate: false });
+      },
+      async radio() {                                                   // the Radio tab and the time bar: passes forecast for this site
+        ui(); S.layers.clear(); syncLayers(); setView("2d"); document.body.classList.add("tour-panel"); showPanel(true); openSheet("relay"); map.invalidateSize();
+      },
+      async navplan() {                                                 // plan a trip: the route, its navigation forecast band and chart
+        ui(); S.layers.clear(); syncLayers(); setView("2d"); document.body.classList.add("tour-panel"); showPanel(true); openSheet("mission");
+        map.fitBounds(L.latLngBounds([ll(HAB[0] - 9000, HAB[1] + 6000), ll(HAB[0] + 9000, HAB[1] - 14000)]), { animate: false });
+        await wait(400); const nb = $("navBox"); if (nb) nb.scrollIntoView({ block: "center" });
+      },
+      async rover() {                                                   // the crew rover leaves the habitat
+        ui(); if (walk.on) endWalk(); setVehicle("rover", false); plan(0);
+        for (let i = 0; i < 60 && !(S.route && S.route.vehicle === "rover"); i++) await wait(100);
+        setView("3d"); { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); }
+        startWalk(); setCam("follow", true); T3.chaseK = 1.7;
+      },
+      async explore() {                                                 // Experience Mars: first person, walk, jump
+        ui(); if (walk.on) endWalk(); setVehicle("foot", false); plan(0);
+        for (let i = 0; i < 60 && !(S.route && S.route.vehicle === "foot"); i++) await wait(100);
+        setView("3d"); { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); }
+        startWalk(); takeControl(); setCam("fp", true);
+        walk.keys = { w: true }; await wait(2600); jump(); await wait(1700); walk.keys = { w: true, a: true }; await wait(900); walk.keys = { w: true }; await wait(1200); walk.keys = {};
+      },
     };
+    function ui() { document.body.classList.remove("tour-panel", "tour-legend"); if (!document.body.classList.contains("nopanel")) showPanel(false); }
     if (S.stops.length) for (let i = 0; i < 80 && !S.route; i++) await wait(100);
     if (TOUR === "slope") { S.layers.add("slope"); S.opacity = 0.85; syncLayers(); T3.dirty = true; }
     if (TOUR === "pavonis") { T3.api.aerial(0.5, 0.26); await wait(2500); }
+    else if (TOUR === "lab") { setView("2d"); await wait(1200); }
     else if (TOUR === "sat") { startWalk(); setCam("follow", true); T3.chaseK = 0.55; await wait(1800); }
     else { if (M.kind === "region") T3.api.aerial(); else T3.api.reset(); T3.tourOrbit = 0.09; await wait(2200); }
     addEventListener("message", async e => {
       if (e.origin !== location.origin || !e.data) return;
-      if (e.data.marswalkTour === "scene" && SCENES[e.data.name]) return SCENES[e.data.name]();
+      if (e.data.marswalkTour === "scene" && SCENES[e.data.name]) return SCENES[e.data.name](e.data.arg);
       if (e.data.marswalkTour === "go" && TOUR === "sat") return SCENES.sat();
     });
-    MW.scene = n => SCENES[n] && SCENES[n]();
+    MW.scene = (n, a) => SCENES[n] && SCENES[n](a);
     tell("ready");
   }
 })().catch(e => { document.getElementById("loader").textContent = "Failed to load: " + e.message; console.error(e); });

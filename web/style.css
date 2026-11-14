@@ -541,3 +541,26 @@ body.veh-rover.walking.fp .visor { background:
   linear-gradient(180deg, rgba(10, 14, 21, 0.92) 0, rgba(10, 14, 21, 0.92) 7%, transparent 9%, transparent 80%, rgba(10, 14, 21, 0.95) 83%),
   linear-gradient(100deg, rgba(10, 14, 21, 0.95) 0, rgba(10, 14, 21, 0.95) 6%, transparent 8%, transparent 92%, rgba(10, 14, 21, 0.95) 94%); box-shadow: none; }
 body.veh-rover.walking .jumpbtn { display: none !important; }
+
+/* tour chapters that show part of the interface */
+body.tour.tour-legend .maplegend { display: grid !important; left: auto; right: 24px; top: calc(var(--bar) + 18px); bottom: auto; width: 280px; }
+body.tour.tour-panel .sidebar { display: flex !important; }
+body.tour.tour-panel .timebar { display: grid !important; }
+body.tour.tour-panel .timebar .play, body.tour.tour-panel .timebar .tctl { visibility: hidden; }
+/* Plan a trip has no walk to speed up: the time rates go, Best window stays */
+body.mode-plan .tctl .seg { display: none !important; }
+
+/* ---------- one look across the site (matches the homepage) ----------
+   Plan a trip is blue, Experience Mars is Mars orange; the top bar is the homepage's glass. */
+:root { --mars: #ff9a6b; --mars-2: #e07a4f; }
+@media (min-width: 981px) { .appbar { background: rgba(4, 6, 10, 0.86); backdrop-filter: blur(12px); } }
+.brand b { letter-spacing: 0.16em; }
+body.mode-plan .modelink { border-color: var(--mars); }
+body.mode-plan .modelink:hover { background: rgba(255, 154, 107, 0.14); }
+body.mode-explore .modelink { border-color: var(--accent); }
+.excard small { color: var(--mars); }
+.exbtns .go:not(.rov) { background: var(--mars); color: #04060a; }
+.exbtns .go:not(.rov):hover { background: #ffb08a; }
+.exbtns .go.rov { background: transparent; color: var(--ink); border: 1px solid var(--mars); }
+.exbtns .go.rov:hover { background: rgba(255, 154, 107, 0.14); }
+.tutcard small { color: var(--mars); }

@@ -811,8 +811,8 @@ details.more[open] > summary::after { content: "–"; }
   /* ---------- plan anywhere ---------- */
   // the homepage sends ?mode=plan (Plan a trip) or ?mode=explore (Experience Mars); the site opens in that mode
   const siteUrl = id => `index.html?site=${encodeURIComponent(id)}${GMODE === "plan" || GMODE === "explore" ? "&mode=" + GMODE : ""}`;
-  if (GMODE === "plan") { $("gMode").textContent = "Plan a trip"; $("gSub").textContent = "Pick a landing site"; $("hint").textContent = "Click anywhere on Mars to plan a trip there"; }
-  if (GMODE === "explore") { $("gMode").textContent = "Experience Mars"; $("gSub").textContent = "Pick a place to stand"; $("hint").textContent = "Click anywhere on Mars to stand there"; }
+  if (GMODE === "plan") { $("gMode").style.color = "#8ab8ff"; $("gMode").textContent = "Plan a trip"; $("gSub").textContent = "Pick a landing site"; $("hint").textContent = "Click anywhere on Mars to plan a trip there"; }
+  if (GMODE === "explore") { $("gMode").style.color = "#ff9a6b"; $("cPlan").style.background = "#ff9a6b"; $("cPlan").style.color = "#04060a"; $("gMode").textContent = "Experience Mars"; $("gSub").textContent = "Pick a place to stand"; $("hint").textContent = "Click anywhere on Mars to stand there"; }
   $("cPlan").addEventListener("click", async () => {
     const p = S.sel; if (!p) return;
     if (p.siteId) { location.href = siteUrl(p.siteId); return; }
