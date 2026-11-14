@@ -2422,6 +2422,11 @@
     else { if (M.kind === "region") T3.api.aerial(); else T3.api.reset(); T3.tourOrbit = 0.09; await wait(2200); }
     addEventListener("message", async e => {
       if (e.origin !== location.origin || !e.data) return;
+      if (e.data.marswalkTour === "pause") {                          // the tour's pause button freezes the clock, the walk and the camera turn
+        if (e.data.on && S.speed) { T3.tourHold = { speed: S.speed, orbit: T3.tourOrbit }; S.speed = 0; T3.tourOrbit = 0; }
+        else if (!e.data.on && T3.tourHold) { S.speed = T3.tourHold.speed; T3.tourOrbit = T3.tourHold.orbit; T3.tourHold = null; }
+        return;
+      }
       if (e.data.marswalkTour === "scene" && SCENES[e.data.name]) return SCENES[e.data.name](e.data.arg);
       if (e.data.marswalkTour === "go" && TOUR === "sat") return SCENES.sat();
     });
