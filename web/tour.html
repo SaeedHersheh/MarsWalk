@@ -222,6 +222,17 @@
     { a: 4, page: "pav", scene: "explore", t: 8, title: "Experience Mars", sub: "First person at real speed: walk with W A S D or the on-screen stick, look around, and jump in 38 % of Earth's gravity." },
     { a: 4, page: "pav", scene: "vr", pre: ["explore"], t: 11, title: "And in VR", sub: "Put a phone in a headset: walk where you look, glance left at the card to pause, and hold the dot on a button for 2 seconds." },
   ];
+  // ?short=1: the 30-second demo for the Space Apps form. One place, one load, one story: map, navigation, 3D, satellite fix, VR.
+  const SHORT = new URLSearchParams(location.search).has("short");
+  if (SHORT) {
+    ACTS.splice(0, ACTS.length, { name: "Marswalk", c: "#ff9a6b" });
+    CH.splice(0, CH.length,
+      { a: 0, page: "pav", scene: "aerial", t: 4, title: "Plan a walk on Mars", sub: "Marswalk is an expedition planner on real NASA terrain. Here: the summit of Pavonis Mons." },
+      { a: 0, page: "pav", scene: "plan", t: 5, title: "1 · Plan the route", sub: "Tap the stops. It finds the safest way round steep ground (red is too steep to walk)." },
+      { a: 0, page: "pav", scene: "navplan", right: true, t: 5, title: "2 · Navigate without GPS", sub: "The band shows how sure your position will be: green near the habitat and at each satellite pass." },
+      { a: 0, page: "pav", scene: "walksat", t: 7, title: "3 · Simulate it in 3D", sub: "Walk it at true scale. A real relay satellite pass measures where you are and re-plans the route." },
+      { a: 0, page: "pav", scene: "vr", t: 7, title: "4 · Experience it in VR", sub: "Stand on the caldera floor in first person or VR, look around, and choose with your gaze." });
+  }
   const PIPE = [
     { c: "#8ab8ff", b: "QGIS", p: "Clip, reproject and check the NASA and USGS rasters: CTX 20 m, HiRISE 1 m, MOLA 463 m.", ic: '<path d="M4 6l8-3 8 3-8 3zM4 12l8 3 8-3M4 18l8 3 8-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' },
     { c: "#3ddc97", b: "Python pipeline", p: "rasterio and NumPy: slope, horizons in 16 directions, radiation, ground heat.", ic: '<path d="M8 4h6a3 3 0 0 1 3 3v3H9a3 3 0 0 0-3 3v1H5a2 2 0 0 1-2-2V9a5 5 0 0 1 5-5ZM16 20h-6a3 3 0 0 1-3-3v-3h8a3 3 0 0 0 3-3v-1h1a2 2 0 0 1 2 2v3a5 5 0 0 1-5 5Z" fill="none" stroke="currentColor" stroke-width="1.6"/>' },
@@ -279,16 +290,24 @@
   }
   function finish() { ++T.token; setPlaying(false); segs.forEach(s => { s.firstChild.style.width = "100%"; }); $("cap").classList.remove("on"); $("pipe").classList.remove("on"); $("end").classList.add("on"); send("end"); }
   let last = performance.now();
-  function tick(now) {
-    const dt = Math.min(0.25, (now - last) / 1000); last = now;
+  function tick() {                                       // a plain timer, so the chapters keep time even when the tab is not in front
+    const now = performance.now(), dt = Math.min(0.25, (now - last) / 1000); last = now;
     if (T.playing && !T.busy && T.i >= 0) {
       T.el += dt; const c = CH[T.i]; segs[T.i].firstChild.style.width = Math.min(100, T.el / c.t * 100) + "%";
       if (T.el >= c.t) { if (T.i + 1 < CH.length) show(T.i + 1, false); else finish(); }
     }
-    requestAnimationFrame(tick);
   }
-  requestAnimationFrame(tick);
-  function begin(i = 0) { $("start").hidden = true; $("player").hidden = false; setPlaying(true); show(i, i !== 0); }
+  setInterval(tick, 50);
+  function begin(i = 0) { $("start").hidden = true; $("player").hidden = SHORT; setPlaying(true); show(i, i !== 0 && !SHORT); }
+  if (SHORT) {
+    document.title = "Marswalk · 30-second demo";
+    document.querySelector(".start h1").innerHTML = 'Marswalk <em>in 30 seconds.</em>';
+    document.querySelector(".start .lede").textContent = "The short demo: one place on Mars, from planning on the map to walking it in 3D and standing there in VR. Start your screen recording, then press Play.";
+    $("acts").hidden = true; $("end").querySelector("h2").textContent = "Marswalk";
+    const pb = $("play"); pb.disabled = true; pb.lastChild.textContent = "Loading Pavonis Mons…"; pb.style.opacity = 0.6;
+    document.querySelector(".startrow span").textContent = "Win + Alt + R records the window · F11 for full screen · runs 30 seconds";
+    load("pav").then(() => { $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (30 s)"; });
+  }
   $("play").onclick = () => begin(0);
   document.querySelectorAll(".act").forEach(b => b.onclick = () => begin(CH.findIndex(c => c.a === +b.dataset.a)));
   $("pp").onclick = () => setPlaying(!T.playing);

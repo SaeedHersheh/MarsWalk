@@ -2384,6 +2384,7 @@
         await ease([T3.vr.head.yaw, T3.vr.head.pitch], [0, 0.03], 1000);
       },
       async end() { vrDemo(false); },
+      async walksat() { await SCENES.walk(); await wait(1600); await SCENES.sat(); },      // the 30-second cut: walk, then a relay pass fixes the position
       // ---- chapters for the full tour (tour.html) ----
       async layer(n) {                                                  // one data layer on the map, with its legend
         ui(); T3.tourOrbit = 0; setView("2d"); document.body.classList.add("tour-legend");
