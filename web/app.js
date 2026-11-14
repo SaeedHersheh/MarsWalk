@@ -1426,6 +1426,7 @@
       },
       zoom: f => { if (T3.fp) { cam.fov = Math.min(80, Math.max(25, cam.fov * f)); cam.updateProjectionMatrix(); return; } if (T3.chase) { T3.chaseK = Math.min(14, Math.max(0.35, (T3.chaseK || 1) * f)); return; } const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
       reset: () => { setCam("free", true); homeCam(); },
+      aerial: (d = 0.42, h = 0.2) => { setCam("free", true); const cx = M.width_m / 2, cy = M.height_m / 2; ctl.target.copy(P(cx, cy, elevAt(cx, cy) ?? M.zmin)); cam.position.copy(ctl.target).add(new THREE.Vector3(0, h * M.width_m, d * M.height_m)); },
       backOff: () => { const d = ctl.target.clone().sub(cam.position).setY(0); if (d.lengthSq() < 1e-6) d.set(0, 0, -1); d.normalize(); ctl.target.copy(cam.position).addScaledVector(d, 2); cam.position.addScaledVector(d, -10); cam.position.y += 4; },
       fov: v => { cam.fov = v; cam.updateProjectionMatrix(); },
       vrPixels: on => { rn.setPixelRatio(on ? Math.min(devicePixelRatio || 1, 1.5) : Math.min(devicePixelRatio || 1, 2)); }, top: () => { T3.skyLook = false; const t = ctl.target; cam.position.set(t.x, t.y + 14000 * K, t.z + 1); },
@@ -1569,6 +1570,7 @@
         ctl.target.lerp(here.clone().setY(here.y + 1.45), 1 - Math.exp(-dtr * 9));
       } else if (walking && walk.follow !== false && !T3.drag && !T3.skyLook) ctl.target.lerp(here, 0.05);
       ctl.maxPolarAngle = T3.skyLook ? Math.PI * 0.95 : Math.PI * 0.49;
+      if (T3.tourOrbit && !T3.drag && !T3.chase && !T3.skyLook) { const o = cam.position.clone().sub(ctl.target); o.applyAxisAngle(UP, T3.tourOrbit * dtr); cam.position.copy(ctl.target).add(o); }
       ctl.update(); rn.render(sc, cam);
     };
     T3.ready = true;
@@ -1990,4 +1992,25 @@
   layoutPhone();
   setDepart(0); syncLayers(); drawRelay();
   requestAnimationFrame(tick);
+
+  /* ---------- presentation tour: tour.html loads this page in a frame with ?tour=orbit|slope|sat ----------
+     The page clears its controls, sets the scene up, says "ready" to the tour page, and on "go" plays its few seconds. */
+  const TOUR = new URLSearchParams(location.search).get("tour");
+  if (TOUR) {
+    const wait = ms => new Promise(r => setTimeout(r, ms)), tell = m => parent !== window && parent.postMessage({ marswalkTour: m }, location.origin);
+    VOICE.on = false; document.body.classList.add("tour", "nopanel"); if (TOUR !== "sat") document.body.classList.add("tour-quiet");
+    $("hint").hidden = true; $("coach").hidden = true; map.invalidateSize();
+    setView("3d"); await wait(400);
+    if (TOUR === "slope") { S.layers.add("slope"); S.opacity = 0.85; syncLayers(); T3.dirty = true; }
+    if (TOUR === "sat") {
+      for (let i = 0; i < 60 && !S.route; i++) await wait(100);
+      startWalk(); setCam("follow", true); T3.chaseK = 0.55; await wait(1800);
+    } else { if (M.kind === "region") T3.api.aerial(); else T3.api.reset(); T3.tourOrbit = 0.09; await wait(2200); }
+    addEventListener("message", async e => {
+      if (e.origin !== location.origin || !e.data || e.data.marswalkTour !== "go") return;
+      if (TOUR !== "sat") return;
+      skipToPass(); await wait(600); if (T3.api) T3.api.lookSat(); await wait(2600); setCam("follow", true); T3.chaseK = 0.55;
+    });
+    tell("ready");
+  }
 })().catch(e => { document.getElementById("loader").textContent = "Failed to load: " + e.message; console.error(e); });

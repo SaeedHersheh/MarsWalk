@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#04060a">
+<link rel="icon" type="image/png" href="img/brand/logo-64.png">
+<title>Marswalk · 20-second tour</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root { --bg: #04060a; --panel: #0a0e15; --line: #2b3649; --ink: #fff; --dim: #8f9cb1; --blue: #1a66e8; --blue-hi: #3b82f6; --accent: #8ab8ff; --red: #fc3d21; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 Inter, system-ui, sans-serif; overflow: hidden; }
+  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }
+  .cover { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: var(--bg); transition: opacity 0.35s; }
+  .cover.off { opacity: 0; pointer-events: none; }
+  .start { width: min(560px, calc(100vw - 32px)); display: grid; gap: 22px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand img { width: 52px; height: 52px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 22px rgba(80, 150, 255, 0.55); }
+  .brand b { display: block; font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .brand small { color: var(--dim); letter-spacing: 0.06em; }
+  h1 { margin: 0; font-size: 28px; font-weight: 600; }
+  ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  ol li { display: grid; grid-template-columns: 34px 1fr auto; gap: 12px; align-items: baseline; padding: 12px 16px; background: #111723; border-radius: 10px; }
+  ol li i { font: 500 13px "IBM Plex Mono", monospace; font-style: normal; color: var(--accent); }
+  ol li span { color: var(--dim); font-size: 13.5px; }
+  ol li em { font: 13px "IBM Plex Mono", monospace; font-style: normal; color: var(--dim); }
+  .btns { display: flex; gap: 12px; flex-wrap: wrap; }
+  button { font: 600 15px Inter, sans-serif; padding: 13px 22px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; }
+  button.rec { background: var(--red); border-color: var(--red); }
+  button:hover { border-color: var(--accent); }
+  p.note { margin: 0; color: var(--dim); font-size: 13.5px; }
+  /* captions, drawn over the scene and recorded with it */
+  .cap { position: fixed; z-index: 5; left: 48px; bottom: 54px; display: grid; gap: 4px; padding-left: 18px; border-left: 4px solid var(--blue-hi); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.8); opacity: 0; transform: translateY(8px); transition: opacity 0.4s, transform 0.4s; pointer-events: none; }
+  .cap.on { opacity: 1; transform: none; }
+  .cap small { font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); }
+  .cap b { font-size: 44px; font-weight: 700; line-height: 1.1; }
+  .cap span { font-size: 18px; color: #e6ebf3; }
+  .end { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, #0d1a33, var(--bg) 70%); opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+  .end.on { opacity: 1; }
+  .end div { display: grid; justify-items: center; gap: 14px; text-align: center; }
+  .end img { width: 120px; height: 120px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 40px rgba(80, 150, 255, 0.6); }
+  .end b { font-size: 46px; letter-spacing: 0.16em; text-transform: uppercase; }
+  .end span { color: var(--dim); font-size: 18px; letter-spacing: 0.06em; }
+  .status { position: fixed; z-index: 11; right: 16px; top: 16px; padding: 6px 12px; border-radius: 999px; background: rgba(10, 14, 21, 0.9); border: 1px solid var(--line); font: 12px "IBM Plex Mono", monospace; color: var(--dim); }
+</style>
+</head>
+<body>
+<iframe id="scene" title="Marswalk scene"></iframe>
+<div class="cap" id="cap"><small id="capK"></small><b id="capT"></b><span id="capS"></span></div>
+<div class="end" id="end"><div><img src="img/brand/logo-192.png" alt="AirAwareNetwork"><b>Marswalk</b><span>EVA route planning on real NASA data · AirAwareNetwork · NASA Space Apps 2026</span></div></div>
+<div class="cover" id="cover">
+  <div class="start">
+    <div class="brand"><img src="img/brand/logo-192.png" alt="AirAwareNetwork"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></div>
+    <h1>20-second tour</h1>
+    <ol id="list"></ol>
+    <div class="btns"><button type="button" class="rec" id="rec">Record video</button><button type="button" id="dry">Play without recording</button></div>
+    <p class="note">Recording: Chrome asks what to share. Pick <b>this tab</b>. Loading between places is cut out, so the video is about 20 seconds. Make the window full screen (F11) first for a sharper video. The file downloads when it ends.</p>
+  </div>
+</div>
+<div class="status" id="status" hidden></div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  // seconds on screen per scene; loading time in between is paused, not recorded
+  const SCENES = [
+    { site: "n18p65_w133p80", mode: "orbit", t: 5, k: "High ground", title: "Olympus Mons", sub: "About 20 km above the Mars datum · MOLA 463 m" },
+    { site: "s04p59_e137p44", mode: "orbit", t: 4, k: "Low ground", title: "Gale crater", sub: "4.5 km below the Mars datum · where Curiosity drives" },
+    { site: "s05p72_w083p21", mode: "slope", t: 4.5, k: "Slopes", title: "Near Valles Marineris", sub: "Fault troughs and crater rims in red are too steep to walk" },
+    { site: "jezero", mode: "sat", t: 5.5, k: "Satellite position fix", title: "Jezero crater", sub: "A relay orbiter measures where the astronaut really is · route replanned" },
+  ];
+  const END = 1.5;
+  $("list").innerHTML = SCENES.map((s, i) => `<li><i>0${i + 1}</i><div><b>${s.title}</b><br><span>${s.k}</span></div><em>${s.t}s</em></li>`).join("") + `<li><i>05</i><div><b>Marswalk · AirAwareNetwork</b><br><span>End card</span></div><em>${END}s</em></li>`;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  let rec = null, chunks = [], ready = null;
+  addEventListener("message", e => { if (e.origin === location.origin && e.data && e.data.marswalkTour === "ready" && ready) { ready(); ready = null; } });
+  const status = t => { $("status").hidden = !t; $("status").textContent = t || ""; };
+  function load(s) {
+    return new Promise(res => {
+      const to = setTimeout(() => { ready = null; res(false); }, 30000);
+      ready = () => { clearTimeout(to); res(true); };
+      $("scene").src = `index.html?site=${encodeURIComponent(s.site)}&tour=${s.mode}&t=${Date.now()}`;
+    });
+  }
+  async function run(record) {
+    if (record) {
+      let stream;
+      try { stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30, displaySurface: "browser" }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" }); }
+      catch (e) { alert("Recording needs permission to share this tab: " + e.message); return; }
+      const type = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+      rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 10000000 }); chunks = [];
+      rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+      rec.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const ext = (rec.mimeType || type).includes("mp4") ? "mp4" : "webm", a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob(chunks, { type: rec.mimeType || type })); a.download = `marswalk-tour.${ext}`; document.body.appendChild(a); a.click();
+        status(`Saved marswalk-tour.${ext} to Downloads`);
+      };
+    }
+    document.querySelector(".cover .start").hidden = true;
+    for (const [i, s] of SCENES.entries()) {
+      $("cover").classList.remove("off"); $("cap").classList.remove("on"); status(`Loading ${i + 1}/${SCENES.length}: ${s.title}`);
+      if (rec && rec.state === "recording") rec.pause();
+      const ok = await load(s); if (!ok) status(`${s.title} did not load in time; skipping`);
+      if (!ok) continue;
+      $("cover").classList.add("off"); await wait(350);
+      if (rec) { if (rec.state === "inactive") rec.start(250); else rec.resume(); }
+      status("");                                   // nothing of ours on screen while it records
+      $("scene").contentWindow.postMessage({ marswalkTour: "go" }, location.origin);
+      $("capK").textContent = s.k; $("capT").textContent = s.title; $("capS").textContent = s.sub;
+      await wait(300); $("cap").classList.add("on");
+      await wait(s.t * 1000 - 300);
+    }
+    $("cap").classList.remove("on"); $("end").classList.add("on");
+    await wait(END * 1000);
+    if (rec && rec.state !== "inactive") rec.stop();
+    if (!rec) status("Done");
+    $("scene").src = "about:blank";
+  }
+  $("rec").onclick = () => run(true);
+  $("dry").onclick = () => run(false);
+})();
+</script>
+</body>
+</html>

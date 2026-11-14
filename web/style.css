@@ -462,3 +462,8 @@ body.driving .maplegend { display: none; }
   .toast { animation: none; }
   .sidebar, body.nopanel .sidebar { transition: none; }
 }
+
+/* ---------- presentation tour (tour.html): only the scene, the brand and the walk read-outs ---------- */
+body.tour .sidebar, body.tour .timebar, body.tour .tools3d, body.tour .rtools, body.tour .readout, body.tour .hintpill, body.tour .jumpbtn,
+body.tour .stick, body.tour .maplegend, body.tour #panelTog, body.tour .viewbar, body.tour .logpanel, body.tour .loader { display: none !important; }
+body.tour-quiet .toasts, body.tour .hudskip, body.tour .vox { display: none !important; }
