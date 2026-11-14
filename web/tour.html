@@ -231,11 +231,13 @@
   if (SHORT) {
     ACTS.splice(0, ACTS.length, { name: "Marswalk", c: "#ff9a6b" });
     CH.splice(0, CH.length,
-      { a: 0, page: "globe", globeDo: "layers", t: 6.5, title: "1 · Explore the planet", sub: "Marswalk is an expedition planner for Mars. On the globe, the layers show NASA data for the whole planet: elevation, then radiation." },
-      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 5.5, title: "2 · Choose where to go", sub: "Turn to any place and pick it. Here: the twin calderas on top of Pavonis Mons." },
-      { a: 0, page: "pav", scene: "layers", t: 7.5, title: "3 · Read the ground", sub: "The place opens as a detailed map, and the same kind of layers work here: slope, radiation, relay-satellite cover and the habitat's radio." },
-      { a: 0, page: "pav", scene: "plan3d", t: 8, title: "4 · Plan it in 3D", sub: "Tap your stops on the true-scale terrain. Marswalk finds the safest route round the steep walls shown in red." },
-      { a: 0, page: "pav", scene: "vrsat", t: 10, title: "5 · Stand there, in VR", sub: "Look up: a real relay satellite passes overhead and fixes your position, because Mars has no GPS. The card tells you how far off you were." });
+      { a: 0, page: "globe", globeDo: "layers", t: 5, title: "1 · Explore the planet", sub: "Marswalk is an expedition planner for Mars. On the globe, layers show NASA data for the whole planet: elevation, then radiation." },
+      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 4.5, title: "2 · Choose where to go", sub: "Turn to any place and pick it. Here: the twin calderas on top of Pavonis Mons." },
+      { a: 0, page: "pav", scene: "layer", arg: "slope", t: 5, title: "3 · Read the ground: slope", sub: "How steep every spot is. Green is an easy walk, red is too steep for a spacesuit.", how: "From NASA's MOLA elevation: the steepest step in each cell." },
+      { a: 0, page: "pav", scene: "layer", arg: "radiation", t: 5, title: "Radiation", sub: "The daily dose on open ground. High ground has less air above it, so it gets more.", how: "Curiosity's measured 0.67 mSv a day, scaled by the air column and the open sky." },
+      { a: 0, page: "pav", scene: "layer", arg: "comms", t: 5, title: "Relay-satellite cover", sub: "Where cliffs and crater walls hide the sky from the relay satellites, so they cannot hear you.", how: "Terrain horizons in 16 directions against each orbiter's real position (NASA JPL)." },
+      { a: 0, page: "pav", scene: "plan3d", t: 6, title: "4 · Plan it in 3D", sub: "Tap your stops on the true-scale terrain. Marswalk finds the safest route round the steep red walls." },
+      { a: 0, page: "pav", scene: "vrsat", t: 8.5, title: "5 · Simulate it, in VR", sub: "Walk the plan before anyone goes. Mars has no GPS: look up as a real relay satellite fixes your position, and the card tells you how far off you were." });
   }
   const PIPE = [
     { c: "#8ab8ff", b: "QGIS", p: "Clip, reproject and check the NASA and USGS rasters: CTX 20 m, HiRISE 1 m, MOLA 463 m.", ic: '<path d="M4 6l8-3 8 3-8 3zM4 12l8 3 8-3M4 18l8 3 8-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' },

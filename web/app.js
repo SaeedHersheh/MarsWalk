@@ -2427,6 +2427,7 @@
       async layer(n) {                                                  // one data layer on the map, with its legend
         ui(); T3.tourOrbit = 0; setView("2d"); document.body.classList.add("tour-legend");
         S.layers.clear(); if (n) S.layers.add(n); S.opacity = 0.85; S.base = "ortho"; syncLayers();
+        if (TOUR === "pavonis" && !T3.layerFit) { T3.layerFit = true; if (S.stops.length) { S.stops = []; plan(0); } map.fitBounds(L.latLngBounds([ll(HAB[0] - 26000, HAB[1] + 14000), ll(HAB[0] + 26000, HAB[1] - 30000)]), { animate: false }); }
         if (n === "hab") map.setView(ll(HAB[0], HAB[1] + 1500), -3.2, { animate: false });
       },
       async radio() {                                                   // the Radio tab and the time bar: passes forecast for this site
