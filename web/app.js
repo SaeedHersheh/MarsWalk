@@ -1457,14 +1457,18 @@
     const camE = new THREE.PerspectiveCamera(80, 1, 0.1, 130000 * K), qF = new THREE.Quaternion(), qY = new THREE.Quaternion(), vF = new THREE.Vector3();
     /* The info card stands to your left, a little below eye level, 1.3 m away, and turns with the way you walk
        (like a screen beside a driver). Looking at it pauses the walk and holds your direction, so you can read in peace. */
-    const hudC = document.createElement("canvas"); hudC.width = 1200; hudC.height = 900;
+    const hudC = document.createElement("canvas"); hudC.width = 1200; hudC.height = 1030;
     const hudT = new THREE.CanvasTexture(hudC); hudT.encoding = THREE.sRGBEncoding; hudT.anisotropy = Math.min(8, rn.capabilities.getMaxAnisotropy());
-    const vrHud = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.7875), new THREE.MeshBasicMaterial({ map: hudT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    const vrHud = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.90125), new THREE.MeshBasicMaterial({ map: hudT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
     vrHud.renderOrder = 20; vrHud.visible = false; sc.add(vrHud);
     const CARD_YAW = 0.75, CARD_D = 1.3, CARD_DY = -0.22, CARD_GAZE = Math.cos(0.3);
     // gaze buttons along the bottom of the card (canvas pixels); hold the reticle on one for 2 s
     const VR_BTNS = [["half", "Halfway", "teleport"], ["sat", "Satellite", "skip the wait"], ["home", "Habitat", "route home"], ["exit", "Exit VR", "back to the app"]]
-      .map(([id, label, sub], i) => ({ id, label, sub, x: 60 + i * (258 + 16), y: 724, w: 258, h: 104 }));
+      .map(([id, label, sub], i) => ({ id, label, sub, x: 60 + i * (258 + 16), y: 840, w: 258, h: 104 }));
+    // a top row of two wide buttons: how fast time runs, and whether you steer or the autopilot walks the route while you look round
+    VR_BTNS.unshift(
+      { id: "speed", x: 60, y: 720, w: 532, h: 104, label: () => `Speed ×${S.speed}`, sub: () => "change how fast time runs" },
+      { id: "auto", x: 608, y: 720, w: 532, h: 104, label: () => walk.manual ? "Autopilot" : "Walk myself", sub: () => walk.manual ? "follow the route, just look around" : "steer with your head again" });
     const gazeRay = new THREE.Raycaster();
     const retC = document.createElement("canvas"); retC.width = retC.height = 128;
     const retT = new THREE.CanvasTexture(retC);
@@ -1514,8 +1518,8 @@
       }
       VR_BTNS.forEach(b => {                                               // the gaze buttons
         const on = hov === b.id; rr(b.x, b.y, b.w, b.h, 20); x.fillStyle = on ? "#1a66e8" : "#19212f"; x.fill(); x.lineWidth = 4; x.strokeStyle = on ? "#8ab8ff" : "#2b3649"; x.stroke();
-        x.fillStyle = "#ffffff"; x.font = "700 36px Inter, sans-serif"; x.fillText(b.label, b.x + 22, b.y + 50);
-        x.fillStyle = on ? "#dbe8ff" : "#8f9cb1"; x.font = "500 26px Inter, sans-serif"; x.fillText(b.sub, b.x + 22, b.y + 86);
+        x.fillStyle = "#ffffff"; x.font = "700 36px Inter, sans-serif"; x.fillText(typeof b.label === "function" ? b.label() : b.label, b.x + 22, b.y + 50);
+        x.fillStyle = on ? "#dbe8ff" : "#8f9cb1"; x.font = "500 26px Inter, sans-serif"; x.fillText(typeof b.sub === "function" ? b.sub() : b.sub, b.x + 22, b.y + 86);
       });
       x.fillStyle = "#627087"; x.font = "500 28px Inter, sans-serif"; x.fillText(paused ? "Hold the dot on a button for 2 seconds · look away to walk on" : "Look at this card to pause", L, H - 30);
       hudT.needsUpdate = true;
@@ -1523,7 +1527,7 @@
     // tour: the head angles (yaw, pitch) that put the dot on a card button
     T3.vrAim = id => {
       const b = VR_BTNS.find(v => v.id === id); vrHud.updateMatrixWorld();
-      const d = new THREE.Vector3(((b.x + b.w / 2) / hudC.width - 0.5) * 1.05, (0.5 - (b.y + b.h / 2) / hudC.height) * 0.7875, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert());
+      const d = new THREE.Vector3(((b.x + b.w / 2) / hudC.width - 0.5) * 1.05, (0.5 - (b.y + b.h / 2) / hudC.height) * 0.90125, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert());
       return [Math.atan2(-d.x, -d.z), Math.asin(d.y)];
     };
     function vrDraw(here, jy) {
@@ -1823,6 +1827,12 @@
     if (id === "exit") return vrExit();
     if (!walk.on) return;
     if (id === "sat") return skipToPass();
+    if (id === "speed") {                                 // ×1 → ×5 → ×30 → ×1: real time, a brisk look, a quick crossing
+      const R = [1, 5, 30]; S.speed = R[(R.indexOf(S.speed) + 1) % R.length] || 1;
+      document.querySelectorAll(".spd").forEach(x => x.setAttribute("aria-pressed", String(+x.dataset.s === S.speed)));
+      return toast(`Time ×${S.speed}`, S.speed === 1 ? "Real time." : `Time runs ${S.speed} times faster.`, "#8ab8ff");
+    }
+    if (id === "auto") return walk.manual ? releaseControl() : takeControl();
     if (!walk.manual) takeControl();
     if (walk.busy || walk.planning) return;
     const b = [walk.mx + walk.drift[0], walk.my + walk.drift[1]];
