@@ -2523,7 +2523,8 @@
         skipToPass(); vrDemo(true); await wait(500);
         const track = (fn, ms) => new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a = fn(); if (a) { const k = Math.min(1, (performance.now() - t0) / 700); h.yaw += (a[0] - h.yaw) * (0.05 + 0.25 * k); h.pitch += (a[1] - h.pitch) * (0.05 + 0.25 * k); } performance.now() - t0 < ms ? setTimeout(st, 16) : res(); }; st(); });
         await track(() => T3.satDir ? T3.vrAimDir(T3.satDir) : [0.2, 0.5], 4600);          // look up: the satellite crossing the sky, the radio link drawn to it
-        await track(() => T3.vrAimCard(), 3800);                                            // then the card: what the satellite found
+        await track(() => T3.vrAimCard(), 3000);                                            // then the card: what the satellite found
+        await track(() => T3.vrAim("r:q2"), 2700);                                          // then the radio on the right: hold the dot on a quick reply to Earth
       },
       async walksat() { await SCENES.walk(); await wait(1600); await SCENES.sat(); },      // the 30-second cut: walk, then a relay pass fixes the position
       // ---- chapters for the full tour (tour.html) ----
