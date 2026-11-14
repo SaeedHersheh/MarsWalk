@@ -137,88 +137,114 @@
   footer { padding: 30px clamp(16px, 5vw, 64px) 40px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 24px; justify-content: space-between; font-size: 13px; color: var(--faint); }
 
 
-  /* ---------- how it works: the interactive explainer ---------- */
-  /* chapter tabs */
-  #nogps .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 36px 0 18px; }
-  #nogps .tab { display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px 10px 10px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; cursor: pointer; font-weight: 600; font-size: 15px; }
-  #nogps .tab i { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface); font: 600 13px var(--f-mono); font-style: normal; color: var(--dim); }
-  #nogps .tab[aria-selected="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
-  #nogps .tab[aria-selected="true"] i { background: #fff; color: var(--blue); }
 
-  /* the diagram */
-  #nogps .stage { display: grid; grid-template-columns: minmax(0, 1fr) 340px; border: 1px solid var(--line-2); border-radius: 22px; overflow: hidden; background: var(--panel); }
-  #nogps .scene { position: relative; min-width: 0; background: radial-gradient(ellipse at 70% 0%, #0f1a2e 0%, #05080e 70%); }
-  #nogps .scene svg { display: block; width: 100%; height: auto; }
-  #nogps .part { cursor: pointer; }
-  #nogps .part .hit { fill: transparent; }
-  #nogps .part:hover .lbl, #nogps .part.on .lbl { fill: #fff; }
-  #nogps .part.on .ring { opacity: 1; }
-  #nogps .ring { opacity: 0; fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 4 5; transition: opacity 0.3s; animation: turn 12s linear infinite; transform-box: fill-box; transform-origin: center; }
-  @keyframes turn { to { transform: rotate(360deg); } }
-  #nogps .lbl { font: 600 13px var(--f-body); fill: var(--dim); letter-spacing: 0.02em; transition: fill 0.2s; }
-  #nogps .link { fill: none; stroke-width: 2.5; stroke-linecap: round; transition: opacity 0.4s, stroke 0.4s; }
-  #nogps .link.flow { stroke-dasharray: 2 10; animation: flow 1s linear infinite; }
-  @keyframes flow { to { stroke-dashoffset: -12; } }
-  #nogps .link.off { opacity: 0.12; animation: none; }
-  #nogps .dim { opacity: 0.25; transition: opacity 0.4s; }
-  #nogps .info { padding: 26px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 14px; }
-  #nogps .info small { font: 600 12px var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
-  #nogps .info h3 { margin: 0; font-size: 22px; line-height: 1.2; color: var(--ink); }
-  #nogps .info p { margin: 0; color: var(--text); font-size: 15px; }
-  #nogps .tags { display: flex; flex-wrap: wrap; gap: 6px; }
-  #nogps .tags span { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-2); font: 500 12.5px var(--f-mono); color: var(--text); }
-  #nogps .hint { margin-top: auto; font-size: 13px; color: var(--faint); }
+  /* ---------- how it works: three cards that open ---------- */
+  .flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0 0 46px; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: var(--panel); }
+  .flow > div { position: relative; padding: 22px 24px; }
+  .flow > div + div { border-left: 1px solid var(--line); }
+  .flow > div + div::before { content: ""; position: absolute; left: -9px; top: 50%; width: 16px; height: 16px; margin-top: -8px; transform: rotate(45deg); background: var(--panel); border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .flow small { font: 500 12px var(--f-mono); color: var(--faint); letter-spacing: 0.08em; }
+  .flow b { display: block; margin: 4px 0 4px; font-size: 18px; color: var(--ink); }
+  .flow p { margin: 0; font-size: 14.5px; color: var(--dim); }
+  .flow .tool { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .flow .tool span { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-2); font: 12px var(--f-mono); color: var(--text); }
+  .map { margin: -26px 0 46px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .map div { padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .map div b { display: block; font-size: 13.5px; color: var(--ink); }
+  .map div i { font-style: normal; font: 12px var(--f-mono); color: var(--accent); }
 
-  /* controls under the scene */
-  #nogps .under { grid-column: 1 / -1; }
-  #nogps .tabs { scroll-margin-top: 90px; }
-  #nogps .ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 18px 22px; border-top: 1px solid var(--line); }
-  #nogps .ctl label { display: grid; gap: 8px; font-size: 13px; color: var(--dim); }
-  #nogps .ctl input[type=range] { width: 100%; accent-color: var(--blue-hi); }
-  #nogps .pill { padding: 11px 20px; border-radius: 999px; border: 0; background: var(--sat); color: #04060a; font-weight: 700; font-size: 14.5px; cursor: pointer; white-space: nowrap; }
-  #nogps .pill:disabled { opacity: 0.4; cursor: default; }
-  #nogps .reads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border-top: 1px solid var(--line); }
-  #nogps .reads div { padding: 14px 18px; background: var(--panel); }
-  #nogps .reads small { display: block; font-size: 12px; color: var(--faint); }
-  #nogps .reads b { display: block; font: 600 19px var(--f-mono); color: var(--ink); }
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .card { position: relative; display: flex; flex-direction: column; text-align: left; padding: 0; border-radius: 22px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); cursor: pointer; overflow: hidden; transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.3s, box-shadow 0.35s; }
+  .card:hover { transform: translateY(-4px); border-color: var(--c); }
+  .card[aria-expanded="true"] { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 30px 80px -30px var(--c); }
+  .card .art { height: 150px; position: relative; background: radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--c) 30%, transparent), transparent 70%), #070a10; border-bottom: 1px solid var(--line); }
+  .card .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .card .tx { padding: 22px 24px 24px; }
+  .card small { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--c); }
+  .card b { display: block; margin: 6px 0 6px; font-size: 23px; color: var(--ink); }
+  .card p { margin: 0; font-size: 15px; color: var(--dim); }
+  .card .open { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; font-weight: 700; font-size: 14px; color: var(--c); }
+  .card .open::after { content: "+"; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--c); font-size: 15px; line-height: 1; transition: transform 0.3s; }
+  .card[aria-expanded="true"] .open::after { transform: rotate(45deg); }
+  .lay { --c: #8ab8ff; } .rou { --c: #6EE7A8; } .nav { --c: #F5B85B; }
 
-  /* the story */
-  #nogps .story { display: grid; gap: 14px; margin-top: 40px; counter-reset: s; }
-  #nogps .st { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 22px; align-items: start; padding: 24px 26px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); transition: border-color 0.3s, transform 0.5s, opacity 0.5s; opacity: 0; transform: translateY(24px); }
-  #nogps .st.in { opacity: 1; transform: none; }
-  #nogps .st.cur { border-color: var(--c, var(--accent)); box-shadow: 0 0 0 1px var(--c, var(--accent)), 0 0 50px -20px var(--c, var(--accent)); }
-  #nogps .st .n { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--c); color: #04060a; font: 700 17px var(--f-mono); box-shadow: 0 0 34px -8px var(--c); }
-  #nogps .st small { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--c); }
-  #nogps .st h3 { margin: 4px 0 6px; font-size: 21px; color: var(--ink); }
-  #nogps .st p { margin: 0 0 12px; color: var(--dim); font-size: 15.5px; max-width: 700px; }
-  #nogps .show { padding: 10px 16px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; cursor: pointer; font-size: 14px; font-weight: 600; white-space: nowrap; }
-  #nogps .show:hover { border-color: var(--accent); color: var(--ink); }
+  .panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), margin 0.5s; margin-top: 0; }
+  .panel.on { grid-template-rows: 1fr; margin-top: 18px; }
+  .panel > div { overflow: hidden; }
+  .pane { display: none; padding: 30px; border-radius: 22px; border: 1px solid var(--line-2); background: linear-gradient(180deg, #0c1220, var(--panel)); }
+  .pane.on { display: block; animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+  .pane h3 { margin: 0 0 6px; font-size: 26px; color: var(--ink); letter-spacing: -0.01em; }
+  .pane > p { margin: 0 0 24px; max-width: 760px; color: var(--dim); }
 
+  /* layers */
+  .lays { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .lays div { padding: 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+  .lays i { display: block; height: 8px; border-radius: 4px; margin-bottom: 12px; }
+  .lays b { display: block; color: var(--ink); font-size: 15.5px; }
+  .lays span { display: block; font: 11.5px var(--f-mono); color: var(--accent); margin: 2px 0 6px; }
+  .lays p { margin: 0; font-size: 13.5px; color: var(--dim); }
+
+  /* routing */
+  .rgrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 26px; align-items: start; }
+  .formula { padding: 18px 20px; border-radius: 16px; background: #070a10; border: 1px solid var(--line); font: 14.5px/1.7 var(--f-mono); color: var(--text); }
+  .formula em { font-style: normal; color: #6EE7A8; }
+  .styles { display: flex; gap: 6px; margin: 18px 0 16px; padding: 4px; border-radius: 999px; border: 1px solid var(--line-2); width: max-content; max-width: 100%; }
+  .styles button { padding: 8px 16px; border-radius: 999px; border: 0; background: transparent; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--dim); }
+  .styles button[aria-pressed="true"] { background: #6EE7A8; color: #04060a; }
+  .bars { display: grid; gap: 10px; }
+  .bar { display: grid; grid-template-columns: 130px minmax(0, 1fr) 42px; gap: 12px; align-items: center; font-size: 14px; }
+  .bar span { color: var(--text); }
+  .bar div { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; }
+  .bar div i { display: block; height: 100%; width: 0; border-radius: 5px; background: var(--k); transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .bar em { font: 13px var(--f-mono); font-style: normal; color: var(--dim); text-align: right; }
+  .nogo { margin-top: 14px; font-size: 14px; color: var(--dim); }
+  .nogo b { color: #ff6b55; font-family: var(--f-mono); }
+  .curve { padding: 18px; border-radius: 16px; background: #070a10; border: 1px solid var(--line); }
+  .curve svg { display: block; width: 100%; height: auto; }
+  .curve small { display: block; margin-top: 8px; font-size: 13px; color: var(--faint); }
+
+  /* navigation */
+  .ngrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .src { display: flex; gap: 14px; padding: 16px 18px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); transition: border-color 0.3s, box-shadow 0.3s; }
+  .src.live { border-color: var(--k); box-shadow: 0 0 0 1px var(--k), 0 0 40px -16px var(--k); }
+  .src .dot { flex: none; width: 12px; height: 12px; margin-top: 6px; border-radius: 50%; background: var(--line-2); }
+  .src.live .dot { background: var(--k); box-shadow: 0 0 12px var(--k); }
+  .src b { display: block; color: var(--ink); }
+  .src p { margin: 2px 0 0; font-size: 14px; color: var(--dim); }
+  .src em { display: block; margin-top: 6px; font: 12px var(--f-mono); font-style: normal; color: var(--k); }
+  .scene { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: radial-gradient(ellipse at 70% 0%, #0f1a2e 0%, #05080e 70%); }
+  .scene svg { display: block; width: 100%; height: auto; }
+  .part .hit { fill: transparent; }
+  .ring { display: none; }
+  .lbl { font: 600 13px var(--f-body); fill: var(--dim); }
+  .link { fill: none; stroke-width: 2.5; stroke-linecap: round; transition: opacity 0.4s; }
+  .link.flow2 { stroke-dasharray: 2 10; animation: flw 1s linear infinite; }
+  @keyframes flw { to { stroke-dashoffset: -12; } }
+  .link.off { opacity: 0.1; animation: none; }
+  .ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; margin-top: 16px; }
+  .ctl label { display: grid; gap: 8px; font-size: 13.5px; color: var(--dim); }
+  .ctl input[type=range] { width: 100%; accent-color: #F5B85B; }
+  .ctl button { padding: 11px 20px; border-radius: 999px; border: 0; background: #F5B85B; color: #04060a; font-weight: 700; font-size: 14.5px; cursor: pointer; white-space: nowrap; }
+  .ctl button:disabled { opacity: 0.45; cursor: default; }
+  .now { margin-top: 14px; padding: 14px 18px; border-radius: 14px; background: #070a10; border: 1px solid var(--line); font-size: 15px; color: var(--text); }
+  .now b { color: var(--ink); }
 
   @media (max-width: 960px) {
-    #nogps .stage { grid-template-columns: 1fr; }
-    #nogps .info { border-left: 0; border-top: 1px solid var(--line); }
-    #nogps .reads { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .flow, .cards, .rgrid { grid-template-columns: 1fr; }
+    .flow > div + div { border-left: 0; border-top: 1px solid var(--line); }
+    .flow > div + div::before { left: 50%; top: -9px; margin: 0 0 0 -8px; transform: rotate(135deg); }
+    .map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lays { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
-  @media (max-width: 640px) {
-    #nogps .st { grid-template-columns: 1fr; gap: 12px; }
-    #nogps .ctl { grid-template-columns: 1fr; }
-    #nogps .tab { font-size: 14px; }
+  @media (max-width: 560px) {
+    .lays, .ngrid { grid-template-columns: 1fr; }
+    .pane { padding: 22px 18px; }
+    .bar { grid-template-columns: 104px minmax(0, 1fr) 36px; }
+    .ctl { grid-template-columns: 1fr; }
+    .card .art { height: 120px; }
   }
-  @media (prefers-reduced-motion: reduce) {
-    #nogps .ring, #nogps .link.flow { animation: none; }
-    #nogps .st { opacity: 1; transform: none; }
-  }
-
-  #nogps .explain { margin-top: 64px; }
-  #nogps .legend { position: absolute; left: 16px; bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--dim); pointer-events: none; }
-  #nogps .legend span { display: inline-flex; align-items: center; gap: 7px; }
-  #nogps .legend span::before { content: ""; width: 18px; height: 3px; border-radius: 2px; background: var(--c); }
-  #nogps .legend .dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 9px); }
-  #nogps .info { background: linear-gradient(180deg, #0d1320, var(--panel)); }
-  #nogps .info h3 { font-size: 24px; }
-  #nogps .stage { box-shadow: 0 40px 100px -40px rgba(26, 102, 232, 0.35); }
-  #nogps .h3big { margin: 14px 0 14px; font-size: clamp(26px, 3.4vw, 40px); line-height: 1.05; letter-spacing: -0.02em; font-weight: 800; color: var(--ink); }
+  @media (prefers-reduced-motion: reduce) { .link.flow2 { animation: none; } .pane.on { animation: none; } .panel { transition: none; } }
 
   @media (max-width: 860px) {
     .top nav { display: none; }
@@ -284,39 +310,91 @@
   <section id="nogps">
     <div class="wrap">
       <span class="eyebrow reveal">How it works</span>
-      <h2 class="reveal">There is no GPS on Mars.</h2>
-      <p class="intro reveal">So how does an astronaut a few kilometres from home know where they are? Marswalk plans around three things, and shows you each one along your route. Try it below: drag the walk, tap any part, or follow one expedition.</p>
-      <div class="steps">
-        <div class="step reveal" style="--c:#8ab8ff">
-          <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20l2-6 3 2v4M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM9 14l1-4 4-1 2 3 3 1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <b>The suit counts steps</b>
-          <p>Between fixes the suit estimates its own position. Every 100 m walked adds about 2 m of doubt, so the error keeps growing.</p>
-          <div class="meter"><i style="--w:72%"></i></div><small>±2 m per 100 m walked (assumed)</small>
-        </div>
-        <div class="step reveal" style="--c:#3ddc97">
-          <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21V11M8.5 7.5a5 5 0 0 1 7 0M5.5 4.5a9 9 0 0 1 13 0M12 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-          <b>The habitat radio</b>
-          <p>While the habitat's mast can see you over the terrain, it measures how far away you are and in which direction, like an airport beacon.</p>
-          <div class="meter"><i style="--w:28%"></i></div><small>5 m in range, 1° in bearing (assumed)</small>
-        </div>
-        <div class="step reveal" style="--c:#F5B85B">
-          <div class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l8 8M5 11l6-6 2 2-6 6zM13 19l6-6 2 2-6 6zM17 5a3 3 0 0 1 2 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <b>Relay satellites</b>
-          <p>When MRO, Mars Odyssey, TGO or Mars Express passes overhead, ranging and Doppler on the real orbit pin you down again, and your route is re-planned from there.</p>
-          <div class="meter"><i style="--w:10%"></i></div><small>about 5 m after a fix · orbits from JPL Horizons</small>
-        </div>
+      <h2 class="reveal">From a QGIS map to a planner that runs itself.</h2>
+      <p class="intro reveal">We first did it by hand in QGIS: clip the terrain, work out the slope, find a path. Then we rebuilt each of those steps in Python, so it runs for any place on Mars in about a minute.</p>
+
+      <div class="flow reveal">
+        <div><small>01 · by hand</small><b>QGIS</b><p>Jezero clipped from the elevation model, a slope map, and a first route drawn and checked by eye.</p><div class="tool"><span>Clip raster</span><span>Slope</span><span>Least-cost path</span></div></div>
+        <div><small>02 · automated</small><b>Python pipelines</b><p>The same steps as scripts, reading NASA and USGS data straight from the source.</p><div class="tool"><span>rasterio</span><span>NumPy</span><span>scikit-image</span></div></div>
+        <div><small>03 · live</small><b>The planner</b><p>A web app that serves the layers, plans routes in a second, and tracks the satellites.</p><div class="tool"><span>FastAPI</span><span>Leaflet</span><span>three.js</span></div></div>
+      </div>
+      <div class="map reveal">
+        <div><b>Clip raster by extent</b><i>→ windowed read</i></div>
+        <div><b>Slope</b><i>→ elevation gradient</i></div>
+        <div><b>Raster calculator</b><i>→ cost grid</i></div>
+        <div><b>Least-cost path</b><i>→ MCP search</i></div>
+        <div><b>Viewshed</b><i>→ habitat coverage</i></div>
       </div>
 
-      <div class="explain">
-      <div class="tabs" role="tablist" aria-label="Chapters">
-        <button class="tab" role="tab" data-ch="find" aria-selected="true"><i>1</i>Finding yourself</button>
-        <button class="tab" role="tab" data-ch="talk" aria-selected="false"><i>2</i>Talking home</button>
-        <button class="tab" role="tab" data-ch="plan" aria-selected="false"><i>3</i>Planning the route</button>
+      <div class="cards steps reveal">
+        <button class="card lay" type="button" aria-expanded="false" data-pane="pLay"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g transform="translate(150 92)">
+<path d="M-90 20 L0 -12 L90 20 L0 52 Z" fill="#1d2a44" stroke="#3b82f6" stroke-opacity=".5"/>
+<path d="M-90 4 L0 -28 L90 4 L0 36 Z" fill="#2a3b5e" stroke="#8ab8ff" stroke-opacity=".6"/>
+<path d="M-90 -12 L0 -44 L90 -12 L0 20 Z" fill="url(#lg1)" stroke="#cfe0ff" stroke-opacity=".8"/></g>
+<defs><linearGradient id="lg1" x1="0" x2="1"><stop offset="0" stop-color="#2878dc"/><stop offset=".5" stop-color="#dcd250"/><stop offset="1" stop-color="#e07a4f"/></linearGradient></defs></svg></div><div class="tx"><small>01</small><b>The layers</b><p>Eight maps of the ground, each from real data.</p><span class="open">See the layers</span></div></button>
+        <button class="card rou" type="button" aria-expanded="false" data-pane="pRou"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+<g opacity=".35" stroke="#6EE7A8" stroke-width=".6"><path d="M0 0V150"/><path d="M20 0V150"/><path d="M40 0V150"/><path d="M60 0V150"/><path d="M80 0V150"/><path d="M100 0V150"/><path d="M120 0V150"/><path d="M140 0V150"/><path d="M160 0V150"/><path d="M180 0V150"/><path d="M200 0V150"/><path d="M220 0V150"/><path d="M240 0V150"/><path d="M260 0V150"/><path d="M280 0V150"/><path d="M300 0V150"/><path d="M0 0H300"/><path d="M0 20H300"/><path d="M0 40H300"/><path d="M0 60H300"/><path d="M0 80H300"/><path d="M0 100H300"/><path d="M0 120H300"/><path d="M0 140H300"/></g>
+<path d="M120 40 h40 v40 h-40z M180 80 h40 v40 h-40z" fill="#c8283c" opacity=".55"/>
+<path class="draw" d="M40 120 C 90 120, 100 90, 110 70 S 170 40, 175 65 S 240 70, 262 30" fill="none" stroke="#6EE7A8" stroke-width="4" stroke-linecap="round"/>
+<circle cx="40" cy="120" r="7" fill="#fff"/><circle cx="262" cy="30" r="7" fill="#1a66e8" stroke="#fff" stroke-width="2"/></svg></div><div class="tx"><small>02</small><b>The routing</b><p>How the safest walk is chosen, and what each weight does.</p><span class="open">How it chooses</span></div></button>
+        <button class="card nav" type="button" aria-expanded="false" data-pane="pNav"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+<path d="M-10 70 Q 150 -30 310 70" fill="none" stroke="#2b3649" stroke-dasharray="3 6"/>
+<path d="M0 135 L 70 128 C 110 120, 130 80, 160 78 C 190 80, 200 118, 240 124 L 300 128 L300 150 L0 150Z" fill="#7a3a20"/>
+<path d="M60 112 L 230 104" stroke="#3ddc97" stroke-width="2" stroke-dasharray="3 6" opacity=".5"/>
+<path d="M200 30 L 230 102" stroke="#F5B85B" stroke-width="2.5" stroke-dasharray="3 6"/>
+<path d="M48 126 v-10 a12 9 0 0 1 24 0 v10z" fill="#d6dce7"/><path d="M60 108 v-12" stroke="#d6dce7" stroke-width="2"/><circle cx="60" cy="94" r="3" fill="#3ddc97"/>
+<circle cx="232" cy="110" r="5" fill="#fff"/><circle cx="232" cy="110" r="16" fill="none" stroke="#8ab8ff" stroke-opacity=".6" stroke-dasharray="2 3"/>
+<g transform="translate(200 28)"><rect x="-16" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="5" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="-5" y="-6" width="10" height="12" rx="1.5" fill="#F5B85B"/></g></svg></div><div class="tx"><small>03</small><b>The navigation</b><p>No GPS: the habitat and the satellites take turns finding you.</p><span class="open">How it finds you</span></div></button>
       </div>
 
-      <div class="stage">
-        <div class="scene">
-          <svg id="dia" viewBox="0 0 900 470" role="img" aria-label="The habitat, a ridge, the astronaut, a relay satellite and Earth, with the radio links between them">
+      <div class="panel" id="panel"><div>
+        <div class="pane" id="pLay">
+          <h3>The layers</h3>
+          <p>Turn any of these on over the map. The planner reads them too.</p>
+          <div class="lays">
+            <div><i style="background:linear-gradient(90deg,#2b5aa8,#5fb27a,#e0c060,#c0603a,#fff)"></i><b>Elevation</b><span>MOLA · CTX DTM</span><p>Height of the ground, shaded.</p></div>
+            <div><i style="background:linear-gradient(90deg,#3cc878,#ebdc50,#f59632,#d71e2d)"></i><b>Slope</b><span>CTX 20 m · HiRISE 1 m</span><p>How steep each spot is. The one that matters most.</p></div>
+            <div><i style="background:linear-gradient(90deg,#2878dc,#6e3caa,#dc506e,#ffc85a)"></i><b>Radiation</b><span>Curiosity RAD</span><p>Dose from the air above you and the open sky.</p></div>
+            <div><i style="background:linear-gradient(90deg,#3cdceb,#f0be46,#e6323c)"></i><b>Relay blind spots</b><span>JPL Horizons</span><p>Where hills hide the satellites for much of the day.</p></div>
+            <div><i style="background:linear-gradient(90deg,#3ddc97,#1a6e4a)"></i><b>Habitat radio</b><span>MOLA line of sight</span><p>Everywhere the habitat's mast can see you.</p></div>
+            <div><i style="background:linear-gradient(90deg,#0b1020,#3a4560,#f5d58a)"></i><b>Sun &amp; shadow</b><span>JPL Horizons Sun</span><p>Real shadows at the hour you walk.</p></div>
+            <div><i style="background:linear-gradient(90deg,#2a3d9a,#8a5ab0,#f07a4a,#ffd27a)"></i><b>Ground temperature</b><span>THEMIS · TES</span><p>How cold the ground is, through one Mars day.</p></div>
+            <div><i style="background:linear-gradient(90deg,#1ea078,#dcd250,#f07832,#c8283c,#19050f)"></i><b>Planner cost</b><span>all of the above</span><p>What the planner sees with your weights.</p></div>
+          </div>
+        </div>
+
+        <div class="pane" id="pRou">
+          <h3>The routing</h3>
+          <p>The map is a grid of 20 m cells. Each cell gets a price, and the planner finds the cheapest way between your stops. Not the shortest: the cheapest.</p>
+          <div class="rgrid">
+            <div>
+              <div class="formula">price of a cell =<br>&nbsp; walking time<br>&nbsp; × ( 1 + <em>slope</em><br>&nbsp;&nbsp;&nbsp;&nbsp; + 6 × (radiation + blind spots + shadow + cold) )</div>
+              <div class="styles" role="group" aria-label="Route style"><button type="button" data-st="safe" aria-pressed="true">Safest</button><button type="button" data-st="bal" aria-pressed="false">Balanced</button><button type="button" data-st="fast" aria-pressed="false">Fastest</button></div>
+              <div class="bars" id="bars"></div>
+              <p class="nogo">Anything steeper than <b id="ng">18°</b> is blocked. If there is no way through, the limit is raised step by step and the route says so.</p>
+            </div>
+            <div class="curve">
+              <svg viewBox="0 0 320 190" role="img" aria-label="The slope penalty: free under 3 degrees, 2 times at 8, 9 times at 12, 25 times at 16, 60 times at 20">
+                <g stroke="#1a2230"><path d="M30 20H310"/><path d="M30 60H310"/><path d="M30 100H310"/><path d="M30 140H310"/></g>
+                <path id="nogoBand" fill="#c8283c" opacity=".14" d="M0 0"/>
+                <path d="M30 170 L 52 170 L 67 167 L 90 155 L 120 110 L 150 40 L 165 20" fill="none" stroke="#6EE7A8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <g font-family="IBM Plex Mono, monospace" font-size="11" fill="#627087"><text x="30" y="186">0°</text><text x="85" y="186">8°</text><text x="143" y="186">16°</text><text x="210" y="186">25°</text><text x="282" y="186">35°</text>
+                <text x="94" y="150" fill="#8f9cb1">2×</text><text x="124" y="104" fill="#8f9cb1">9×</text><text x="154" y="36" fill="#8f9cb1">25× and up</text></g>
+                <path d="M30 170 H310" stroke="#2b3649"/>
+              </svg>
+              <small>The slope price: free under 3°, double at 8°, 25 times at 16°. Cells next to a steep cell count as steep, so the route keeps away from edges.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="pane" id="pNav">
+          <h3>The navigation</h3>
+          <p>There is no GPS on Mars, so two things take turns telling the suit where it is. Drag the astronaut over the ridge and watch them hand over.</p>
+          <div class="ngrid">
+            <div class="src" id="sHab" style="--k:#3ddc97"><i class="dot"></i><div><b>The habitat</b><p>While its mast can see you, it measures your distance and direction, like an airport beacon. Voice is instant.</p><em>about 5 m · always on in sight</em></div></div>
+            <div class="src" id="sSat" style="--k:#F5B85B"><i class="dot"></i><div><b>The satellites</b><p>MRO, Odyssey, TGO and Mars Express. When one is overhead, ranging and Doppler on its real orbit pin you down, and the route is re-planned.</p><em>about 5 m · a few passes a day</em></div></div>
+          </div>
+          <div class="scene"><svg id="dia" viewBox="0 0 900 470" role="img" aria-label="The habitat, a ridge, the astronaut, a relay satellite and Earth, with the radio links between them">
             <defs>
               <linearGradient id="gnd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a4d2c"/><stop offset="1" stop-color="#3a1a10"/></linearGradient>
               <radialGradient id="doubt"><stop offset="0" stop-color="#8ab8ff" stop-opacity="0.35"/><stop offset="1" stop-color="#8ab8ff" stop-opacity="0.05"/></radialGradient>
@@ -325,9 +403,9 @@
             <!-- orbit arc -->
             <path d="M-20 170 Q 450 -40 920 170" fill="none" stroke="#2b3649" stroke-dasharray="3 7"/>
             <!-- links -->
-            <path id="lkHab" class="link flow" stroke="#3ddc97"/>
-            <path id="lkSat" class="link flow" stroke="#F5B85B"/>
-            <path id="lkEarth" class="link flow" stroke="#4fa3ff" d="M600 92 L 820 70"/>
+            <path id="lkHab" class="link flow2" stroke="#3ddc97"/>
+            <path id="lkSat" class="link flow2" stroke="#F5B85B"/>
+            <path id="lkEarth" class="link flow2" stroke="#4fa3ff" d="M600 92 L 820 70"/>
             <!-- the planned route -->
             <path id="route" d="M150 370 C 260 360, 320 330, 400 322 S 560 352, 760 360" fill="none" stroke="#6EE7A8" stroke-width="3" stroke-dasharray="7 7" opacity="0.8"/>
             <!-- ground with a ridge -->
@@ -357,34 +435,14 @@
 
             <g class="part" data-p="plan"><rect class="hit" x="640" y="390" width="200" height="60"/><circle class="ring" cx="760" cy="362" r="22"/>
               <circle cx="760" cy="360" r="7" fill="#1a66e8" stroke="#fff" stroke-width="2"/><text class="lbl" x="760" y="400" text-anchor="middle">Next stop</text></g>
-          </svg>
-          <div class="legend" aria-hidden="true"><span style="--c:#3ddc97">Habitat radio</span><span style="--c:#F5B85B">Satellite link</span><span style="--c:#4fa3ff">To Earth</span><span style="--c:#6EE7A8" class="dash">Planned route</span></div>
+          </svg></div>
+          <div class="ctl">
+            <label for="walkR">Walk away from the habitat <input id="walkR" type="range" min="0" max="100" value="18"></label>
+            <button id="passB" type="button">Satellite pass</button>
+          </div>
+          <div class="now" id="now"></div>
         </div>
-        <aside class="info" aria-live="polite">
-          <small id="iK">Tap a part</small>
-          <h3 id="iT">The habitat mast</h3>
-          <p id="iP"></p>
-          <div class="tags" id="iC"></div>
-          <p class="hint">Tap the habitat, the ridge, the astronaut, the satellite, Earth or the next stop.</p>
-        </aside>
-        <div class="under">
-        <div class="ctl">
-          <label for="walkR">Walk from the habitat towards the next stop <input id="walkR" type="range" min="0" max="100" value="18"></label>
-          <button class="pill" id="passB" type="button">Satellite pass</button>
-        </div>
-        <div class="reads">
-          <div><small>Walked</small><b id="rW">0.0 km</b></div>
-          <div><small>Position doubt</small><b id="rD">± 0 m</b></div>
-          <div><small>Habitat radio</small><b id="rH">linked</b></div>
-          <div><small>Message to Earth</small><b id="rE">waits</b></div>
-        </div>
-        </div>
-      </div>
-      <span class="eyebrow" style="margin-top:72px">Follow one walk</span>
-      <h3 class="h3big">The life of one expedition.</h3>
-      <p class="intro">Eight things happen on every walk you plan in Marswalk. Press "Show in the diagram" to see each one.</p>
-      <div class="story" id="story"></div>
-      </div>
+      </div></div>
     </div>
   </section>
 
@@ -497,100 +555,60 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const PARTS = {
-    hab: ["Fixed point", "The habitat mast", "A radio mast on the habitat. While it can see you over the ground, it measures how far away you are and in which direction, like an airport beacon. It also carries your voice home instantly.", ["5 m in range", "1° in bearing", "assumed"]],
-    ridge: ["Real terrain", "The ridge", "Hills block radio. Marswalk traces the line from the mast to every spot on the map over MOLA terrain, so it knows exactly where the habitat link drops.", ["MOLA 463 m", "line of sight"]],
-    suit: ["Dead reckoning", "The astronaut's suit", "Between fixes the suit counts steps and heading to guess its own position. Every 100 m walked adds about 2 m of doubt, so the blue circle keeps growing.", ["±2 m per 100 m", "assumed"]],
-    sat: ["Relay orbiter", "The relay satellite", "MRO, Mars Odyssey, TGO and Mars Express pass overhead a few times a sol. Ranging and Doppler on the real orbit pin you down to about 5 m, and the route is re-planned from there.", ["JPL Horizons orbits", "≈5 m after a fix"]],
-    earth: ["Mission control", "Earth", "Messages to Earth go up through the relay satellite, then cross the real light delay: 4 to 24 minutes one way. Replies wait at the orbiter until your next pass.", ["4–24 light-min", "store and forward"]],
-    plan: ["The planner", "The next stop", "The route follows the flattest ground and stays inside the habitat link where it can. When a fix shows you drifted, Marswalk re-plans from where you really are.", ["slope from MOLA", "re-planned on a fix"]],
-  };
-  const CH = {
-    find: { parts: ["suit", "hab", "sat"], show: "suit" },
-    talk: { parts: ["hab", "sat", "earth"], show: "earth" },
-    plan: { parts: ["ridge", "plan", "suit"], show: "plan" },
-  };
-  let ch = "find", sel = "hab", walked = 0, lastFix = 0, passT = 0, satK = 0.5;
+  // the three cards: one opens at a time, below them
+  const cards = document.querySelectorAll("#nogps .card"), panel = $("panel");
+  cards.forEach(c => c.addEventListener("click", () => {
+    const open = c.getAttribute("aria-expanded") !== "true";
+    cards.forEach(x => x.setAttribute("aria-expanded", String(x === c && open)));
+    document.querySelectorAll("#nogps .pane").forEach(p => p.classList.toggle("on", open && p.id === c.dataset.pane));
+    panel.classList.toggle("on", open);
+    if (open) { if (c.dataset.pane === "pNav") draw(); if (c.dataset.pane === "pRou") bars(); setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "nearest" }), 120); }
+  }));
 
-  function pick(p) {
-    sel = p; const d = PARTS[p];
-    $("iK").textContent = d[0]; $("iT").textContent = d[1]; $("iP").textContent = d[2];
-    $("iC").innerHTML = d[3].map(c => `<span>${c}</span>`).join("");
-    document.querySelectorAll("#nogps .part").forEach(g => g.classList.toggle("on", g.dataset.p === p));
+  // routing: the three styles set the weights (the same numbers the planner uses)
+  const ST = { safe: [{ slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, 18], bal: [{ slope: 0.4, radiation: 0.15, comms: 0.15, shadow: 0.1, cold: 0.1 }, 22], fast: [{ slope: 0.08, radiation: 0, comms: 0, shadow: 0, cold: 0 }, 25] };
+  const NAMES = [["slope", "Slope", "#6EE7A8"], ["radiation", "Radiation", "#dc506e"], ["comms", "Blind spots", "#3cdceb"], ["shadow", "Shadow", "#8f9cb1"], ["cold", "Cold ground", "#8ab8ff"]];
+  let st = "safe";
+  $("bars").innerHTML = NAMES.map(([k, n, c]) => `<div class="bar" style="--k:${c}"><span>${n}</span><div><i data-k="${k}"></i></div><em data-v="${k}">0</em></div>`).join("");
+  function bars() {
+    const [w, ng] = ST[st];
+    NAMES.forEach(([k]) => { document.querySelector(`#bars i[data-k="${k}"]`).style.width = (w[k] * 100) + "%"; document.querySelector(`#bars em[data-v="${k}"]`).textContent = w[k]; });
+    $("ng").textContent = ng + "°";
+    const x = 30 + ng * 8; $("nogoBand").setAttribute("d", `M${x} 10 H310 V170 H${x} Z`);
   }
-  document.querySelectorAll("#nogps .part").forEach(g => {
-    g.setAttribute("tabindex", "0"); g.setAttribute("role", "button"); g.setAttribute("aria-label", PARTS[g.dataset.p][1]);
-    g.addEventListener("click", () => pick(g.dataset.p));
-    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(g.dataset.p); } });
-  });
-  function setCh(c) {
-    ch = c; document.querySelectorAll("#nogps .tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.ch === c)));
-    document.querySelectorAll("#nogps .part").forEach(g => g.classList.toggle("dim", !CH[c].parts.includes(g.dataset.p)));
-    pick(CH[c].show); draw();
-  }
-  document.querySelectorAll("#nogps .tab").forEach(t => t.onclick = () => setCh(t.dataset.ch));
+  document.querySelectorAll("#nogps .styles button").forEach(b => b.onclick = () => { st = b.dataset.st; document.querySelectorAll("#nogps .styles button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); bars(); });
 
-  // the ground under x (same curve as the drawn path)
+  // navigation: walk over the ridge, the habitat link drops, a satellite pass takes over
   const groundY = x => {
     const P = [[0, 380], [150, 372], [260, 345], [330, 280], [400, 250], [470, 262], [520, 330], [620, 360], [900, 368]];
-    for (let i = 1; i < P.length; i++) if (x <= P[i][0]) { const [a, b] = [P[i - 1], P[i]], k = (x - a[0]) / (b[0] - a[0]), s = k * k * (3 - 2 * k); return a[1] + (b[1] - a[1]) * s; }
+    for (let i = 1; i < P.length; i++) if (x <= P[i][0]) { const a = P[i - 1], b = P[i], k = (x - a[0]) / (b[0] - a[0]), s = k * k * (3 - 2 * k); return a[1] + (b[1] - a[1]) * s; }
     return 368;
   };
-  const KM = 3.2;                                   // the slider covers 3.2 km
+  let pass = false, satK = 0.12, lastFix = 0;
   function draw() {
-    const v = +$("walkR").value / 100, x = 150 + v * 610, y = groundY(x) - 2;
-    walked = v * KM;
-    const blocked = x > 420;                          // past the ridge top the mast cannot see you
-    const doubt = blocked ? 5 + (walked - lastFix) * 20 : 5;   // ±2 m per 100 m since the last fix
-    const satX = 120 + ((passT ? satK : 0.12) * 660), satY = 170 - Math.sin(Math.PI * (satX + 20) / 940) * 140;
-    const satUp = !!passT;
+    const v = +$("walkR").value / 100, x = 150 + v * 610, y = groundY(x) - 2, km = v * 3.2;
+    const hab = x <= 420, doubt = hab || pass ? 5 : 5 + (km - lastFix) * 20;
+    const sx = 120 + satK * 660, sy = 170 - Math.sin(Math.PI * (sx + 20) / 940) * 140;
     $("astro").setAttribute("transform", `translate(${x} ${y})`);
-    $("doubtC").setAttribute("r", Math.min(90, 10 + Math.max(0, doubt) * 0.9));
-    $("satG").setAttribute("transform", `translate(${satX} ${satY})`);
-    $("lkHab").setAttribute("d", `M150 294 L ${x} ${y - 30}`); $("lkHab").classList.toggle("off", blocked);
-    $("lkSat").setAttribute("d", `M${satX} ${satY + 8} L ${x} ${y - 30}`); $("lkSat").classList.toggle("off", !satUp);
-    $("lkEarth").setAttribute("d", `M${satX + 20} ${satY} L 806 72`); $("lkEarth").classList.toggle("off", !satUp);
-    $("rW").textContent = walked.toFixed(1) + " km";
-    $("rD").textContent = "± " + Math.round(Math.max(5, doubt)) + " m";
-    $("rH").textContent = blocked ? "hidden" : "linked"; $("rH").style.color = blocked ? "#f2b84b" : "#3ddc97";
-    $("rE").textContent = satUp ? "≈ 12 min" : blocked ? "queued" : "via habitat"; $("rE").style.color = satUp ? "#4fa3ff" : "";
+    $("doubtC").setAttribute("r", Math.min(90, 10 + doubt * 0.9));
+    $("satG").setAttribute("transform", `translate(${sx} ${sy})`);
+    $("lkHab").setAttribute("d", `M150 294 L ${x} ${y - 30}`); $("lkHab").classList.toggle("off", !hab);
+    $("lkSat").setAttribute("d", `M${sx} ${sy + 8} L ${x} ${y - 30}`); $("lkSat").classList.toggle("off", !pass);
+    $("lkEarth").setAttribute("d", `M${sx + 20} ${sy} L 806 72`); $("lkEarth").classList.toggle("off", !pass);
+    $("sHab").classList.toggle("live", hab); $("sSat").classList.toggle("live", pass);
+    $("now").innerHTML = pass ? `<b>Satellite overhead.</b> It pins you to about 5 m and the route is re-planned from there. Messages to Earth can leave now.`
+      : hab ? `<b>The habitat can see you.</b> Your position is good to about 5 m, and voice reaches home instantly.`
+      : `<b>Behind the ridge, between passes.</b> The suit counts steps on its own, and its doubt grows: <b>± ${Math.round(doubt)} m</b> after ${km.toFixed(1)} km. Press Satellite pass.`;
   }
-  $("walkR").addEventListener("input", () => { draw(); });
+  $("walkR").addEventListener("input", draw);
   $("passB").onclick = () => {
-    passT = 1; lastFix = walked; pick("sat");
-    $("passB").disabled = true; $("passB").textContent = "Satellite overhead";
-    const t0 = performance.now(), D = 5000;                    // the orbiter rises, crosses the sky and sets
-    const step = () => { const k = (performance.now() - t0) / D; satK = 0.18 + k * 0.7; draw();
-      if (k < 1) requestAnimationFrame(step); else { passT = 0; satK = 0.5; $("passB").disabled = false; $("passB").textContent = "Satellite pass"; draw(); } };
+    pass = true; $("passB").disabled = true; $("passB").textContent = "Satellite overhead";
+    const v = +$("walkR").value / 100, t0 = performance.now();
+    const step = () => { const k = (performance.now() - t0) / 5000; satK = 0.18 + Math.min(1, k) * 0.7; lastFix = +$("walkR").value / 100 * 3.2; draw();
+      if (k < 1) requestAnimationFrame(step); else { pass = false; satK = 0.12; $("passB").disabled = false; $("passB").textContent = "Satellite pass"; draw(); } };
     requestAnimationFrame(step);
   };
-
-  // the story: eight steps, each one sets the diagram
-  const STEPS = [
-    ["#8ab8ff", "Plan", "Pick your stops", "Choose stops on real NASA terrain. Marswalk finds the flattest way between them and keeps it inside the habitat's radio where it can.", ["MOLA slope", "safest route"], { ch: "plan", w: 0, p: "plan" }],
-    ["#3ddc97", "Leave", "The habitat sees you", "As you walk out, the mast measures your distance and direction. Your position is good to about 5 m.", ["5 m", "instant voice"], { ch: "find", w: 18, p: "hab" }],
-    ["#f2b84b", "Over the ridge", "The radio goes quiet", "The ridge now stands between you and the mast. Marswalk knew this before you left: it drew the habitat's coverage over the terrain.", ["line of sight", "coverage map"], { ch: "plan", w: 52, p: "ridge" }],
-    ["#8ab8ff", "On your own", "Doubt grows with every step", "Only the suit's step counter is left. Every 100 m adds about 2 m of doubt, so the blue circle around you keeps growing.", ["±2 m / 100 m"], { ch: "find", w: 82, p: "suit" }],
-    ["#F5B85B", "Satellite pass", "A relay orbiter finds you", "A real orbiter rises over the horizon. Ranging and Doppler pin you down to about 5 m, and the route is re-planned from where you really are.", ["JPL Horizons", "≈5 m"], { ch: "find", w: 82, p: "sat", pass: true }],
-    ["#4fa3ff", "Call home", "A message to Earth", "While the orbiter is up, your message leaves for Earth and crosses the real light delay. Mission control hears it minutes later.", ["4–24 light-min"], { ch: "talk", w: 82, p: "earth", pass: true }],
-    ["#4fa3ff", "Wait", "The reply waits in orbit", "Earth's answer reaches Mars orbit and waits at the satellite until it comes overhead again. Marswalk shows when that will be.", ["store and forward", "next pass"], { ch: "talk", w: 90, p: "sat" }],
-    ["#3ddc97", "Home", "Back in range, back home", "Walk back over the ridge and the habitat link returns: instant voice, and a position good to 5 m again.", ["link restored"], { ch: "find", w: 12, p: "hab" }],
-  ];
-  $("story").innerHTML = STEPS.map((s, i) => `<article class="st" style="--c:${s[0]}"><div class="n">${String(i + 1).padStart(2, "0")}</div><div><small>${s[1]}</small><h3>${s[2]}</h3><p>${s[3]}</p><div class="tags">${s[4].map(c => `<span>${c}</span>`).join("")}</div></div><button class="show" type="button" data-i="${i}">Show in the diagram</button></article>`).join("");
-  $("story").addEventListener("click", e => {
-    const b = e.target.closest(".show"); if (!b) return; const s = STEPS[+b.dataset.i], o = s[5];
-    document.querySelectorAll("#nogps .st").forEach((a, i) => a.classList.toggle("cur", i === +b.dataset.i));
-    setCh(o.ch); $("walkR").value = o.w;
-    if (o.pass) { passT = 1; lastFix = o.w / 100 * KM; } else { passT = 0; if (o.w < 30) lastFix = 0; }
-    $("passB").disabled = false; $("passB").textContent = "Satellite pass";
-    draw(); pick(o.p);
-    document.querySelector("#nogps .tabs").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: 0.15 }) : null;
-  document.querySelectorAll("#nogps .st").forEach(a => io ? io.observe(a) : a.classList.add("in"));
-
-  setCh("find"); pick("hab");
-
+  draw(); bars();
 })();
 </script>
 </body>
