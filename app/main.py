@@ -645,4 +645,11 @@ def route(q: RouteReq):
     }
 
 
+@app.get("/", include_in_schema=False)
+def home(site: str | None = None):
+    """The homepage, unless an old link asks for a site straight away (/?site=...): then the planner."""
+    from fastapi.responses import FileResponse
+    return FileResponse(os.path.join(ROOT, "web", "index.html" if site else "home.html"), headers={"Cache-Control": "no-cache"})
+
+
 app.mount("/", StaticFiles(directory=os.path.join(ROOT, "web"), html=True), name="web")

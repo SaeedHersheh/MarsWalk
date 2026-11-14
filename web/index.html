@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794667200">
+<link rel="stylesheet" href="style.css?v=1794667915">
 </head>
 <body>
 <div id="map"></div>
@@ -19,7 +19,7 @@
 
 <header class="appbar">
   <button type="button" class="paneltog" id="panelTog" aria-pressed="true" aria-controls="sidebar" aria-label="Show or hide the panel" title="Hide the panel (M)"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.5 4.5v15" stroke="currentColor" stroke-width="1.8"/></svg></button>
-  <a class="brand" href="globe.html" title="AirAwareNetwork · Marswalk"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="40" height="40"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
+  <a class="brand" id="brandLink" href="globe.html" title="AirAwareNetwork · Marswalk"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="40" height="40"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
   <nav class="crumbs" aria-label="Location"><span id="siteName">Jezero crater</span><small id="siteRes"></small></nav>
   <div class="viewbar">
     <div class="seg" role="group" aria-label="View">
@@ -27,6 +27,7 @@
       <button type="button" id="v-3d" aria-pressed="false">3D</button>
     </div>
     <button type="button" class="bell" id="logBtn" aria-label="Notifications" title="Notifications" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 17V11a6 6 0 0 1 12 0v6l1.5 2h-15L6 17Z M10 21h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><i id="logCount"></i></button>
+    <a class="back modelink" id="modeLink" href="#" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M13 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Experience this place</span></a>
     <button type="button" class="back" id="helpBtn" title="Tutorial: a guided look at each part of the page" aria-label="Tutorial"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.1" fill="currentColor"/></svg><span>Tutorial</span></button>
     <a class="back" href="globe.html" title="Pick another place on Mars"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c3 3.5 3 14.500 0 18M12 3c-3 3.5-3 14.500 0 18" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Globe</span></a>
   </div>
@@ -94,6 +95,13 @@
         <div class="stats" id="moreStats"></div>
         <div class="contacts" id="contacts"></div>
       </details>
+      <div class="box navbox" id="navBox" hidden>
+        <h3>Navigation forecast <em>how sure your position will be</em></h3>
+        <canvas id="navChart"></canvas>
+        <p class="hint" id="navSum"></p>
+        <div class="navkey"><span><i style="background:#3ddc97"></i>within 12 m</span><span><i style="background:#8ab8ff"></i>12–30 m</span><span><i style="background:#f2b84b"></i>30–60 m</span><span><i style="background:#ff6b55"></i>over 60 m</span></div>
+        <p class="hint">No GPS on Mars: the suit counts steps (about 2 m off per 100 m), the habitat mast measures range and bearing while it can see you, and each relay pass fixes the position to about 5 m (assumed accuracies).</p>
+      </div>
       <p class="hint nextstep">Then press <b>play</b> in the time bar to simulate the walk.</p>
     </section>
   </aside>
@@ -223,6 +231,16 @@
 <button type="button" class="jumpbtn" id="jumpBtn" hidden aria-label="Jump">Jump</button>
 <div class="visor" aria-hidden="true"></div>
 <div class="toasts" id="toasts"></div>
+<div class="explore" id="explore" hidden role="dialog" aria-modal="true" aria-labelledby="exSite">
+  <div class="excard">
+    <small>Experience Mars</small>
+    <h1 id="exSite"></h1>
+    <p class="exfacts" id="exFacts"></p>
+    <p>You are at the airlock of a habitat, on real terrain from NASA orbiters, at true scale. Walk anywhere. Mars has no GPS, so the guide tells you how the habitat radio and passing satellites keep track of you.</p>
+    <ul class="exhow" id="exHow"></ul>
+    <div class="exbtns"><button type="button" class="go" id="exGo">Step outside</button><a class="chip" href="globe.html?mode=explore">Pick another place</a></div>
+  </div>
+</div>
 <div class="maplegend" id="mapLegend" hidden></div>
 <div class="readout"><div><span>Lat</span><b id="rLat">—</b></div><div><span>Lon</span><b id="rLon">—</b></div><div><span>Elev</span><b id="rEl">—</b></div><div><span>Slope</span><b id="rSl">—</b></div></div>
 
@@ -269,6 +287,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="relayfix.js?v=1794663000"></script>
-<script src="app.js?v=1794667200"></script>
+<script src="app.js?v=1794667915"></script>
 </body>
 </html>

@@ -2,6 +2,8 @@
 (async () => {
   const $ = id => document.getElementById(id);
   const SITE = new URLSearchParams(location.search).get("site") || "jezero";
+  const MODE = ["plan", "explore"].includes(new URLSearchParams(location.search).get("mode")) ? new URLSearchParams(location.search).get("mode") : "full";
+  document.body.classList.add("mode-" + MODE);
   const Q = u => u.startsWith("/api/") ? u + (u.includes("?") ? "&" : "?") + "site=" + SITE : u;   // every API call names its site
   const J = (u, o) => fetch(Q(u), o).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText); return r.json(); });
   const ORB = {
@@ -192,6 +194,8 @@
   const routeCase = L.polyline([], { color: "#05060A", weight: 8, opacity: 0.8, interactive: false, pane: "route" }).addTo(map);
   const routeDone = L.polyline([], { color: "#EDE7DF", weight: 2, opacity: 0.35, dashArray: "4 6", interactive: false, pane: "route" }).addTo(map);
   const routeLine = L.layerGroup().addTo(map);
+  map.createPane("nav").style.zIndex = 445;             // just under the route: a glowing band coloured by how sure the position is
+  const navLine = L.layerGroup().addTo(map);
   // draw the route green where it is flat, amber on moderate slope, red where steep. `from` = first node still ahead; `head` = walker position.
   function paintRoute(r, from = 0, head = null) {
     const pts = head ? [ll(head[0], head[1])] : [];
@@ -261,7 +265,7 @@
     const r = S.route;
     if (r) paintRoute(r); else { routeCase.setLatLngs([]); routeLine.clearLayers(); }
     syncWalk();
-    if (!r) { $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("moreStats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
+    if (!r) { drawNav(); $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("moreStats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
     const mx = r.slope_mix || { green: 100, yellow: 0, steep: 0 }, f0 = v => Math.round(v);
     $("verdict").className = "verdict " + (mx.steep > 0.5 ? "bad" : mx.yellow > 3 ? "warn" : "ok");
     $("verdict").textContent = mx.steep > 0.5 ? `${f0(mx.steep)} % of this route is steep (over 15°). Steepest ${r.max_slope.toFixed(0)}°.`
@@ -282,7 +286,67 @@
     $("warns").innerHTML = r.warnings.map(w => `<div class="warn">${w}</div>`).join("") +
       `<p class="note">Radiation on this walk: ${(r.dose_msv * 1000).toFixed(0)} µSv (${r.career_pct.toFixed(3)} % of the ${M.rad ? M.rad.career : 600} mSv career limit). Standing still in the open here costs about ${r.rad_day_avg.toFixed(2)} mSv a day.</p>`;
     $("contacts").innerHTML = r.contacts.map(c => `<div><i class="dot" style="background:${ORB[c.orbiter].c}"></i><span>${c.orbiter} ${c.start ? fUTC(c.start) + " UTC" : "blocked"}</span><span>${c.minutes} min · ${c.max_el}°${c.blocked_min ? ` · ${c.blocked_min} blocked` : ""}</span></div>`).join("");
-    drawProfile(); drawTimeline(); T3.dirty = true;
+    drawProfile(); drawTimeline(); drawNav(); T3.dirty = true;
+  }
+
+  /* ---------- navigation forecast ----------
+     Mars has no GPS. Along the planned route this works out, point by point, how well the astronaut will know where they are:
+     the suit's own estimate (dead reckoning) loses about DRIFT of the distance walked; the habitat mast, while it can see the suit,
+     measures range (5 m) and bearing (1 degree); a relay pass that stays in view for a minute fixes the position to about 5 m.
+     Pass times come from the route's contact list (terrain blocking included). Accuracy figures are assumptions, as in the walk. */
+  const NAVC = e => e <= 12 ? "#3ddc97" : e <= 30 ? "#8ab8ff" : e <= 60 ? "#f2b84b" : "#ff6b55";
+  function navForecast(r) {
+    const n = r.x.length, out = { err: new Float32Array(n), src: new Array(n), fixes: [] };
+    const wins = (r.contacts || []).filter(c => c.start && c.minutes >= 1).map(c => ({ ...c, a: c.start + 60, b: c.end })).sort((a, b) => a.a - b.a);
+    let e = 1.5, wi = 0, hk = 0, hOk = true;
+    for (let i = 0; i < n; i++) {
+      if (i) e += DRIFT * (r.d[i] - r.d[i - 1]);
+      const t = r.depart + r.t[i]; let src = "suit";
+      if (i % 3 === 0 || i === n - 1) { hOk = habLinkAt(r.x[i], r.y[i]).ok; hk = Math.hypot(r.x[i] - HAB[0], r.y[i] - HAB[1]); }
+      if (hOk) { e = Math.min(e, 2 * Math.hypot(5, hk * Math.PI / 180)); src = "hab"; }      // in sight of the mast: it keeps the estimate in check
+      while (wi < wins.length && wins[wi].b < t) wi++;
+      const w = wins[wi];
+      if (w && t >= w.a && t <= w.b) { if (e > 5) { if (!w.used) { w.used = true; out.fixes.push({ i, orbiter: w.orbiter, t, before: e }); } e = 5; } src = "sat"; }
+      out.err[i] = e; out.src[i] = src;
+    }
+    let worst = 0; for (let i = 1; i < n; i++) if (out.err[i] > out.err[worst]) worst = i;
+    out.worst = worst;
+    const habEnd = out.src.findIndex(v => v !== "hab" && v !== "sat"); out.habKm = habEnd > 0 ? r.d[habEnd] / 1000 : 0;
+    return out;
+  }
+  function drawNav() {
+    navLine.clearLayers(); const r = S.route, box = $("navBox");
+    if (!r || walk.on) { if (box) box.hidden = !r; return; }
+    const F = navForecast(r); S.nav = F;
+    let start = 0, col = NAVC(F.err[0]);
+    for (let i = 1; i < r.x.length; i++) {
+      const c = NAVC(F.err[i]);
+      if (c !== col || i === r.x.length - 1) { navLine.addLayer(L.polyline(r.x.slice(start, i + 1).map((x, k) => ll(x, r.y[start + k])), { color: col, weight: 20, opacity: 0.6, lineCap: "round", interactive: false, pane: "nav" })); start = i; col = c; }
+    }
+    F.fixes.forEach(f => {
+      const o = ORB[f.orbiter] || { c: "#8ab8ff" };
+      L.marker(ll(r.x[f.i], r.y[f.i]), { icon: L.divIcon({ className: "", html: `<div class="navfix" style="--c:${o.c}"><i></i><span>${shortOrb(f.orbiter)} fix · ${fUTC(f.t)}</span></div>`, iconSize: [0, 0], iconAnchor: [0, 0] }), interactive: false, pane: "route" }).addTo(navLine);
+    });
+    if (box) { box.hidden = false; drawNavChart(r, F); }
+  }
+  function drawNavChart(r, F) {
+    const cv = $("navChart"); if (!cv || !cv.clientWidth) return;
+    const W2 = cv.clientWidth, H2 = cv.clientHeight, dpr = devicePixelRatio || 1; cv.width = W2 * dpr; cv.height = H2 * dpr;
+    const c = cv.getContext("2d"); c.scale(dpr, dpr); c.clearRect(0, 0, W2, H2);
+    const L0 = 34, B = H2 - 18, T = 8, D = r.d.at(-1) || 1, emax = Math.max(30, ...F.err) * 1.1, X = d => L0 + (W2 - L0 - 6) * d / D, Y = e => B - (B - T) * e / emax;
+    c.strokeStyle = "#1a2230"; c.lineWidth = 1; c.fillStyle = "#627087"; c.font = "11px IBM Plex Mono, monospace";
+    for (const v of [0, Math.round(emax / 2 / 10) * 10, Math.floor(emax / 10) * 10]) { c.beginPath(); c.moveTo(L0, Y(v)); c.lineTo(W2 - 6, Y(v)); c.stroke(); c.fillText(v + " m", 0, Y(v) + 4); }
+    c.fillText("0 km", L0, H2 - 3); const km = (D / 1000).toFixed(1) + " km"; c.fillText(km, W2 - 6 - c.measureText(km).width, H2 - 3);
+    for (let i = 1; i < r.x.length; i++) {
+      c.fillStyle = NAVC(F.err[i]); c.globalAlpha = 0.85; const x0 = X(r.d[i - 1]), x1 = X(r.d[i]);
+      c.beginPath(); c.moveTo(x0, B); c.lineTo(x0, Y(F.err[i - 1])); c.lineTo(x1, Y(F.err[i])); c.lineTo(x1, B); c.fill();
+    }
+    c.globalAlpha = 1;
+    F.fixes.forEach(f => { const x = X(r.d[f.i]); c.strokeStyle = (ORB[f.orbiter] || { c: "#fff" }).c; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(x, T); c.lineTo(x, B); c.stroke(); c.setLineDash([]); });
+    const w = F.worst, nf = F.fixes.length;
+    $("navSum").innerHTML = (nf ? `<b>${nf} satellite fix${nf > 1 ? "es" : ""}</b> on this walk: ${F.fixes.map(f => `${f.orbiter} at ${fUTC(f.t)}`).join(", ")}. ` : `<b>No satellite pass</b> during this walk, so nothing corrects the suit's estimate away from the habitat. `)
+      + (F.habKm > 0.05 ? `The habitat radio places you for the first ${F.habKm.toFixed(1)} km. ` : "")
+      + `Least sure: <b>±${Math.round(F.err[w])} m</b> at km ${(r.d[w] / 1000).toFixed(1)}.`;
   }
 
   /* ---------- relay panel ---------- */
@@ -553,7 +617,7 @@
     camWalk();
     if (!mq.matches && !document.body.classList.contains("nopanel")) { UI.autoHid = true; showPanel(false); }      // the walk gets the whole screen; the panel button brings it back
     document.body.classList.remove("showui"); syncPanelTog();
-    $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet();
+    $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet(); navLine.clearLayers();
     $("depart").disabled = true; drawStops();
     { const np = DB.passes.find(q => q.end > walk.simT);
       guide("Walk started", np && np.start <= walk.simT ? `${np.orbiter} is overhead right now. In a moment it will measure exactly where you are.`
@@ -574,6 +638,7 @@
     if (UI.autoHid && !mq.matches) showPanel(true); UI.autoHid = false; document.body.classList.remove("showui"); syncPanelTog();
     $("depart").disabled = false; dopplerTone(null);
     if (msg) guide("Walk complete", msg, "#6EE7A8");
+    if (MODE === "explore" && $("explore")) { $("exGo").textContent = "Walk again"; setTimeout(() => { $("explore").hidden = false; }, msg ? 2500 : 0); }
     drawStops(); showRoute();
   }
   function posOn(r, el) {
@@ -818,7 +883,7 @@
   addEventListener("keydown", e => {
     const k = e.key.toLowerCase(); if (!["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) return;
     if (/^(input|textarea|select)$/i.test(e.target.tagName) || !walk.on) return;
-    e.preventDefault(); if (!walk.manual) takeControl(); walk.keys[k] = true;
+    e.preventDefault(); if (!walk.manual) takeControl(); walk.keys[k] = true; if (MODE === "explore") $("exKeys") && ($("exKeys").hidden = true);
   });
   addEventListener("keyup", e => { if (walk.keys) walk.keys[e.key.toLowerCase()] = false; });
   addEventListener("blur", () => { walk.keys = {}; });
@@ -1732,7 +1797,7 @@
   $("vrExit").onclick = vrExit;
   $("vrCenter").onclick = () => { if (T3.vr) T3.vr.yaw0 = null; $("vrBar").hidden = true; };
   // a standing jump in Mars gravity (3.71 m/s2): about 40 cm up and nearly a second in the air
-  function jump() { if (S.view !== "3d" || T3.jmp) return; T3.jmp = { t: 0 }; }
+  function jump() { if (S.view !== "3d" || T3.jmp || MODE === "plan") return; T3.jmp = { t: 0 }; }
   T3.vrTest = { enter: () => vrEnter(), exit: () => vrExit() };
 
   /* ---------- controls ---------- */
@@ -1814,7 +1879,7 @@
   { const hint = $("hint"), bye = () => { hint.hidden = true; try { localStorage.setItem("mw_hint", "1"); } catch (e) { /* private mode */ } };
     let seen = false; try { seen = localStorage.getItem("mw_hint") === "1"; } catch (e) { /* private mode */ }
     hint.hidden = seen; $("walkBtn").addEventListener("click", bye); $("map").addEventListener("pointerdown", bye); $("view3d").addEventListener("pointerdown", bye); }
-  $("walkBtn").onclick = () => walk.on ? endWalk() : startWalk();
+  $("walkBtn").onclick = () => walk.on ? endWalk() : MODE === "plan" ? null : startWalk();
   $("homeBtn").onclick = () => { if (!walk.on) return; const p = posOn(walk.route, walk.simT - walk.t0); reroute([p.x, p.y], [HAB], "Abort: shortest safe way back to the habitat."); };
   map.on("dragstart", () => walk.follow = false);
   addEventListener("resize", () => { drawTimeline(); drawProfile(); });
@@ -1958,7 +2023,7 @@
     if (e.ctrlKey || e.metaKey || e.altKey || /^(input|textarea|select)$/i.test(document.activeElement.tagName)) return;
     if (e.code === "KeyT" && !e.repeat) { e.preventDefault(); pttDown(); }
     else if (e.code === "KeyM" && !e.repeat) togglePanel();
-    else if (e.code === "KeyC" && !e.repeat && S.view === "3d") { const o = ["free", "follow", "fp"]; setCam(o[(o.indexOf(T3.cam3) + 1) % 3]); }
+    else if (e.code === "KeyC" && !e.repeat && S.view === "3d" && MODE !== "plan") { const o = ["free", "follow", "fp"]; setCam(o[(o.indexOf(T3.cam3) + 1) % 3]); }
     else if (e.code === "Space" && S.view === "3d") { e.preventDefault(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (!e.repeat) jump(); }
   });
   addEventListener("keyup", e => { if (e.code === "KeyT") pttUp(); });
@@ -2067,6 +2132,56 @@
   setDepart(0); syncLayers(); drawRelay();
   requestAnimationFrame(tick);
 
+  /* ---------- the two ways in: Plan a trip / Experience Mars ---------- */
+  {
+    const other = MODE === "explore" ? "plan" : "explore";
+    $("modeLink").href = `index.html?site=${encodeURIComponent(SITE)}&mode=${other}`;
+    $("modeLink").querySelector("span").textContent = MODE === "explore" ? "Plan a trip here" : "Experience this place";
+    $("modeLink").hidden = MODE === "full";
+    $("brandLink").href = "/";
+    if (MODE === "plan") {
+      $("hint").textContent = "Tap the map to add a waypoint. The band under the route shows how sure your position will be.";
+      document.querySelector(".nextstep").textContent = "Switch to 3D to see the ground, or open Experience to walk it yourself.";
+    }
+  }
+  if (MODE === "explore") {
+    /* Experience Mars: the panels go, the astronaut steps out of the airlock, and you are behind the visor.
+       A lookout is chosen for you: the highest ground within 2.5 km of the habitat, so the first walk has a view. */
+    document.body.classList.add("nopanel"); setView("3d"); setCam("fp", true); syncPanelTog();
+    const ex = $("explore"), sunNow = sunAt(Date.now() / 1000), dark = sunNow.el < 6;
+    if (dark) T3.testSun = { az: 200, el: 34 };
+    const [lo, la] = lonLat(...HAB), z0 = elevAt(...HAB) ?? 0;
+    $("exSite").textContent = M.label;
+    $("exFacts").innerHTML = `<span>${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"}</span><span>${z0 >= 0 ? "+" : "−"}${Math.abs(z0 / 1000).toFixed(1)} km elevation</span><span>${dark ? "Night there now · shown in daylight" : `Sun ${Math.round(sunNow.el)}° up there now`}</span>`;
+    const coarse = matchMedia("(pointer: coarse)").matches;
+    $("exHow").innerHTML = coarse
+      ? "<li><b>Stick</b> walk and turn</li><li><b>Drag</b> look around</li><li><b>Jump</b> in 0.38 g</li><li><b>VR</b> phone in a headset</li>"
+      : "<li><b>W A S D</b> walk and turn</li><li><b>Drag</b> look around</li><li><b>Space</b> jump in 0.38 g</li><li><b>C</b> change camera</li>";
+    function lookout() {
+      let best = null, bz = -1e9; const R0 = 2500, st = Math.max(DX, 40);
+      for (let dy = -R0; dy <= R0; dy += st) for (let dx = -R0; dx <= R0; dx += st) {
+        const d = Math.hypot(dx, dy); if (d < 700 || d > R0) continue;
+        const x = HAB[0] + dx, y = HAB[1] + dy, z = elevAt(x, y), sl = slopeAt(x, y); if (z == null || sl == null || sl > 22) continue;
+        if (z > bz) { bz = z; best = [x, y]; }
+      }
+      return best || [HAB[0] + 1200, HAB[1] + 900];
+    }
+    async function stepOut() {
+      ex.hidden = true; audio().resume();
+      if (!walk.on) {
+        const poi = lookout(); S.stops = [poi]; S.roundTrip = true; plan(0);
+        for (let i = 0; i < 80 && !(S.route && S.route.stop_idx.length >= 2 && S.stops[0] === poi); i++) await new Promise(r => setTimeout(r, 100));
+        if (!S.route) return toast("Could not set the walk up", "Try another place on the globe.", "#F0616B");
+        const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click();
+        startWalk(); takeControl(); setCam("fp", true);
+        guide("You are outside", `The lookout is the highest ground near the habitat, ${wKm(Math.hypot(poi[0] - HAB[0], poi[1] - HAB[1]))} away. Walk there yourself and back to the airlock. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.`, "#8ab8ff");
+      }
+      try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
+    }
+    $("exGo").onclick = stepOut;
+    ex.hidden = false;
+  }
+
   /* ---------- tutorial: a short guided look at each part of the page (the Tutorial button in the top bar) ---------- */
   {
     const T = { i: -1 }, phone = () => mq.matches;
@@ -2122,6 +2237,9 @@
     addEventListener("resize", place);
     addEventListener("keydown", e => { if (T.i < 0) return; if (e.key === "Escape") end(); else if (e.key === "ArrowRight") $("tutNext").click(); else if (e.key === "ArrowLeft") $("tutBack").click(); else return; e.stopPropagation(); }, true);
     MW.tut = { show, end, STEPS };
+    if (MODE === "plan") STEPS.find(v => v.sel === "#timebar").x = "The clock is the time at the site and the strip shows daylight and satellite passes. Drag along it to choose when you leave: the navigation band changes with the passes.";
+    if (MODE === "explore") $("helpBtn").hidden = true;
+    if (new URLSearchParams(location.search).get("tutorial") === "1" && MODE !== "explore") setTimeout(() => show(0), 900);
   }
 
   /* ---------- presentation tour: tour.html loads this page in a frame with ?tour=pavonis (or orbit|slope|sat) ----------

@@ -163,8 +163,8 @@ details.more[open] > summary::after { content: "–"; }
 <div class="busy" id="busy" hidden><div><b>Building this site</b><span id="busyTxt"></span><i></i></div></div>
 
 <header class="appbar">
-  <a class="brand" href="globe.html" title="AirAwareNetwork · Marswalk"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="40" height="40"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
-  <nav class="crumbs" aria-label="Location"><span>Mars</span><small>Pick a place to plan a walk</small></nav>
+  <a class="brand" href="/" title="Marswalk home"><img class="logo" src="img/brand/logo-192.png" alt="AirAwareNetwork" width="40" height="40"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
+  <nav class="crumbs" aria-label="Location"><span id="gMode">Mars</span><small id="gSub">Pick a place to plan a walk</small></nav>
   <div class="viewbar">
     <div class="seg" role="group" aria-label="View">
       <button type="button" id="v-globe" aria-pressed="true">Globe</button>
@@ -254,6 +254,7 @@ details.more[open] > summary::after { content: "–"; }
 (() => {
   const D2R = Math.PI / 180;
   const $ = id => document.getElementById(id);
+  const GMODE = new URLSearchParams(location.search).get("mode");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const KM_PER_DEG = 2 * Math.PI * 3389.5 / 360;          // 59.16 km per degree of latitude
 
@@ -749,7 +750,7 @@ details.more[open] > summary::after { content: "–"; }
     const pe = elevAt(p.lat, p.lon);
     $("cLat").textContent = fmtLat(p.lat); $("cLon").textContent = fmtLon(p.lon); $("cEl").textContent = fmtEl(pe); $("cRad").textContent = pe == null ? "—" : `${radDose(pe).toFixed(2)} mSv/day`;
     $("cBlurb").textContent = p.blurb || (p.kind === "site" ? `Terrain is already built for this area (${p.cell} m per pixel, ${p.size} km across), so the planner opens straight away.` : "The planner builds this area from NASA elevation data and real orbiter passes. It takes about a minute the first time.");
-    $("cPlan").textContent = p.siteId ? "Open the planner" : "Plan a walk here";
+    $("cPlan").textContent = GMODE === "explore" ? "Step outside here" : GMODE === "plan" ? "Plan a trip here" : p.siteId ? "Open the planner" : "Plan a walk here";
     $("cSwitch").textContent = S.view === "globe" ? "Show on map" : "Show on globe";
   }
   $("cClose").addEventListener("click", () => { S.sel = null; PLACES.forEach(q => q.el.classList.remove("sel")); refreshCard(); if (S.view === "map") map.draw(); });
@@ -808,16 +809,20 @@ details.more[open] > summary::after { content: "–"; }
   $("zhome").addEventListener("click", () => { if (S.view === "map") { map.fit = true; map.cx = 0; map.cy = 0; map.draw(); } else camera.position.setLength(camera.aspect < 1 ? Math.min(7, 3.3 * Math.min(2.1, 0.9 / camera.aspect)) : 3.3); });
 
   /* ---------- plan anywhere ---------- */
+  // the homepage sends ?mode=plan (Plan a trip) or ?mode=explore (Experience Mars); the site opens in that mode
+  const siteUrl = id => `index.html?site=${encodeURIComponent(id)}${GMODE === "plan" || GMODE === "explore" ? "&mode=" + GMODE : ""}`;
+  if (GMODE === "plan") { $("gMode").textContent = "Plan a trip"; $("gSub").textContent = "Pick a landing site"; $("hint").textContent = "Click anywhere on Mars to plan a trip there"; }
+  if (GMODE === "explore") { $("gMode").textContent = "Experience Mars"; $("gSub").textContent = "Pick a place to stand"; $("hint").textContent = "Click anywhere on Mars to stand there"; }
   $("cPlan").addEventListener("click", async () => {
     const p = S.sel; if (!p) return;
-    if (p.siteId) { location.href = "/?site=" + p.siteId; return; }
+    if (p.siteId) { location.href = siteUrl(p.siteId); return; }
     $("busy").hidden = false;
     $("busyTxt").textContent = `${fmtLat(p.lat)} ${fmtLon(p.lon)}: reading MOLA terrain, computing horizons, then asking JPL Horizons for the orbiter passes. About a minute.`;
     try {
       const r = await fetch("/api/sites", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lat: p.lat, lon: p.lon, name: p.kind === "point" ? null : (p.where || p.name) }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.detail || r.statusText);
-      location.href = "/?site=" + j.id;
+      location.href = siteUrl(j.id);
     } catch (e) { $("busyTxt").textContent = "Could not build the site: " + e.message; setTimeout(() => { $("busy").hidden = true; }, 5000); }
   });
   addEventListener("pageshow", () => { $("busy").hidden = true; });
