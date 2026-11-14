@@ -2246,31 +2246,38 @@
       return best || [HAB[0] + 1200, HAB[1] + 900];
     }
     // second step: choose where to go. The map opens round the habitat; tap a spot (or take the lookout).
+    // second step: plan where to go. Tap the map to add stops (as many as you like); the route is drawn as you go.
+    // Nothing starts until you press Start: then you are in first person at the airlock.
     function chooseDest() {
       return new Promise(res => {
-        const R0 = S.vehicle === "rover" ? 8000 : 3500, bar = $("exPick");
-        if (S.stops.length) { S.stops = []; plan(0); }                  // a clean map: only the habitat, and the spot you choose
+        const R0 = S.vehicle === "rover" ? 8000 : 3500, bar = $("exPick"), go = $("exStart"), rv = S.vehicle === "rover";
+        S.stops = []; S.roundTrip = false; plan(0);
         setView("2d"); map.fitBounds(L.latLngBounds([ll(HAB[0] - R0, HAB[1] - R0), ll(HAB[0] + R0, HAB[1] + R0)]), { animate: false });
-        $("exPickT").textContent = `Tap the map where you want to ${S.vehicle === "rover" ? "drive" : "walk"}`;
+        const sync = () => {
+          const n = S.stops.length, r = S.route && S.route.stop_idx.length === n + 1 ? S.route : null;
+          $("exPickT").textContent = !n ? `Tap the map to add your stops` : r ? `${n} stop${n > 1 ? "s" : ""} · ${wKm(r.distance_m)} · about ${wDur(r.time_s)} ${rv ? "driving" : "walking"}` : `${n} stop${n > 1 ? "s" : ""} · planning the route…`;
+          go.disabled = !r; $("exUndo").hidden = !n;
+        };
+        const timer = setInterval(sync, 300); sync();
         bar.hidden = false; document.body.classList.add("ex-picking");
-        const done = p => { T3.exPick = null; bar.hidden = true; document.body.classList.remove("ex-picking"); res(p); };
-        T3.exPick = p => done(p);
-        $("exLook").onclick = () => done(lookout()); $("exBack").onclick = () => done(null);
+        const done = ok => { clearInterval(timer); T3.exPick = null; bar.hidden = true; document.body.classList.remove("ex-picking"); res(ok); };
+        T3.exPick = p => { S.stops.push(p); plan(0); sync(); };
+        $("exUndo").onclick = () => { S.stops.pop(); plan(0); sync(); };
+        $("exLook").onclick = () => { S.stops.push(lookout()); plan(0); sync(); };
+        $("exStart").onclick = () => done(true);
+        $("exBack").onclick = () => { S.stops = []; plan(0); done(false); };
       });
     }
     async function stepOut(veh) {
       ex.hidden = true; audio().resume();
       if (!walk.on) {
         setVehicle(veh === "rover" ? "rover" : "foot", false);
-        const dest = await chooseDest();
-        if (!dest) { setView("3d"); setCam("fp", true); ex.hidden = false; return; }
-        S.stops = [dest]; S.roundTrip = false; plan(0);
-        for (let i = 0; i < 100 && !(S.route && S.route.stop_idx.length >= 2 && S.stops[0] === dest); i++) await new Promise(r => setTimeout(r, 100));
-        if (!S.route) { toast("No way there", "That spot cannot be reached on this terrain. Pick another one.", "#F0616B"); return stepOut(veh); }
+        if (!(await chooseDest())) { setView("3d"); setCam("fp", true); ex.hidden = false; return; }
+        if (!S.route) return toast("No route yet", "Add a stop that can be reached.", "#F0616B");
         const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click();
         setView("3d"); startWalk(); takeControl(); setCam("fp", true);
-        const far = S.route.distance_m, rv = S.vehicle === "rover";
-        guide(rv ? "You are at the wheel" : "You are outside", `Your destination is ${wKm(far)} away by the planned route, about ${wDur(S.route.time_s)}. ${rv ? "Drive" : "Walk"} there yourself; the green line shows the way. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.${far > (rv ? 30000 : 8000) ? " It is a long way: the Speed buttons make time run faster." : ""}`, "#8ab8ff");
+        const far = S.route.distance_m, rv = S.vehicle === "rover", n = S.stops.length;
+        guide(rv ? "You are at the wheel" : "You are outside", `Your plan: ${n} stop${n > 1 ? "s" : ""}, ${wKm(far)} by the planned route, about ${wDur(S.route.time_s)}. ${rv ? "Drive" : "Walk"} it yourself; the green line shows the way. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.${far > (rv ? 30000 : 8000) ? " It is a long way: the Speed buttons make time run faster." : ""}`, "#8ab8ff");
       }
       try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
     }

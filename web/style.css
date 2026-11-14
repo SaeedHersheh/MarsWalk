@@ -577,3 +577,12 @@ body.ex-picking .timebar, body.ex-picking .tools3d, body.ex-picking .stick, body
 .tutspot { border-color: var(--mars); box-shadow: 0 0 0 9999px rgba(2, 4, 8, 0.6), 0 0 30px rgba(255, 154, 107, 0.35); }
 .tutcard { border-radius: 18px; padding: 22px 22px 18px; }
 .tutcard b { font-size: 19px; font-weight: 700; }
+
+/* Experience: plan the stops, then Start */
+.expick { flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 20px; }
+.exrow { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+#exStart { display: inline-flex; align-items: center; gap: 8px; padding: 10px 22px; border: 0; border-radius: 999px; background: var(--mars); color: #04060a; font-weight: 700; font-size: 15px; }
+#exStart svg { width: 16px; height: 16px; }
+#exStart:disabled { opacity: 0.4; cursor: default; }
+#exStart:not(:disabled):hover { background: #ffb08a; }
+.expick { top: auto !important; bottom: calc(20px + env(safe-area-inset-bottom)); }   /* the plan-and-start bar sits at the bottom, under your thumb */
