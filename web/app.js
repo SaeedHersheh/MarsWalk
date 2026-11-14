@@ -733,7 +733,7 @@
     hb.textContent = h.ok ? `linked · ${fKm(h.d)}` : "hidden by terrain"; hb.style.color = h.ok ? "var(--ok)" : "var(--warn)";
     if (walk.habOk !== undefined && walk.habOk !== h.ok && performance.now() - (walk.habSaid || 0) > 15000 && (walk.habSaid = performance.now())) guide(h.ok ? "Habitat link is back" : "Habitat link lost", h.ok ? "The habitat mast can see you again. You can talk to the habitat, and it can help place you." : `The ground between you and the habitat is in the way, ${wKm(h.d)} from home. Messages to the habitat wait until the link is back or a satellite passes.`, h.ok ? "#6EE7A8" : "#F5B85B");
     walk.habOk = h.ok;
-    $("hudPosL").textContent = "Position · " + (locked ? "sat" : walk.src === "hab" ? "hab" : "suit"); $("hudPosL").title = locked ? "Position from the satellite fix" : walk.src === "hab" ? "Position from the habitat mast (range and bearing)" : "Position from the suit's own dead reckoning";
+    $("hudPosL").textContent = "Position · " + (locked ? "sat" : walk.src === "hab" ? "hab" : S.vehicle === "rover" ? "rover" : "suit"); $("hudPosL").title = locked ? "Position from the satellite fix" : walk.src === "hab" ? "Position from the habitat mast (range and bearing)" : "Position from the suit's own dead reckoning";
   }
   // "Wait here for the next satellite": jump the clock to just before the next pass. The astronaut stays where they are.
   function skipToPass() {
@@ -1313,9 +1313,9 @@
     // From far away they are smaller than a pixel, so labels and the beacon mark where they are (the way NASA Eyes marks spacecraft).
     // The orbiter is the one exception: it is hundreds of km away, so it is drawn as a sky marker and its label gives the real range.
     const AS = 1, HS = 4.2, SSC = 430 * K, IDLE = HAB, HABM = [HAB[0], Math.min(M.height_m - 1, HAB[1] + 9.6)];   // the walk starts and ends at the habitat point, which is the ground in front of the airlock; the dome stands just north of it
-    const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro);
+    const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro); T3.astro = astro;
     const astroTag = labelSprite("Astronaut", "#8ab8ff"); sc.add(astroTag);
-    const rover = makeRover(); rover.visible = false; sc.add(rover);
+    const rover = makeRover(); rover.visible = false; sc.add(rover); T3.rover = rover;
     const roverTag = labelSprite("Crew rover", "#8ab8ff"); roverTag.visible = false; sc.add(roverTag);
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 28), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: 0.34, map: (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })() }));
     blob.rotation.x = -Math.PI / 2; blob.renderOrder = 2; sc.add(blob);
@@ -1694,12 +1694,18 @@
       if (RV) {
         // driving: the crew are inside. Parked: beside the airlock, nose out
         const hvx = hab.position.x + M.width_m / 2 - IDLE[0], hvy = M.height_m / 2 - hab.position.z - IDLE[1], hl = Math.hypot(hvx, hvy) || 1;   // from the airlock to the dome
-        const hy = walking && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                    // parked nose away from the dome
+        const hyT = walking && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                   // parked nose away from the dome
+        // a vehicle steers and rides on its suspension: ease the heading, height and tilt instead of snapping to every bend and bump
+        const ez = r => 1 - Math.exp(-dtr * r);
+        if (T3.rvHy == null || !walking) T3.rvHy = hyT; else T3.rvHy += Math.atan2(Math.sin(hyT - T3.rvHy), Math.cos(hyT - T3.rvHy)) * ez(2.2);
+        const hy = T3.rvHy;
         const fx = Math.sin(hy), fy = Math.cos(hy), mx0 = walking ? k.x : IDLE[0] - hvy / hl * 7, my0 = walking ? k.y : IDLE[1] + hvx / hl * 7;       // 7 m to the side of the airlock
         const gz = (a, b) => ground(Math.min(M.width_m, Math.max(0, mx0 + a * fx - b * fy)), Math.min(M.height_m, Math.max(0, my0 + a * fy + b * fx)));
-        const zf = gz(1.6, 0), zb = gz(-1.6, 0), zl = gz(0, 1.3), zr = gz(0, -1.3);
-        rover.position.copy(P(mx0, my0, 0)); rover.position.y = (zf + zb + zl + zr) / 4;
-        rover.rotation.set(-Math.atan2(zf - zb, 3.2), Math.atan2(fx, -fy), Math.atan2(zl - zr, 2.6));
+        const zf = gz(1.6, 0), zb = gz(-1.6, 0), zl = gz(0, 1.3), zr = gz(0, -1.3), yT = (zf + zb + zl + zr) / 4, pT = -Math.atan2(zf - zb, 3.2), rT = Math.atan2(zl - zr, 2.6);
+        const S2 = T3.rvSus || (T3.rvSus = { y: yT, p: pT, r: rT }), big = Math.abs(S2.y - yT) > 30 || !walking;
+        S2.y = big ? yT : S2.y + (yT - S2.y) * ez(6); S2.p = big ? pT : S2.p + (pT - S2.p) * ez(4); S2.r = big ? rT : S2.r + (rT - S2.r) * ez(4);
+        rover.position.copy(P(mx0, my0, 0)); rover.position.y = S2.y;
+        rover.rotation.set(S2.p, Math.atan2(fx, -fy), S2.r);
         const lp = T3.rvLast || [mx0, my0], dd = Math.hypot(mx0 - lp[0], my0 - lp[1]); T3.rvLast = [mx0, my0];
         if (dd < 50) { T3.rvRoll = (T3.rvRoll || 0) + dd / 0.5; rover.userData.wheels.forEach(w => { w.rotation.x = T3.rvRoll; }); }
         if (walking) { astro.visible = false; blob.visible = false; astroTag.visible = false; }
@@ -2555,8 +2561,8 @@
       async rover() {                                                   // the crew rover leaves the habitat
         ui(); if (walk.on) endWalk(); setVehicle("rover", false); plan(0);
         for (let i = 0; i < 60 && !(S.route && S.route.vehicle === "rover"); i++) await wait(100);
-        setView("3d"); { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); }
-        startWalk(); setCam("follow", true); T3.chaseK = 1.7;
+        setView("3d"); tourSpeed(6);                                       // a rover at ×6: clearly faster than the walk, still smooth
+        startWalk(); setCam("follow", true); T3.chaseK = 0.6;
       },
       async explore() {                                                 // Experience Mars: first person, walk, jump
         ui(); if (walk.on) endWalk(); setVehicle("foot", false); plan(0);
