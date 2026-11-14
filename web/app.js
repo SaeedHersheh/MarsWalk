@@ -1417,6 +1417,12 @@
       x.fillStyle = "#627087"; x.font = "500 28px Inter, sans-serif"; x.fillText(paused ? "Hold the dot on a button for 2 seconds · look away to walk on" : "Look at this card to pause", L, H - 30);
       hudT.needsUpdate = true;
     }
+    // tour: the head angles (yaw, pitch) that put the dot on a card button
+    T3.vrAim = id => {
+      const b = VR_BTNS.find(v => v.id === id); vrHud.updateMatrixWorld();
+      const d = new THREE.Vector3(((b.x + b.w / 2) / hudC.width - 0.5) * 1.05, (0.5 - (b.y + b.h / 2) / hudC.height) * 0.7875, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert());
+      return [Math.atan2(-d.x, -d.z), Math.asin(d.y)];
+    };
     function vrDraw(here, jy) {
       const V = T3.vr, fd = T3.fpDir || new THREE.Vector3(0, 0, -1);
       if (V.yaw0 == null) { vF.set(0, 0, -1).applyQuaternion(V.q); V.yaw0 = Math.atan2(-vF.x, -vF.z); V.calib = Math.atan2(-fd.x, -fd.z) - V.yaw0; }   // recenter: straight ahead = the way you face now
@@ -1457,6 +1463,10 @@
       },
       zoom: f => { if (T3.fp) { cam.fov = Math.min(80, Math.max(25, cam.fov * f)); cam.updateProjectionMatrix(); return; } if (T3.chase) { T3.chaseK = Math.min(14, Math.max(0.35, (T3.chaseK || 1) * f)); return; } const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
       reset: () => { setCam("free", true); homeCam(); },
+      flyTo: (tx, ty, back, up, ms, az = 0.6) => {                          // look at map point (tx, ty) from 'back' metres away (azimuth az from south) and 'up' metres higher
+        setCam("free", true); const q1 = P(tx, ty, elevAt(tx, ty) ?? M.zmin), p1 = q1.clone().add(new THREE.Vector3(-Math.sin(az) * back, up, Math.cos(az) * back));
+        T3.fly = { p0: cam.position.clone(), q0: ctl.target.clone(), p1, q1, t0: performance.now(), ms };
+      },
       aerial: (d = 0.42, h = 0.2) => { setCam("free", true); const cx = M.width_m / 2, cy = M.height_m / 2; ctl.target.copy(P(cx, cy, elevAt(cx, cy) ?? M.zmin)); cam.position.copy(ctl.target).add(new THREE.Vector3(0, h * M.width_m, d * M.height_m)); },
       backOff: () => { const d = ctl.target.clone().sub(cam.position).setY(0); if (d.lengthSq() < 1e-6) d.set(0, 0, -1); d.normalize(); ctl.target.copy(cam.position).addScaledVector(d, 2); cam.position.addScaledVector(d, -10); cam.position.y += 4; },
       fov: v => { cam.fov = v; cam.updateProjectionMatrix(); },
@@ -1601,7 +1611,11 @@
         ctl.target.lerp(here.clone().setY(here.y + 1.45), 1 - Math.exp(-dtr * 9));
       } else if (walking && walk.follow !== false && !T3.drag && !T3.skyLook) ctl.target.lerp(here, 0.05);
       ctl.maxPolarAngle = T3.skyLook ? Math.PI * 0.95 : Math.PI * 0.49;
-      if (T3.tourOrbit && !T3.drag && !T3.chase && !T3.skyLook) { const o = cam.position.clone().sub(ctl.target); o.applyAxisAngle(UP, T3.tourOrbit * dtr); cam.position.copy(ctl.target).add(o); }
+      if (T3.fly && !T3.chase) {                                              // tour: a smooth camera flight
+        const F = T3.fly, k = Math.min(1, (now - F.t0) / F.ms), e2 = k * k * (3 - 2 * k);
+        cam.position.lerpVectors(F.p0, F.p1, e2); ctl.target.lerpVectors(F.q0, F.q1, e2); if (k >= 1) T3.fly = null;
+      }
+      if (T3.tourOrbit && !T3.fly && !T3.drag && !T3.chase && !T3.skyLook) { const o = cam.position.clone().sub(ctl.target); o.applyAxisAngle(UP, T3.tourOrbit * dtr); cam.position.copy(ctl.target).add(o); }
       ctl.update(); rn.render(sc, cam);
     };
     T3.ready = true;
@@ -1674,6 +1688,13 @@
     if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look: small head turns steer, and looking further to the side just looks around. Your info card is on your left: look at it to pause and read, look away to walk on.", "#8ab8ff");
     else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
     T3.vr.go = setTimeout(() => { if (!T3.vr || !S.route) return; if (!walk.on) startWalk(); takeControl(); if (S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); } }, 5000);
+  }
+  // tour: VR without a phone, the head moved by a script
+  function vrDemo(on) {
+    if (!on) { if (T3.vr) { clearInterval(T3.vr.demo); T3.vr = null; T3.vrHead = null; } document.body.classList.remove("vr"); return; }
+    setCam("fp", true); const q = new THREE.Quaternion(), e3 = new THREE.Euler(0, 0, 0, "YXZ");
+    T3.vr = { q: q.clone(), yaw0: null, head: { yaw: 0, pitch: 0 } }; document.body.classList.add("vr");
+    T3.vr.demo = setInterval(() => { if (!T3.vr) return; const h = T3.vr.head; e3.set(h.pitch, h.yaw, 0, "YXZ"); T3.vr.q.setFromEuler(e3); }, 16);
   }
   // the card's gaze buttons
   async function vrAction(id) {
@@ -2046,24 +2067,117 @@
   setDepart(0); syncLayers(); drawRelay();
   requestAnimationFrame(tick);
 
-  /* ---------- presentation tour: tour.html loads this page in a frame with ?tour=orbit|slope|sat ----------
-     The page clears its controls, sets the scene up, says "ready" to the tour page, and on "go" plays its few seconds. */
+  /* ---------- tutorial: a short guided look at each part of the page (the Tutorial button in the top bar) ---------- */
+  {
+    const T = { i: -1 }, phone = () => mq.matches;
+    const panel = p => { if (!phone()) showPanel(true); openSheet(p); };
+    const STEPS = [
+      { t: "Welcome to Marswalk", x: "Marswalk plans a safe walk for an astronaut on Mars, on real NASA terrain, and shows how relay satellites keep track of where they are. This takes about a minute." },
+      { sel: "#map", soft: true, pre: () => { setView("2d"); if (phone()) closeSheet(); }, t: "The map", x: "This is the ground around the habitat, marked H. Tap anywhere to add a waypoint, and drag a marker to move it. The route is planned again each time." },
+      { sel: "#stops", pre: () => panel("mission"), t: "Plan: your waypoints", x: "Your stops are listed here in walking order. Remove one with the ×, or choose whether the walk ends back at the habitat." },
+      { sel: "#styles", pre: () => panel("mission"), t: "Plan: how careful to be", x: "Safest keeps to flat ground even if it is longer. Fastest takes the short way over steeper ground. Balanced sits between the two." },
+      { sel: "#stats", alt: "#verdict", pre: () => panel("mission"), t: "Plan: check the walk", x: "Distance, time, climb, radiation dose and how steep it gets, with a plain-words verdict above." },
+      { sel: "#layerChips", pre: () => panel("layers"), t: "Layers", x: "Colour the map by slope, radiation, ground temperature, sunlight, or where the radio reaches. One tap turns a layer on or off." },
+      { sel: "#nextPass", pre: () => panel("relay"), t: "Radio: satellites overhead", x: "Mars has no GPS. Relay orbiters pass overhead a few times a day. This shows the next pass. While one is up you can talk to Earth, and it measures where you really are." },
+      { sel: "#timebar", pre: () => { if (phone()) closeSheet(); }, t: "Time bar", x: "Press play to walk the route. The clock is the time at the site, the strip shows daylight and satellite passes, and ×1 to ×600 sets how fast time runs." },
+      { sel: ".viewbar .seg", pre: () => { if (phone()) closeSheet(); }, t: "Map or 3D", x: "3D shows the terrain at true scale. There you can orbit, follow the astronaut, or go first person, take control and walk yourself. On a phone, the VR button puts the walk in a headset." },
+      { sel: "#logBtn", t: "The guide and the bell", x: "During a walk a guide tells you in words what is happening: a satellite coming, how far off your position was, the new route. Every message is kept behind the bell." },
+      { sel: "a.back", alt: ".brand", last: true, t: "Anywhere on Mars", x: "Tap Globe, or the Marswalk logo, to pick any other place on Mars and plan a walk there." },
+    ];
+    const root = document.createElement("div"); root.className = "tut"; root.hidden = true;
+    root.innerHTML = '<div class="tutblock"></div><div class="tutspot"></div><div class="tutcard" role="dialog" aria-modal="true" aria-labelledby="tutT"><small id="tutN"></small><b id="tutT"></b><p id="tutX"></p>'
+      + '<a class="tutlink" id="tutTour" href="tour.html" hidden>Watch the Pavonis Mons tour (3D, satellites and VR)</a>'
+      + '<div class="tutbtns"><button type="button" class="chip" id="tutSkip">Skip</button><span></span><button type="button" class="chip" id="tutBack">Back</button><button type="button" class="go" id="tutNext">Next</button></div></div>';
+    document.body.appendChild(root);
+    const spot = root.querySelector(".tutspot"), card = root.querySelector(".tutcard");
+    const seen = e => !!e && e.getClientRects().length > 0 && e.getBoundingClientRect().height > 4;
+    function place() {
+      if (T.i < 0) return;
+      const st = STEPS[T.i]; let el = st.sel ? document.querySelector(st.sel) : null; if (!seen(el) && st.alt) el = document.querySelector(st.alt); if (!seen(el)) el = null;
+      const W = innerWidth, H = innerHeight, cw = Math.min(380, W - 24), pad = 8;
+      let r = el && !st.soft ? el.getBoundingClientRect() : null;
+      if (r && phone() && r.height > H * 0.4) r = { left: r.left, right: r.right, top: r.top, width: r.width, height: H * 0.4, bottom: r.top + H * 0.4 };   // a long list: light up the top of it, leave room for the card
+      card.style.width = cw + "px"; root.classList.toggle("dim", !r); spot.style.display = r ? "block" : "none";
+      if (r) Object.assign(spot.style, { left: Math.max(4, r.left - pad) + "px", top: Math.max(4, r.top - pad) + "px", width: Math.min(W - 8, r.width + 2 * pad) + "px", height: Math.min(H - Math.max(4, r.top - pad) - 4, r.height + 2 * pad) + "px" });
+      const ch = card.offsetHeight; let x, y;
+      if (!r) { x = (W - cw) / 2; y = phone() ? H * 0.2 : (H - ch) / 2; }
+      else if (!phone() && r.right + cw + 36 < W && r.height > 110) { x = r.right + 24; y = Math.min(H - ch - 16, Math.max(16, r.top - pad)); }
+      else { x = Math.min(W - cw - 12, Math.max(12, r.left + r.width / 2 - cw / 2)); y = r.bottom + 20 + ch < H - 8 ? r.bottom + 20 : r.top - ch - 20; if (y < 8) y = 8; }
+      card.style.left = Math.round(x) + "px"; card.style.top = Math.round(y) + "px";
+    }
+    function show(i) {
+      T.i = i; const st = STEPS[i]; if (st.pre) st.pre();
+      $("tutN").textContent = `${i + 1} of ${STEPS.length}`; $("tutT").textContent = st.t; $("tutX").textContent = st.x;
+      $("tutBack").hidden = i === 0; $("tutSkip").hidden = !!st.last; $("tutNext").textContent = st.last ? "Done" : "Next"; $("tutTour").hidden = !st.last;
+      root.hidden = false;
+      const el = st.sel && !st.soft ? document.querySelector(st.sel) : null; if (seen(el)) el.scrollIntoView({ block: "center" });
+      place(); setTimeout(place, 80); setTimeout(place, 340);            // again once the panel or sheet has finished moving
+      $("tutNext").focus({ preventScroll: true });
+    }
+    function end() { root.hidden = true; T.i = -1; if (phone()) closeSheet(); else openSheet("mission"); $("helpBtn").focus({ preventScroll: true }); }
+    $("helpBtn").onclick = () => { if (walk.on) return toast("End the walk first", "The tutorial shows the planning screens. Press stop, then open it again.", "#F5B85B"); show(0); };
+    $("tutNext").onclick = () => T.i >= STEPS.length - 1 ? end() : show(T.i + 1);
+    $("tutBack").onclick = () => T.i > 0 && show(T.i - 1);
+    $("tutSkip").onclick = end;
+    addEventListener("resize", place);
+    addEventListener("keydown", e => { if (T.i < 0) return; if (e.key === "Escape") end(); else if (e.key === "ArrowRight") $("tutNext").click(); else if (e.key === "ArrowLeft") $("tutBack").click(); else return; e.stopPropagation(); }, true);
+    MW.tut = { show, end, STEPS };
+  }
+
+  /* ---------- presentation tour: tour.html loads this page in a frame with ?tour=pavonis (or orbit|slope|sat) ----------
+     The page clears its controls, sets up, says "ready", then plays each scene the tour page names. */
   const TOUR = new URLSearchParams(location.search).get("tour");
   if (TOUR) {
     const wait = ms => new Promise(r => setTimeout(r, ms)), tell = m => parent !== window && parent.postMessage({ marswalkTour: m }, location.origin);
-    VOICE.on = false; document.body.classList.add("tour", "nopanel"); if (TOUR !== "sat") document.body.classList.add("tour-quiet");
+    const ease = (from, to, ms) => new Promise(res => { const t0 = performance.now(), st = () => { const k = Math.min(1, (performance.now() - t0) / ms), e2 = k * k * (3 - 2 * k); const h = T3.vr && T3.vr.head; if (h) { h.yaw = from[0] + (to[0] - from[0]) * e2; h.pitch = from[1] + (to[1] - from[1]) * e2; } k < 1 ? setTimeout(st, 16) : res(); }; st(); });
+    VOICE.on = false; document.body.classList.add("tour", "nopanel"); if (!["sat", "pavonis"].includes(TOUR)) document.body.classList.add("tour-quiet");
     $("hint").hidden = true; $("coach").hidden = true; map.invalidateSize();
+    T3.testSun = { az: 165, el: 48 };                                  // the tour is filmed in daylight, whatever the clock says
     setView("3d"); await wait(400);
+    // Pavonis Mons has two calderas side by side. The habitat (site centre) stands on the floor of the large shallow one, at the rim of the small deep one.
+    // PITS[0]: a science stop on the floor of the large caldera. PITS[1]: the floor of the deep caldera, 3 km lower.
+    const PITS = [[HAB[0] + 1500, HAB[1] + 4500], [HAB[0], HAB[1] - 11000]];
+    const SCENES = {
+      async aerial() { T3.api.aerial(0.5, 0.26); T3.tourOrbit = 0.07; },
+      async pits() { T3.tourOrbit = 0; T3.api.flyTo(HAB[0], HAB[1] - 9000, 52000, 30000, 4200, 2.6); },
+      async plan() {
+        T3.tourOrbit = 0; setView("2d"); S.layers.add("slope"); S.opacity = 0.75; syncLayers();
+        map.fitBounds(L.latLngBounds([ll(HAB[0] - 24000, HAB[1] + 9000), ll(HAB[0] + 24000, HAB[1] - 26000)]), { animate: false });
+        S.stops = []; plan(0); await wait(700); S.stops = [PITS[0]]; plan(0); await wait(1500); S.stops = [PITS[0], PITS[1]]; plan(0);
+      },
+      async walk() {
+        for (let i = 0; i < 60 && (!S.route || S.route.stop_idx.length < 3); i++) await wait(100);
+        S.layers.delete("slope"); syncLayers(); setView("3d"); { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
+        startWalk(); setCam("follow", true); T3.chaseK = 0.45;
+      },
+      async sat() { skipToPass(); await wait(900); if (T3.api) T3.api.lookSat(); await wait(3600); setCam("follow", true); T3.chaseK = 0.45; },
+      async vr() {
+        // stand on the floor of the deep caldera, facing the 3 km wall you came down, and look round through the headset
+        if (!walk.manual) takeControl();
+        const vx = PITS[1][0] + 600, vy = PITS[1][1] - 1500;                // well out on the floor, so the wall stands in front of you with sky above it
+        walk.mx = vx - walk.drift[0]; walk.my = vy - walk.drift[1]; walk.hd = 0.2; walk.rest = [PITS[1], HAB]; walk.ri = 0;
+        reroute([vx, vy], walk.rest, "", "#8ab8ff", { soft: true, quiet: true });
+        vrDemo(true); await wait(300);
+        await ease([0, 0.02], [0.28, 0.06], 1300); await ease([0.28, 0.06], [-0.3, 0.04], 1700);
+        await ease([-0.3, 0.04], [0, 0.02], 900);
+        // turn to the card and hold the dot on "Satellite" until it fires; the target is re-read every frame because the card turns with the body
+        await new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a2 = T3.vrAim("sat"), k = Math.min(1, (performance.now() - t0) / 900);
+          h.yaw += (a2[0] - h.yaw) * (0.06 + 0.3 * k); h.pitch += (a2[1] - h.pitch) * (0.06 + 0.3 * k); performance.now() - t0 < 3700 ? setTimeout(st, 16) : res(); }; st(); });
+        await ease([T3.vr.head.yaw, T3.vr.head.pitch], [0, 0.03], 1000);
+      },
+      async end() { vrDemo(false); },
+    };
+    if (S.stops.length) for (let i = 0; i < 80 && !S.route; i++) await wait(100);
     if (TOUR === "slope") { S.layers.add("slope"); S.opacity = 0.85; syncLayers(); T3.dirty = true; }
-    if (TOUR === "sat") {
-      for (let i = 0; i < 60 && !S.route; i++) await wait(100);
-      startWalk(); setCam("follow", true); T3.chaseK = 0.55; await wait(1800);
-    } else { if (M.kind === "region") T3.api.aerial(); else T3.api.reset(); T3.tourOrbit = 0.09; await wait(2200); }
+    if (TOUR === "pavonis") { T3.api.aerial(0.5, 0.26); await wait(2500); }
+    else if (TOUR === "sat") { startWalk(); setCam("follow", true); T3.chaseK = 0.55; await wait(1800); }
+    else { if (M.kind === "region") T3.api.aerial(); else T3.api.reset(); T3.tourOrbit = 0.09; await wait(2200); }
     addEventListener("message", async e => {
-      if (e.origin !== location.origin || !e.data || e.data.marswalkTour !== "go") return;
-      if (TOUR !== "sat") return;
-      skipToPass(); await wait(600); if (T3.api) T3.api.lookSat(); await wait(2600); setCam("follow", true); T3.chaseK = 0.55;
+      if (e.origin !== location.origin || !e.data) return;
+      if (e.data.marswalkTour === "scene" && SCENES[e.data.name]) return SCENES[e.data.name]();
+      if (e.data.marswalkTour === "go" && TOUR === "sat") return SCENES.sat();
     });
+    MW.scene = n => SCENES[n] && SCENES[n]();
     tell("ready");
   }
 })().catch(e => { document.getElementById("loader").textContent = "Failed to load: " + e.message; console.error(e); });
