@@ -1354,12 +1354,30 @@
     const camE = new THREE.PerspectiveCamera(80, 1, 0.1, 130000 * K), qF = new THREE.Quaternion(), qY = new THREE.Quaternion(), vF = new THREE.Vector3();
     /* The info card stands to your left, a little below eye level, 1.3 m away, and turns with the way you walk
        (like a screen beside a driver). Looking at it pauses the walk and holds your direction, so you can read in peace. */
-    const hudC = document.createElement("canvas"); hudC.width = 1200; hudC.height = 820;
+    const hudC = document.createElement("canvas"); hudC.width = 1200; hudC.height = 900;
     const hudT = new THREE.CanvasTexture(hudC); hudT.encoding = THREE.sRGBEncoding; hudT.anisotropy = Math.min(8, rn.capabilities.getMaxAnisotropy());
-    const vrHud = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.718), new THREE.MeshBasicMaterial({ map: hudT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    const vrHud = new THREE.Mesh(new THREE.PlaneGeometry(1.05, 0.7875), new THREE.MeshBasicMaterial({ map: hudT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
     vrHud.renderOrder = 20; vrHud.visible = false; sc.add(vrHud);
     const CARD_YAW = 0.75, CARD_D = 1.3, CARD_DY = -0.22, CARD_GAZE = Math.cos(0.3);
-    function drawVrHud(paused) {
+    // gaze buttons along the bottom of the card (canvas pixels); hold the reticle on one for 2 s
+    const VR_BTNS = [["half", "Halfway", "teleport"], ["sat", "Satellite", "skip the wait"], ["home", "Habitat", "route home"], ["exit", "Exit VR", "back to the app"]]
+      .map(([id, label, sub], i) => ({ id, label, sub, x: 60 + i * (258 + 16), y: 724, w: 258, h: 104 }));
+    const gazeRay = new THREE.Raycaster();
+    const retC = document.createElement("canvas"); retC.width = retC.height = 128;
+    const retT = new THREE.CanvasTexture(retC);
+    const reticle = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: retT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    reticle.renderOrder = 30; reticle.visible = false; sc.add(reticle);
+    let retKey = "";
+    function drawReticle(on, prog) {
+      const key = (on ? 1 : 0) + ":" + Math.round(prog * 40); if (key === retKey) return; retKey = key;
+      const x = retC.getContext("2d"); x.clearRect(0, 0, 128, 128); x.lineCap = "round";
+      x.lineWidth = 14; x.strokeStyle = "rgba(0, 0, 0, 0.55)"; x.beginPath(); x.arc(64, 64, 38, 0, 7); x.stroke();
+      x.lineWidth = 7; x.strokeStyle = on ? "#ffffff" : "rgba(255, 255, 255, 0.8)"; x.beginPath(); x.arc(64, 64, on ? 38 : 26, 0, 7); x.stroke();
+      if (prog > 0) { x.lineWidth = 12; x.strokeStyle = "#3b82f6"; x.beginPath(); x.arc(64, 64, 38, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2); x.stroke(); }
+      x.fillStyle = "#ffffff"; x.beginPath(); x.arc(64, 64, 7, 0, 7); x.fill();
+      retT.needsUpdate = true;
+    }
+    function drawVrHud(paused, hov) {
       const x = hudC.getContext("2d"), W = hudC.width, H = hudC.height, tx = id => ($(id) && $(id).textContent) || "", L = 60;
       const rr = (X, Y, w, h, r) => { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); };
       x.clearRect(0, 0, W, H);
@@ -1388,10 +1406,15 @@
         x.fillStyle = g.color || "#8ab8ff"; x.font = "600 42px Inter, sans-serif"; x.fillText(g.title.slice(0, 44), L, 500);
         x.fillStyle = "#d6dce7"; x.font = "400 36px Inter, sans-serif";
         const words = String(g.msg).split(" "); let line = "", y = 552, n = 0;
-        for (const w of words) { const t = line ? line + " " + w : w; if (x.measureText(t).width > W - 2 * L) { x.fillText(n === 3 ? line + " …" : line, L, y); y += 48; line = w; if (++n === 4) { line = ""; break; } } else line = t; }
+        for (const w of words) { const t = line ? line + " " + w : w; if (x.measureText(t).width > W - 2 * L) { x.fillText(n === 2 ? line + " …" : line, L, y); y += 48; line = w; if (++n === 3) { line = ""; break; } } else line = t; }
         if (line) x.fillText(line, L, y);
       }
-      x.fillStyle = "#627087"; x.font = "500 28px Inter, sans-serif"; x.fillText(paused ? "Look away from this card to walk on" : "Look at this card to pause", L, H - 40);
+      VR_BTNS.forEach(b => {                                               // the gaze buttons
+        const on = hov === b.id; rr(b.x, b.y, b.w, b.h, 20); x.fillStyle = on ? "#1a66e8" : "#19212f"; x.fill(); x.lineWidth = 4; x.strokeStyle = on ? "#8ab8ff" : "#2b3649"; x.stroke();
+        x.fillStyle = "#ffffff"; x.font = "700 36px Inter, sans-serif"; x.fillText(b.label, b.x + 22, b.y + 50);
+        x.fillStyle = on ? "#dbe8ff" : "#8f9cb1"; x.font = "500 26px Inter, sans-serif"; x.fillText(b.sub, b.x + 22, b.y + 86);
+      });
+      x.fillStyle = "#627087"; x.font = "500 28px Inter, sans-serif"; x.fillText(paused ? "Hold the dot on a button for 2 seconds · look away to walk on" : "Look at this card to pause", L, H - 30);
       hudT.needsUpdate = true;
     }
     function vrDraw(here, jy) {
@@ -1404,10 +1427,18 @@
       const hv = new THREE.Vector3(0, 0, -1).applyQuaternion(qF);
       const side = new THREE.Vector3(fd.x, 0, fd.z).normalize().applyAxisAngle(UP, CARD_YAW);
       vrHud.position.set(cam.position.x, here.y + 1.68 + CARD_DY, cam.position.z).addScaledVector(side, CARD_D); vrHud.lookAt(cam.position); vrHud.visible = true;
-      const atCard = hv.dot(vF.copy(vrHud.position).sub(cam.position).normalize()) > CARD_GAZE;
+      vrHud.updateMatrixWorld(); gazeRay.set(cam.position, hv); const gHit = gazeRay.intersectObject(vrHud)[0];
+      const atCard = !!gHit || hv.dot(vF.copy(vrHud.position).sub(cam.position).normalize()) > CARD_GAZE;      // anywhere on the card
       T3.vrHead = { hd: Math.atan2(hv.x, -hv.z), pitch: Math.asin(Math.max(-1, Math.min(1, hv.y))), atCard };
       if (atCard !== V.paused) { V.paused = atCard; V.hudAt = 0; }
-      const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; drawVrHud(V.paused); }
+      let hov = null;
+      if (atCard) { const hit = gHit; if (hit && hit.uv) { const px = hit.uv.x * hudC.width, py = (1 - hit.uv.y) * hudC.height; hov = VR_BTNS.find(b2 => px >= b2.x && px <= b2.x + b2.w && py >= b2.y && py <= b2.y + b2.h) || null; } }
+      const DW = V.dwell || (V.dwell = { id: null, t: 0, done: false });
+      if ((hov && hov.id) !== DW.id) { DW.id = hov ? hov.id : null; DW.t = 0; DW.done = false; V.hudAt = 0; }
+      else if (hov && !DW.done) { DW.t += T3.vrDt || 0.016; if (DW.t >= 2) { DW.done = true; V.hudAt = 0; setTimeout(() => vrAction(hov.id), 0); } }
+      reticle.position.copy(cam.position).addScaledVector(hv, 1.2); reticle.quaternion.copy(qF); reticle.visible = true;
+      drawReticle(!!hov, hov && !DW.done ? Math.min(1, DW.t / 2) : 0);
+      const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; drawVrHud(V.paused, V.dwell && !V.dwell.done ? V.dwell.id : null); }
       const W = cv.clientWidth, H = cv.clientHeight, half = W / 2, rt = new THREE.Vector3(1, 0, 0).applyQuaternion(qF);
       camE.fov = 80; camE.aspect = half / H; camE.near = 0.1; camE.far = cam.far; camE.updateProjectionMatrix();
       rn.setScissorTest(true);
@@ -1554,12 +1585,12 @@
         cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob;
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
         if (T3.vr && T3.vr.q) { T3.vrDt = dtr; vrDraw(here, jy); return; }
-        vrHud.visible = false;
+        vrHud.visible = false; reticle.visible = false;
         cam.lookAt(ctl.target); cam.rotateZ(-sway * 0.5);
         rn.render(sc, cam);
         return;
       }
-      ctl.enabled = true; vrHud.visible = false;
+      ctl.enabled = true; vrHud.visible = false; reticle.visible = false;
       if (T3.chase && !T3.drag) {
         const dist = chaseBase() * (T3.chaseK || 1);
         if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; } }
@@ -1643,6 +1674,28 @@
     if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look: small head turns steer, and looking further to the side just looks around. Your info card is on your left: look at it to pause and read, look away to walk on.", "#8ab8ff");
     else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
     T3.vr.go = setTimeout(() => { if (!T3.vr || !S.route) return; if (!walk.on) startWalk(); takeControl(); if (S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); } }, 5000);
+  }
+  // the card's gaze buttons
+  async function vrAction(id) {
+    if (S.sound) chime("MRO");
+    if (id === "exit") return vrExit();
+    if (!walk.on) return;
+    if (id === "sat") return skipToPass();
+    if (!walk.manual) takeControl();
+    if (walk.busy || walk.planning) return;
+    const b = [walk.mx + walk.drift[0], walk.my + walk.drift[1]];
+    if (id === "home") { walk.rest = [HAB]; return reroute(b, [HAB], "", "#8ab8ff", { title: "Heading home", lead: "New route straight back to the habitat." }); }
+    if (id === "half") {
+      const r = walk.route, i0 = Math.min(Math.max(0, walk.ri | 0), r.d.length - 1), goal = r.d[i0] + (r.d.at(-1) - r.d[i0]) / 2;
+      let j = i0; while (j < r.d.length - 1 && r.d[j] < goal) j++;
+      const k = r.stop_idx.slice(1).filter(i => i > i0 && i <= j).length;            // waypoints you jump past count as visited
+      for (let n = 0; n < k && walk.rest.length > 1; n++) walk.rest.shift();
+      const dt = Math.max(0, r.t[j] - r.t[i0]), dist = r.d[j] - r.d[i0];
+      if (![r.x[j], r.y[j], r.t[j], r.t[i0]].every(Number.isFinite)) return;
+      walk.mx = r.x[j] - walk.drift[0]; walk.my = r.y[j] - walk.drift[1]; walk.simT += dt; walk.dose += (r.dose_msv / (r.time_s || 1)) * dt; walk.ri = j;
+      T3.dirty = true;
+      return reroute([r.x[j], r.y[j]], walk.rest, "", "#8ab8ff", { title: "Teleported halfway", lead: `You skipped ${wKm(dist)} and about ${wDur(dt)} of walking.` });
+    }
   }
   function vrExit() {
     if (!T3.vr) return;
