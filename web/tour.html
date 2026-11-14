@@ -230,7 +230,10 @@
   // page, scene (and its argument), seconds on screen, what to say, how we made it; 'pre' = scenes that rebuild the state a chapter needs when you jump straight to it
   const CH = [
     { a: 0, page: "home", act: "top", t: 7, title: "Marswalk", sub: "A route planner for walking on Mars, and a Mars you can stand on. Two ways in: Plan a trip, or Experience Mars.", how: "Built by AirAwareNetwork for the NASA Space Apps Challenge 2026." },
-    { a: 0, page: "home", act: "#nogps .steps", t: 7, title: "There is no GPS on Mars", sub: "So an astronaut a few kilometres out leans on three things: the suit counting steps, the habitat's radio, and relay satellites passing overhead. Marswalk plans around all three." },
+    { a: 0, page: "home", act: "#nogps", t: 6.5, title: "There is no GPS on Mars", sub: "So how do you plan a safe walk, and know where you are? We worked it out by hand in QGIS first, then rebuilt every step in Python. It comes down to three parts." },
+    { a: 0, page: "home", home: "lay", t: 8, title: "1 · The layers", sub: "Eight maps of the ground, each from real NASA data: elevation, slope, radiation, satellite cover, the habitat's radio, sunlight, temperature, and what the planner sees." },
+    { a: 0, page: "home", home: "rou", t: 12, title: "2 · How the route is chosen", sub: "The map is cut into 20 m squares. Each square gets a score: flat and safe is low, steep or risky is high. Watch the score climb as the ground gets steeper. The planner takes the path with the lowest total, so it bends around hills." },
+    { a: 0, page: "home", home: "nav", t: 14, title: "3 · How the astronaut is found", sub: "Two things take turns. The habitat's radio finds the astronaut while it can see them. The moment a hill gets in the way, a satellite overhead takes over, and the habitat takes back over on the way home." },
     { a: 0, page: "globe", t: 7, title: "Pick anywhere on Mars", sub: "The globe marks landing sites and landmarks. Click any other point and the server builds a 178 km site from NASA terrain in about a minute.", how: "Global MOLA elevation (463 m) and a colour mosaic from NASA Mars Trek; sites built on demand by our Python pipeline." },
     { a: 1, page: "lab", scene: "layer", arg: null, t: 7, title: "Jezero crater, in detail", sub: "Perseverance's landing site, at walking resolution: 20 m terrain and a 6 m photo mosaic from the CTX camera, slopes from HiRISE 1 m where it exists.", how: "Started in QGIS: clipped, reprojected and checked the USGS rasters, then our Python pipeline turned them into map layers." },
     { a: 1, page: "lab", scene: "layer", arg: "slope", t: 6.5, title: "Slope", sub: "How steep the ground is at every spot. Green is an easy walk; red is too steep for a suited astronaut.", how: "NumPy gradient of the elevation model · HiRISE 1 m drives the hazard where it covers." },
@@ -246,11 +249,11 @@
     { a: 3, page: "pav", scene: "pits", t: 6, title: "Two calderas, side by side", sub: "A wide shallow one, and a pit about 3 km deeper. The habitat stands on the rim between them." },
     { a: 3, page: "pav", scene: "plan", t: 7, title: "Plan the route", sub: "Tap the stops. The Safest policy stays off the 30° wall (red) and finds the long, gentle way down to the floor." },
     { a: 3, page: "pav", scene: "navplan", pre: ["plan"], right: true, t: 9, title: "The navigation forecast", sub: "Before anyone leaves: how sure the position will be along the route. Green near the habitat and at each satellite fix; amber and red where the suit's own estimate has drifted." },
-    { a: 4, page: "pav", scene: "walk", pre: ["plan"], t: 6.5, title: "Simulate it in true-scale 3D", sub: "A 1.9 m astronaut, an 8.4 m habitat, real terrain. As they walk, the suit's position estimate slowly drifts." },
-    { a: 4, page: "pav", scene: "sat", pre: ["plan", "walk"], t: 9, title: "A relay pass fixes the position", sub: "A real orbiter track. Ranging and Doppler measure where the astronaut really is; the guide says how far off the suit was, and the route is re-planned from there." },
-    { a: 4, page: "pav", scene: "rover", t: 7.5, title: "Or take the crew rover", sub: "A pressurised rover at about 10 km/h on flat ground, up to 20° slopes (assumed). The crew suit up through the suitports at each stop." },
+    { a: 4, page: "pav", scene: "walk", pre: ["plan"], t: 9, title: "Walk the route in 3D", sub: "The same route, now on the real ground at true size. The astronaut follows the planned path, step by step. Out here, away from the habitat, the suit has to guess where it is, and the guess slowly drifts." },
+    { a: 4, page: "pav", scene: "sat", pre: ["plan", "walk"], t: 11, title: "A satellite finds the astronaut", sub: "A real relay satellite rises overhead. The yellow line is its radio link to the astronaut. From it we measure where they really are, correct the drift, and re-plan the rest of the route." },
+    { a: 4, page: "pav", scene: "rover", t: 9, title: "Or drive the crew rover", sub: "For longer trips: a pressurised rover at about 10 km/h on flat ground. The route is planned for the rover, up to 20° slopes (assumed), and the crew step out through the suitports at each stop." },
     { a: 4, page: "pav", scene: "explore", t: 8, title: "Experience Mars", sub: "First person at real speed: walk with W A S D or the on-screen stick, look around, and jump in 38 % of Earth's gravity." },
-    { a: 4, page: "pav", scene: "vr", pre: ["explore"], pos: "bc", t: 11, title: "And in VR", sub: "Put a phone in a headset: walk where you look, glance left at the card to pause, and hold the dot on a button for 2 seconds." },
+    { a: 4, page: "pav", scene: "vr", pre: ["explore"], pos: "bc", t: 14, title: "And in VR", sub: "Put a phone in a headset and walk where you look. Two screens float beside you: on the left, where you are and what to do; on the right, the radio. Hold the dot on a button for 2 seconds to press it, here a message to Earth." },
   ];
   // ?short=1: the 30-second demo for the Space Apps form. One place, one load, one story: map, navigation, 3D, satellite fix, VR.
   const SHORT = new URLSearchParams(location.search).has("short");
@@ -313,7 +316,8 @@
       if (jumped && c.pre) for (const p of c.pre) { send(p); await wait(p === "plan" ? 2600 : p === "explore" ? 3500 : 1800); if (tok !== T.token) return; }
     }
     let w = null; try { w = frame.contentWindow; } catch (e) { w = null; }
-    if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.getBoundingClientRect().top + w.scrollY - 76 : 0, behavior: "smooth" }); }
+    if (c.page === "home" && w && c.home) homeCard(w, c.home, tok);
+    else if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.getBoundingClientRect().top + w.scrollY - 76 : 0, behavior: "smooth" }); }
     if (c.scene) send(c.scene, c.arg);
     if (c.globe && w && w.GLOBE) w.GLOBE.pick(c.globe);
     if (c.globeDo && w && w.GLOBE) w.GLOBE[c.globeDo]();
@@ -323,6 +327,21 @@
     $("capT").textContent = c.title; $("capS").textContent = c.sub; $("capHowT").textContent = c.how || ""; $("capHow").hidden = !c.how;
     await wait(250); if (tok !== T.token) return;
     placeCap(c, true); $("cap").classList.add("on"); T.busy = false;
+  }
+  // ---------- homepage chapters: open one of the three How-it-works cards and let it run ----------
+  async function homeCard(w, key, tok) {
+    const d = w.document, card = d.querySelector("#nogps .card." + key), pane = { lay: "pLay", rou: "pRou", nav: "pNav" }[key];
+    if (!card) return;
+    if (card.getAttribute("aria-expanded") !== "true") card.click();
+    await wait(450); if (tok !== T.token) return;
+    const el = d.querySelector({ lay: "#pLay .lays", rou: "#pRou .simple", nav: "#pNav .scene" }[key]) || d.getElementById(pane);
+    w.scrollTo({ top: el.getBoundingClientRect().top + w.scrollY - (key === "nav" ? 90 : 84), behavior: "smooth" });
+    await wait(1200); if (tok !== T.token) return;
+    if (key === "rou") {                                   // drag the slope from flat to too steep, slowly
+      const s = d.getElementById("cSlope"), t0 = performance.now();
+      await new Promise(res => { const st = () => { if (tok !== T.token) return res(); const k = Math.min(1, (performance.now() - t0) / 7000); s.value = Math.round(k * 22); s.dispatchEvent(new w.Event("input")); k < 1 ? setTimeout(st, 60) : res(); }; st(); });
+    }
+    if (key === "nav") { const b = d.getElementById("playB"); if (b && b.getAttribute("aria-pressed") !== "true") b.click(); }
   }
   // ---------- the caption finds the emptiest corner: it measures what the app has on screen and keeps clear of it ----------
   function busyRects() {
@@ -338,7 +357,7 @@
       out.push(r);
     }
     // the homepage scrolls, so its content is not 'fixed': keep clear of the headings, text and cards too
-    for (const el of d.querySelectorAll(".hero h1, .hero .lede, .eyebrow, .modes, h2, .intro, .steps, .data")) { const r = el.getBoundingClientRect(); if (r.width > 8 && r.bottom > 0 && r.top < H) out.push(r); }
+    for (const el of d.querySelectorAll(".hero h1, .hero .lede, .eyebrow, .modes, h2, .intro, .steps, .data, .pane.on .simple, .pane.on .lab, .pane.on .lays, .pane.on .ngrid, .pane.on .scene, .pane.on .ctl")) { const r = el.getBoundingClientRect(); if (r.width > 8 && r.bottom > 0 && r.top < H) out.push(r); }
     return out;
   }
   const CAP = { key: "", x: 0, y: 0 };

@@ -1619,7 +1619,9 @@
       rn.setScissorTest(false); rn.setViewport(0, 0, W, H);
     }
     T3.api = {
-      lookSat: () => { if (!T3.satDir) return; setCam("free", true); const h0 = T3.herePos, d = T3.satDir.clone(), flat = d.clone().setY(0); if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1); flat.normalize(); T3.skyLook = true; cam.position.copy(h0).addScaledVector(flat, -600 * K); cam.position.y += 250 * K; ctl.target.copy(cam.position).addScaledVector(d, 2600 * K); },
+      lookSat: (ms = 0) => { if (!T3.satDir) return; const p0 = cam.position.clone(), q0 = ctl.target.clone(); setCam("free", true); const h0 = T3.herePos, d = T3.satDir.clone(), flat = d.clone().setY(0); if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1); flat.normalize(); T3.skyLook = true;
+        const p1 = h0.clone().addScaledVector(flat, -600 * K); p1.y += 250 * K; const q1 = p1.clone().addScaledVector(d, 2600 * K);
+        if (ms) { cam.position.copy(p0); ctl.target.copy(q0); T3.fly = { p0, q0, p1, q1, t0: performance.now(), ms }; } else { cam.position.copy(p1); ctl.target.copy(q1); } },
       setLite: v => {
         lite = v; T3.lite = v; try { localStorage.setItem("mw_lite", v ? "1" : "0"); } catch (e) { /* ignore */ }
         rn.shadowMap.enabled = !v; sun.castShadow = !v; sc.environment = v ? null : envTex;
@@ -1785,7 +1787,7 @@
       ctl.enabled = true; vrHud.visible = false; vrRad.visible = false; reticle.visible = false;
       if (T3.chase && !T3.drag) {
         const dist = chaseBase() * (T3.chaseK || 1);
-        if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; } }
+        if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); if (!T3.dir) T3.dir = d; else T3.dir.lerp(d, 1 - Math.exp(-dtr * 1.6)).normalize(); } }   // the camera turns gently, not at every bend of the path
         const back = walking ? (T3.dir || new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(-Math.sin(hab.rotation.y + 0.35), 0, -Math.cos(hab.rotation.y + 0.35));   // idle: stand in front of the astronaut, habitat behind
         const want = here.clone().addScaledVector(back, -dist); want.y = here.y + 1.3 + dist * 0.36;
         const gy = ground(Math.min(M.width_m, Math.max(0, want.x + M.width_m / 2)), Math.min(M.height_m, Math.max(0, M.height_m / 2 - want.z))) + 0.7; if (want.y < gy) want.y = gy;
@@ -2473,18 +2475,23 @@
       },
       async walk() {
         for (let i = 0; i < 60 && (!S.route || S.route.stop_idx.length < 3); i++) await wait(100);
-        S.layers.delete("slope"); syncLayers(); setView("3d"); { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
-        startWalk(); setCam("follow", true); T3.chaseK = 0.45;
+        S.layers.delete("slope"); syncLayers(); setView("3d"); tourSpeed(8);                 // slow enough to watch the steps
+        startWalk(); setCam("follow", true); T3.chaseK = 0.6;
       },
       async sat() {
         // show a pass by one of the low orbiters (MRO, Odyssey, TGO): they cross the sky in minutes, so the geometry is good for a fix within seconds.
         // Mars Express is high and slow; it does fix you, but over a much longer pass than a tour chapter.
-        { const b = document.querySelector('.spd[data-s="120"]'); if (b) b.click(); }
+        tourSpeed(20);
         for (let n = 0; n < 8; n++) { const np = DB.passes.find(q => q.start > walk.simT + 20); if (!np || np.orbiter !== "Mars Express") break; const dt = np.end + 30 - walk.simT; walk.simT += dt; if (!walk.manual) walk.t0 += dt; }     // wait in place, the way Skip does
-        skipToPass(); await wait(900); if (T3.api) T3.api.lookSat(); await wait(3600); setCam("follow", true); T3.chaseK = 0.45;
+        skipToPass(); await wait(1200); if (T3.api) T3.api.lookSat(2600);                    // a slow camera rise to the satellite and its radio link
+        await wait(5200); setCam("follow", true); T3.chaseK = 0.6;                           // then glide back behind the astronaut
       },
       async vr() {
         // stand on the floor of the deep caldera, facing the 3 km wall you came down, and look round through the headset
+        if (!walk.on) {                                                     // jumped straight here: get a route and a walk going first
+          for (let i = 0; i < 80 && !S.route; i++) await wait(100);
+          if (!S.route) return; setView("3d"); startWalk(); setCam("fp", true); await wait(400);
+        }
         if (!walk.manual) takeControl();
         const vx = PITS[1][0] + 600, vy = PITS[1][1] - 1500;                // well out on the floor, so the wall stands in front of you with sky above it
         walk.mx = vx - walk.drift[0]; walk.my = vy - walk.drift[1]; walk.hd = 0.2; walk.rest = [PITS[1], HAB]; walk.ri = 0;
@@ -2495,7 +2502,10 @@
         // turn to the card and hold the dot on "Satellite" until it fires; the target is re-read every frame because the card turns with the body
         await new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a2 = T3.vrAim("sat"), k = Math.min(1, (performance.now() - t0) / 900);
           h.yaw += (a2[0] - h.yaw) * (0.06 + 0.3 * k); h.pitch += (a2[1] - h.pitch) * (0.06 + 0.3 * k); performance.now() - t0 < 3700 ? setTimeout(st, 16) : res(); }; st(); });
-        await ease([T3.vr.head.yaw, T3.vr.head.pitch], [0, 0.03], 1000);
+        // then the radio card on the right: hold the dot on a quick reply to Earth
+        await new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a2 = T3.vrAim("r:q0"), k = Math.min(1, (performance.now() - t0) / 1200);
+          h.yaw += (a2[0] - h.yaw) * (0.04 + 0.2 * k); h.pitch += (a2[1] - h.pitch) * (0.04 + 0.2 * k); performance.now() - t0 < 3600 ? setTimeout(st, 16) : res(); }; st(); });
+        await ease([T3.vr.head.yaw, T3.vr.head.pitch], [0, 0.03], 1200);
       },
       async end() { vrDemo(false); T3.vrHold = false; },
       // ---- the short demo: 2 read the ground, 3 plan in 3D, 4 stand there in VR while a satellite fixes you ----
@@ -2524,7 +2534,7 @@
         const track = (fn, ms) => new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a = fn(); if (a) { const k = Math.min(1, (performance.now() - t0) / 700); h.yaw += (a[0] - h.yaw) * (0.05 + 0.25 * k); h.pitch += (a[1] - h.pitch) * (0.05 + 0.25 * k); } performance.now() - t0 < ms ? setTimeout(st, 16) : res(); }; st(); });
         await track(() => T3.satDir ? T3.vrAimDir(T3.satDir) : [0.2, 0.5], 4600);          // look up: the satellite crossing the sky, the radio link drawn to it
         await track(() => T3.vrAimCard(), 3000);                                            // then the card: what the satellite found
-        await track(() => T3.vrAim("r:q2"), 2700);                                          // then the radio on the right: hold the dot on a quick reply to Earth
+        await track(() => T3.vrAim("r:q0"), 2700);                                          // then the radio on the right: hold the dot on a quick reply to Earth
       },
       async walksat() { await SCENES.walk(); await wait(1600); await SCENES.sat(); },      // the 30-second cut: walk, then a relay pass fixes the position
       // ---- chapters for the full tour (tour.html) ----
@@ -2556,6 +2566,7 @@
         walk.keys = { w: true }; await wait(2600); jump(); await wait(1700); walk.keys = { w: true, a: true }; await wait(900); walk.keys = { w: true }; await wait(1200); walk.keys = {};
       },
     };
+    function tourSpeed(v) { S.speed = v; document.querySelectorAll(".spd").forEach(x => x.setAttribute("aria-pressed", String(+x.dataset.s === v))); }
     function ui() { document.body.classList.remove("tour-panel", "tour-legend"); if (!document.body.classList.contains("nopanel")) showPanel(false); }
     if (S.stops.length) for (let i = 0; i < 80 && !S.route; i++) await wait(100);
     if (TOUR === "slope") { S.layers.add("slope"); S.opacity = 0.85; syncLayers(); T3.dirty = true; }
