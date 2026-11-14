@@ -1,0 +1,9 @@
+fastapi==0.162.2
+uvicorn[standard]==0.54.0
+numpy==2.5.4
+scipy==1.18.1
+rasterio==1.5.2
+scikit-image==0.26.0
+psycopg[binary]==3.3.8
+requests==2.34.2
+pillow==13.0.0

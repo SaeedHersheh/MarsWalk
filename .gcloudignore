@@ -1,0 +1,10 @@
+# gcloud would otherwise follow .gitignore and leave out data/, which the app needs
+.venv/
+.git/
+.env
+certs/
+__pycache__/
+**/__pycache__/
+*.pyc
+docs/
+web/__snap.js

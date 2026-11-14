@@ -1,3 +1,14 @@
+---
+title: Marswalk
+emoji: 🚀
+colorFrom: blue
+colorTo: red
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Mars EVA route planner on real NASA data
+---
+
 # Marswalk
 
 Walking-route planner for Jezero crater on real NASA data. NASA Space Apps 2026, team AirAware.
