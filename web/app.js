@@ -640,6 +640,7 @@
   function endWalk(msg) {
     walk.on = false; walk.manual = false; T3.pathHead = null; T3.dirty = true; syncDrive(); [me, unc, ghost].forEach(l => map.removeLayer(l));
     $("hud").hidden = true; $("homeBtn").disabled = true; syncWalk();
+    $("radioDock").hidden = true;
     if (UI.autoHid && !mq.matches) showPanel(true); UI.autoHid = false; document.body.classList.remove("showui"); syncPanelTog();
     $("depart").disabled = false; dopplerTone(null);
     if (msg) guide("Walk complete", msg, "#6EE7A8");
@@ -2096,7 +2097,31 @@
     b.disabled = !lk;
     $("talkMain").textContent = rec ? "Release to send" : lk ? "Hold to transmit" : "Link closed";
     $("talkSub").textContent = rec ? `Sending to ${dest} via ${lk ? lk.orbiter : "the orbiter"}` : lk ? (lk.hab ? `Habitat link · ${fKm(habNow().d)} away · direct radio` : `${lk.orbiter} overhead · ${fDur(lk.end - comTime())} left`) : COM.dest === "pod" ? `Habitat hidden by terrain · ${nextPassText()}` : `No relay orbiter overhead · ${nextPassText()}`;
+    renderDock(lk, rec);
   }
+  /* ---------- the radio dock: the Radio tab's links and talk button, on screen while you walk in 3D ---------- */
+  function renderDock(lk, rec) {
+    const d = $("radioDock"), on = walk.on && S.view === "3d" && !T3.vr && !document.body.classList.contains("ex-picking");
+    d.hidden = !on; if (!on) return;
+    const hb = habNow(), sat = linkNow(), c = COM.cfg, lm = c ? c.effective_min : null;
+    const row = (el, ok, name, txt) => { el.className = ok ? "ok" : "no"; el.innerHTML = `<i></i><b>${name}</b><span>${txt}</span>`; };
+    row($("rdHab"), hb.ok, "Habitat", hb.ok ? `direct radio · ${fKm(hb.d)}` : "hidden by terrain");
+    row($("rdSat"), !!sat, "Relay", sat ? `${sat.orbiter} · ${fDur(sat.end - comTime())} left` : nextPassText().replace("next: ", "next "));
+    row($("rdEarth"), !!sat, "Earth", sat ? `via ${sat.orbiter}${lm ? ` · ${lm.toFixed(1)} light-min` : ""}` : "waits for a relay pass");
+    document.querySelectorAll("[data-rd]").forEach(b => b.setAttribute("aria-pressed", b.dataset.rd === COM.dest));
+    const t = $("rdTalk"), dest = COM.dest === "earth" ? "Earth" : "the habitat";
+    t.classList.toggle("ready", !!lk && !rec && COM.mic); t.classList.toggle("live", rec); t.disabled = !COM.mic || !lk;
+    $("rdMain").textContent = !COM.mic ? "Mic unavailable" : rec ? "Release to send" : lk ? `Hold to talk to ${dest}` : "Link closed";
+    $("rdSub").textContent = !COM.mic ? "Use the quick messages" : rec ? `via ${lk ? (lk.hab ? "the habitat mast" : lk.orbiter) : "the orbiter"}` : lk ? (lk.hab ? "straight over the habitat mast" : COM.dest === "earth" && lm ? `arrives in ${lm.toFixed(1)} min` : `via ${lk.orbiter}`) : COM.dest === "earth" && hb.ok ? "switch to Habitat to talk now" : "messages queue until a link opens";
+    const nowS = Date.now() / 1000 + COM.off, pend = COM.q.length + [...COM.srv.values()].filter(m => m.to === "astronaut" ? !m.delivered : m.status === "in_flight" && m.arrive > nowS).length;
+    $("rdBadge").hidden = !pend; $("rdBadge").textContent = pend;
+  }
+  const setDest = d => { COM.dest = d; document.querySelectorAll(".dest").forEach(x => x.setAttribute("aria-pressed", x.dataset.d === d)); renderMsgs(); };
+  document.querySelectorAll("[data-rd]").forEach(b => b.onclick = () => setDest(b.dataset.rd));
+  $("rdQuick").innerHTML = QUICK.slice(0, 3).map(t => `<button type="button">${t}</button>`).join("");
+  $("rdQuick").addEventListener("click", e => { const b = e.target.closest("button"); if (b) queueMsg({ kind: "text", text: b.textContent }); });
+  $("rdOpen").onclick = () => { if (!mq.matches) showPanel(true); openSheet("relay"); setTimeout(() => $("radio").scrollIntoView({ block: "start", behavior: "smooth" }), 250); };
+  { const t = $("rdTalk"); t.addEventListener("pointerdown", pttDown); ["pointerup", "pointercancel", "pointerleave"].forEach(ev => t.addEventListener(ev, pttUp)); t.addEventListener("contextmenu", e => e.preventDefault()); }
   const talk = $("talkBtn");
   talk.addEventListener("pointerdown", pttDown);
   ["pointerup", "pointercancel", "pointerleave"].forEach(ev => talk.addEventListener(ev, pttUp));
@@ -2142,7 +2167,7 @@
   $("quick").addEventListener("click", e => { const b = e.target.closest("button"); if (b) queueMsg({ kind: "text", text: b.textContent }); });
   const sendTyped = () => { const t = $("msgText").value.trim(); if (!t) return; $("msgText").value = ""; queueMsg({ kind: "text", text: t }); };
   $("msgSend").onclick = sendTyped; $("msgText").addEventListener("keydown", e => { if (e.key === "Enter") sendTyped(); });
-  document.querySelectorAll(".dest").forEach(b => b.onclick = () => { COM.dest = b.dataset.d; document.querySelectorAll(".dest").forEach(x => x.setAttribute("aria-pressed", x === b)); renderMsgs(); });
+  document.querySelectorAll(".dest").forEach(b => b.onclick = () => setDest(b.dataset.d));
   $("practice").onclick = e => {
     COM.practice = !COM.practice; e.currentTarget.setAttribute("aria-pressed", COM.practice); $("practiceNote").hidden = !COM.practice;
     audio().resume(); commsTick(true);
