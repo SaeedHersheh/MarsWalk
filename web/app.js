@@ -226,6 +226,7 @@
   const fmtLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${la.toFixed(3)}°N ${lo.toFixed(3)}°E`; };
   map.on("click", e => {
     if (walk.on) return;
+    if (MODE === "explore") { const { lng: x0, lat: y0 } = e.latlng; if (T3.exPick && x0 > 0 && y0 > 0 && x0 < M.width_m && y0 < M.height_m) T3.exPick([x0, y0]); return; }   // Experience: a tap picks the destination, nothing else
     dismissCoach(); if (mq.matches) closeSheet();
     const { lng: x, lat: y } = e.latlng;
     if (x < 0 || y < 0 || x > M.width_m || y > M.height_m) return;
@@ -1433,6 +1434,7 @@
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) { down = null; return; }
       down = null; if (walk.on) return;
       const h = pickTerrain(e); if (!h) return;
+      if (MODE === "explore") { if (T3.exPick) T3.exPick([h.x, h.y]); return; }
       dismissCoach(); S.stops.push([h.x, h.y]); plan(); toast("Waypoint added", `Waypoint ${S.stops.length} added. Select the terrain again to add another.`, "#8ab8ff");
     });
     cv.addEventListener("pointermove", e => {
@@ -2240,15 +2242,32 @@
       }
       return best || [HAB[0] + 1200, HAB[1] + 900];
     }
+    // second step: choose where to go. The map opens round the habitat; tap a spot (or take the lookout).
+    function chooseDest() {
+      return new Promise(res => {
+        const R0 = S.vehicle === "rover" ? 8000 : 3500, bar = $("exPick");
+        if (S.stops.length) { S.stops = []; plan(0); }                  // a clean map: only the habitat, and the spot you choose
+        setView("2d"); map.fitBounds(L.latLngBounds([ll(HAB[0] - R0, HAB[1] - R0), ll(HAB[0] + R0, HAB[1] + R0)]), { animate: false });
+        $("exPickT").textContent = `Tap the map where you want to ${S.vehicle === "rover" ? "drive" : "walk"}`;
+        bar.hidden = false; document.body.classList.add("ex-picking");
+        const done = p => { T3.exPick = null; bar.hidden = true; document.body.classList.remove("ex-picking"); res(p); };
+        T3.exPick = p => done(p);
+        $("exLook").onclick = () => done(lookout()); $("exBack").onclick = () => done(null);
+      });
+    }
     async function stepOut(veh) {
-      ex.hidden = true; audio().resume(); if (!walk.on) setVehicle(veh === "rover" ? "rover" : "foot", false);
+      ex.hidden = true; audio().resume();
       if (!walk.on) {
-        const poi = lookout(); S.stops = [poi]; S.roundTrip = true; plan(0);
-        for (let i = 0; i < 80 && !(S.route && S.route.stop_idx.length >= 2 && S.stops[0] === poi); i++) await new Promise(r => setTimeout(r, 100));
-        if (!S.route) return toast("Could not set the walk up", "Try another place on the globe.", "#F0616B");
+        setVehicle(veh === "rover" ? "rover" : "foot", false);
+        const dest = await chooseDest();
+        if (!dest) { setView("3d"); setCam("fp", true); ex.hidden = false; return; }
+        S.stops = [dest]; S.roundTrip = false; plan(0);
+        for (let i = 0; i < 100 && !(S.route && S.route.stop_idx.length >= 2 && S.stops[0] === dest); i++) await new Promise(r => setTimeout(r, 100));
+        if (!S.route) { toast("No way there", "That spot cannot be reached on this terrain. Pick another one.", "#F0616B"); return stepOut(veh); }
         const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click();
-        startWalk(); takeControl(); setCam("fp", true);
-        guide(S.vehicle === "rover" ? "You are at the wheel" : "You are outside", `The lookout is the highest ground near the habitat, ${wKm(Math.hypot(poi[0] - HAB[0], poi[1] - HAB[1]))} away. ${S.vehicle === "rover" ? "Drive" : "Walk"} there yourself and back to the airlock. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.`, "#8ab8ff");
+        setView("3d"); startWalk(); takeControl(); setCam("fp", true);
+        const far = S.route.distance_m, rv = S.vehicle === "rover";
+        guide(rv ? "You are at the wheel" : "You are outside", `Your destination is ${wKm(far)} away by the planned route, about ${wDur(S.route.time_s)}. ${rv ? "Drive" : "Walk"} there yourself; the green line shows the way. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.${far > (rv ? 30000 : 8000) ? " It is a long way: the Speed buttons make time run faster." : ""}`, "#8ab8ff");
       }
       try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
     }

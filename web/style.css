@@ -564,3 +564,11 @@ body.mode-explore .modelink { border-color: var(--accent); }
 .exbtns .go.rov { background: transparent; color: var(--ink); border: 1px solid var(--mars); }
 .exbtns .go.rov:hover { background: rgba(255, 154, 107, 0.14); }
 .tutcard small { color: var(--mars); }
+
+/* Experience Mars: choosing the destination */
+.expick { position: fixed; z-index: 880; left: 50%; top: calc(var(--bar) + 16px); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; width: max-content; max-width: calc(100vw - 24px); padding: 10px 12px 10px 20px; border-radius: 999px; background: rgba(10, 14, 21, 0.94); backdrop-filter: blur(12px); border: 1px solid var(--mars); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
+.expick b { color: var(--ink); font-size: 15px; }
+.expick #exLook { border-color: var(--mars); }
+body.ex-picking .leaflet-container { cursor: crosshair; }
+body.ex-picking .timebar, body.ex-picking .tools3d, body.ex-picking .stick, body.ex-picking .jumpbtn { display: none !important; }
+@media (max-width: 980px) { .expick { top: calc(var(--bar) + 10px + env(safe-area-inset-top)); border-radius: 20px; padding: 12px; } .expick b { width: 100%; text-align: center; } }
