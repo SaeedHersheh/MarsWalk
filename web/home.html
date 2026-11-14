@@ -186,9 +186,6 @@
   .lays p { margin: 0; font-size: 13.5px; color: var(--dim); }
 
   /* routing */
-  .styles { display: flex; gap: 6px; margin: 18px 0 16px; padding: 4px; border-radius: 999px; border: 1px solid var(--line-2); width: max-content; max-width: 100%; }
-  .styles button { padding: 8px 16px; border-radius: 999px; border: 0; background: transparent; cursor: pointer; font-weight: 600; font-size: 14px; color: var(--dim); }
-  .styles button[aria-pressed="true"] { background: #6EE7A8; color: #04060a; }
 
   /* navigation */
   .ngrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
@@ -233,17 +230,6 @@
 
 
   /* routing: the formula, a square to try, and the detour */
-  #nogps .eq { padding: 24px; border-radius: 20px; background: #070a10; border: 1px solid var(--line); margin-bottom: 22px; }
-  #nogps .eqh { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; font: 600 15px var(--f-mono); color: var(--dim); }
-  #nogps .eqh b { color: var(--ink); font-size: 22px; }
-  #nogps .eqrow { display: flex; align-items: stretch; gap: 10px; }
-  #nogps .paren { flex: 1; display: flex; align-items: stretch; gap: 10px; padding: 10px; border-radius: 16px; border: 1px dashed var(--line-2); }
-  #nogps .op { display: grid; place-items: center; font: 600 24px var(--f-mono); color: var(--faint); }
-  #nogps .term { flex: 1; min-width: 0; padding: 14px; border-radius: 14px; background: var(--surface); border-top: 3px solid var(--k); }
-  #nogps .term small { display: block; font: 600 12px var(--f-mono); letter-spacing: 0.06em; color: var(--k); text-transform: uppercase; }
-  #nogps .term b { display: block; margin: 4px 0 6px; font: 700 28px var(--f-mono); color: var(--ink); transition: color 0.3s; }
-  #nogps .term p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--dim); }
-  #nogps .t-time { --k: #8ab8ff; flex: 0.9; } #nogps .t-one { --k: #8f9cb1; flex: 0.8; } #nogps .t-slope { --k: #6EE7A8; } #nogps .t-haz { --k: #f2b84b; }
   #nogps .lab { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; margin-bottom: 22px; }
   #nogps .labin, #nogps .out, #nogps .why { padding: 22px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
   #nogps h4 { margin: 0 0 14px; font-size: 17px; color: var(--ink); }
@@ -253,7 +239,6 @@
   #nogps .tg { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
   #nogps .tg button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--dim); }
   #nogps .tg button[aria-pressed="true"] { background: rgba(242, 184, 75, 0.14); border-color: #f2b84b; color: #ffd98a; }
-  #nogps .wnote { margin: 0; font-size: 13px; color: var(--faint); }
   #nogps .out { display: flex; flex-direction: column; justify-content: center; text-align: center; background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--k, #6EE7A8) 22%, transparent), transparent 70%), var(--surface); transition: background 0.4s; }
   #nogps .out small { font-size: 13px; color: var(--dim); }
   #nogps .out b { font: 800 clamp(44px, 6vw, 64px) var(--f-mono); color: var(--k, #6EE7A8); line-height: 1.1; transition: color 0.3s; }
@@ -273,24 +258,18 @@
   #nogps .play { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px 12px 16px; border-radius: 999px; border: 0; background: var(--blue); color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 0 30px -8px var(--blue-hi); }
   #nogps .play svg { width: 18px; height: 18px; }
   #nogps .play[aria-pressed="true"] { background: #2a3a5c; box-shadow: none; }
-  #nogps .tl { list-style: none; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 16px 0 0; padding: 0; counter-reset: t; }
-  #nogps .tl li { position: relative; padding: 12px 12px 12px 14px; border-radius: 12px; background: #070a10; border: 1px solid var(--line); counter-increment: t; transition: border-color 0.3s, background 0.3s; }
-  #nogps .tl li::before { content: "0" counter(t); font: 500 11px var(--f-mono); color: var(--faint); }
-  #nogps .tl b { display: block; font-size: 14px; color: var(--dim); }
-  #nogps .tl span { font-size: 12.5px; color: var(--faint); }
-  #nogps .tl li.on { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); }
-  #nogps .tl li.on b { color: var(--ink); }
-  #nogps .tl li.on span { color: var(--text); }
   @media (max-width: 960px) { #nogps .lab { grid-template-columns: 1fr; } }
   @media (max-width: 760px) {
-    #nogps .eqrow, #nogps .paren { flex-direction: column; }
-    #nogps .op { padding: 2px 0; font-size: 20px; }
     #nogps .ctl { grid-template-columns: 1fr; }
     #nogps .play { justify-content: center; }
-    #nogps .tl { grid-template-columns: 1fr; }
-    #nogps .tl li { display: flex; gap: 10px; align-items: baseline; }
     #nogps .paths { grid-template-columns: 1fr; }
   }
+
+  #nogps .simple { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 6px 0 22px; padding: 0; }
+  #nogps .simple li { display: flex; gap: 14px; align-items: center; padding: 18px; border-radius: 16px; background: #070a10; border: 1px solid var(--line); font-size: 16px; color: var(--text); }
+  #nogps .simple b { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #6EE7A8; color: #04060a; font: 700 17px var(--f-mono); }
+  #nogps .doubtC, #doubtC { display: none; }
+  @media (max-width: 760px) { #nogps .simple { grid-template-columns: 1fr; } }
 
   @media (max-width: 860px) {
     .top nav { display: none; }
@@ -410,61 +389,46 @@
         </div>
 
         <div class="pane" id="pRou">
-          <h3>The routing</h3>
-          <p>The map is cut into 20 m squares. Every square gets a price, and the planner finds the path between your stops with the lowest total price. Not the shortest path: the cheapest one.</p>
-
-          <div class="eq" aria-label="The price of one square">
-            <div class="eqh"><span>price of one square</span><b>=</b></div>
-            <div class="eqrow">
-              <div class="term t-time"><small>walking time</small><b>1.0</b><p>How long it takes to cross on flat ground (Tobler's hiking rule).</p></div>
-              <div class="op">×</div>
-              <div class="paren">
-                <div class="term t-one"><small>base</small><b>1</b><p>A flat, safe square costs just its walking time.</p></div>
-                <div class="op">+</div>
-                <div class="term t-slope"><small>slope</small><b id="vSlope">0</b><p>Free under 3°, then it climbs fast: 2 at 8°, 24 at 16°.</p></div>
-                <div class="op">+</div>
-                <div class="term t-haz"><small>6 × hazards</small><b id="vHaz">0</b><p>Radiation, relay blind spots, shadow and cold ground, each weighted.</p></div>
-              </div>
-            </div>
-          </div>
-
+          <h3>How we pick the path</h3>
+          <ol class="simple">
+            <li><b>1</b><span>We cut the map into small squares, 20 m each.</span></li>
+            <li><b>2</b><span>Every square gets a score. Flat and safe is low. Steep or risky is high.</span></li>
+            <li><b>3</b><span>The computer finds the path with the lowest total score.</span></li>
+          </ol>
           <div class="lab">
             <div class="labin">
-              <h4>Try one square</h4>
-              <label class="sl" for="cSlope"><span>Slope <b id="cSlopeV">6°</b></span><input id="cSlope" type="range" min="0" max="30" value="6"></label>
-              <div class="tg" role="group" aria-label="What is on this square">
-                <button type="button" data-h="radiation" aria-pressed="false">High radiation</button>
-                <button type="button" data-h="comms" aria-pressed="false">Relay blind spot</button>
+              <h4>Try it on one square</h4>
+              <label class="sl" for="cSlope"><span>How steep is it? <b id="cSlopeV">6°</b></span><input id="cSlope" type="range" min="0" max="30" value="6"></label>
+              <div class="tg" role="group" aria-label="Anything else risky here?">
+                <button type="button" data-h="radiation" aria-pressed="false">More radiation</button>
+                <button type="button" data-h="comms" aria-pressed="false">No satellite signal</button>
                 <button type="button" data-h="shadow" aria-pressed="false">In shadow</button>
-                <button type="button" data-h="cold" aria-pressed="false">Cold ground</button>
+                <button type="button" data-h="cold" aria-pressed="false">Very cold</button>
               </div>
-              <div class="styles" role="group" aria-label="Route style"><button type="button" data-st="safe" aria-pressed="true">Safest</button><button type="button" data-st="bal" aria-pressed="false">Balanced</button><button type="button" data-st="fast" aria-pressed="false">Fastest</button></div>
-              <p class="wnote" id="wnote"></p>
             </div>
             <div class="out" id="out">
-              <small>This square costs</small>
-              <b id="price">1.0×</b>
-              <span id="priceTx">a flat, safe square</span>
+              <small>Score</small>
+              <b id="price">1</b>
+              <span id="priceTx">Easy. The path goes here.</span>
               <div class="meter"><i id="priceBar"></i></div>
             </div>
           </div>
-
           <div class="why">
-            <h4>So why not walk straight?</h4>
+            <h4>That is why the path bends</h4>
             <div class="paths">
-              <div class="path" id="pathA"><small>Straight over the hill</small><b>1.0 km at 11°</b><span id="pa">—</span></div>
-              <div class="path" id="pathB"><small>Around it, on flat ground</small><b>2.0 km at 3°</b><span id="pb">—</span></div>
+              <div class="path" id="pathA"><small>Straight over a hill</small><b>1 km, steep</b><span id="pa"></span></div>
+              <div class="path win" id="pathB"><small>Around the hill</small><b>2 km, flat</b><span id="pb"></span></div>
             </div>
-            <p id="whyTx"></p>
+            <p>Walking twice as far on flat ground still scores lower, so the planner goes around.</p>
           </div>
         </div>
 
         <div class="pane" id="pNav">
-          <h3>The navigation</h3>
-          <p>There is no GPS on Mars, so two things take turns telling the suit where it is. Drag the astronaut over the ridge and watch them hand over.</p>
+          <h3>How the astronaut is found</h3>
+          <p>There is no GPS on Mars. Two things tell the astronaut where they are, and they take turns: when one cannot see them, the other one can.</p>
           <div class="ngrid">
-            <div class="src" id="sHab" style="--k:#3ddc97"><i class="dot"></i><div><b>The habitat</b><p>While its mast can see you, it measures your distance and direction, like an airport beacon. Voice is instant.</p><em>about 5 m · always on in sight</em></div></div>
-            <div class="src" id="sSat" style="--k:#F5B85B"><i class="dot"></i><div><b>The satellites</b><p>MRO, Odyssey, TGO and Mars Express. When one is overhead, ranging and Doppler on its real orbit pin you down, and the route is re-planned.</p><em>about 5 m · a few passes a day</em></div></div>
+            <div class="src" id="sHab" style="--k:#3ddc97"><i class="dot"></i><div><b>The habitat</b><p>Its radio mast finds you while nothing blocks the view.</p><em>works close to home</em></div></div>
+            <div class="src" id="sSat" style="--k:#F5B85B"><i class="dot"></i><div><b>The satellite</b><p>When a hill hides you from home, a satellite above finds you instead.</p><em>works behind hills</em></div></div>
           </div>
           <div class="scene"><svg id="dia" viewBox="0 0 900 470" role="img" aria-label="The habitat, a ridge, the astronaut, a relay satellite and Earth, with the radio links between them">
             <defs>
@@ -509,17 +473,9 @@
               <circle cx="760" cy="360" r="7" fill="#1a66e8" stroke="#fff" stroke-width="2"/><text class="lbl" x="760" y="400" text-anchor="middle">Next stop</text></g>
           </svg></div>
           <div class="ctl">
-            <button id="playB" class="play" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg><span>Simulate a walk</span></button>
-            <label for="walkR">or drag it yourself <input id="walkR" type="range" min="0" max="100" value="10"></label>
-            <button id="passB" type="button">Satellite pass</button>
+            <button id="playB" class="play" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg><span>Play the walk</span></button>
+            <label for="walkR">or drag the astronaut <input id="walkR" type="range" min="0" max="100" value="5"></label>
           </div>
-          <ol class="tl" id="tl">
-            <li data-s="0"><b>Leave</b><span>The habitat sees you</span></li>
-            <li data-s="1"><b>Ridge</b><span>The habitat link drops</span></li>
-            <li data-s="2"><b>Alone</b><span>The suit counts steps</span></li>
-            <li data-s="3"><b>Satellite</b><span>An orbiter finds you</span></li>
-            <li data-s="4"><b>Home</b><span>Back in range</span></li>
-          </ol>
           <div class="now" id="now"></div>
         </div>
       </div></div>
@@ -645,83 +601,59 @@
     if (open) { if (c.dataset.pane === "pNav") draw(); if (c.dataset.pane === "pRou") bars(); setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "nearest" }), 120); }
   }));
 
-  // routing: the same numbers the planner uses (app/main.py SLOPE_COST and cost_grid)
-  const ST = { safe: [{ slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, 18, "Safest"], bal: [{ slope: 0.4, radiation: 0.15, comms: 0.15, shadow: 0.1, cold: 0.1 }, 22, "Balanced"], fast: [{ slope: 0.08, radiation: 0, comms: 0, shadow: 0, cold: 0 }, 25, "Fastest"] };
+  // routing: the planner's real numbers (Safest style), shown as one score
+  const W = { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 };
   const SC = [[0, 0], [3, 0], [5, .4], [8, 2], [12, 8], [16, 24], [20, 60], [25, 160], [45, 400]];
   const pen = s => { for (let i = 1; i < SC.length; i++) if (s <= SC[i][0]) { const [a0, b0] = SC[i - 1], [a1, b1] = SC[i]; return b0 + (b1 - b0) * (s - a0) / (a1 - a0); } return 400; };
-  let st = "safe"; const on = new Set();
-  const mult = (s, hz) => { const w = ST[st][0]; return 1 + w.slope * pen(s) + 6 * [...hz].reduce((t, k) => t + w[k], 0); };
-  const f = v => v >= 100 ? Math.round(v) + "" : v >= 10 ? v.toFixed(0) : v.toFixed(1);
+  const on = new Set();
   function bars() {
-    const [w, ng, name] = ST[st], s = +$("cSlope").value;
-    $("cSlopeV").textContent = s + "°";
-    const sl = w.slope * pen(s), hz = 6 * [...on].reduce((t, k) => t + w[k], 0), m = 1 + sl + hz, blocked = s > ng;
-    $("vSlope").textContent = f(sl); $("vHaz").textContent = f(hz);
-    const out = $("out"), k = blocked ? "#ff6b55" : m < 2 ? "#6EE7A8" : m < 8 ? "#f2b84b" : "#ff8a5b";
-    out.style.setProperty("--k", k);
-    $("price").textContent = blocked ? "Blocked" : f(m) + "×";
-    $("priceTx").textContent = blocked ? `steeper than ${ng}°, the ${name} limit` : m < 1.05 ? "the same as a flat, safe square" : `the price of a flat, safe square`;
+    const s = +$("cSlope").value; $("cSlopeV").textContent = s + "°";
+    const m = 1 + W.slope * pen(s) + 6 * [...on].reduce((t, k) => t + W[k], 0), blocked = s > 18;
+    const k = blocked ? "#ff6b55" : m < 2 ? "#6EE7A8" : m < 8 ? "#f2b84b" : "#ff8a5b";
+    $("out").style.setProperty("--k", k);
+    $("price").textContent = blocked ? "No go" : m < 10 ? m.toFixed(1).replace(".0", "") : Math.round(m);
+    $("priceTx").textContent = blocked ? "Too steep to walk. The path never goes here." : m < 2 ? "Easy. The path goes here." : m < 8 ? "Costly. The path avoids it if it can." : "Very costly. The path goes around.";
     $("priceBar").style.width = blocked ? "100%" : Math.min(100, Math.log(m) / Math.log(60) * 100) + "%";
-    $("wnote").textContent = `${name}: slope weight ${w.slope}, hazards ${w.radiation}, ${w.comms}, ${w.shadow}, ${w.cold}. Steeper than ${ng}° is never allowed.`;
-    // the detour
-    const A = 1.0 * mult(11, new Set()), B = 2.0 * mult(3, new Set()), aWins = A < B;
-    $("pa").textContent = `price ${A.toFixed(1)}`; $("pb").textContent = `price ${B.toFixed(1)}`;
-    $("pathA").classList.toggle("win", aWins); $("pathB").classList.toggle("win", !aWins);
-    $("whyTx").textContent = aWins ? `With ${name}, slope barely costs anything, so the short way over the hill wins.` : `With ${name}, the 11° hill costs so much that walking twice as far on flat ground is cheaper. Switch to Fastest and watch it change.`;
+    $("pa").textContent = "score " + Math.round(1 * (1 + pen(11))); $("pb").textContent = "score " + Math.round(2 * (1 + pen(3)));
   }
   $("cSlope").addEventListener("input", bars);
   document.querySelectorAll("#nogps .tg button").forEach(b => b.onclick = () => { const k = b.dataset.h; on.has(k) ? on.delete(k) : on.add(k); b.setAttribute("aria-pressed", String(on.has(k))); bars(); });
-  document.querySelectorAll("#nogps .styles button").forEach(b => b.onclick = () => { st = b.dataset.st; document.querySelectorAll("#nogps .styles button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); bars(); });
 
-  // navigation: walk over the ridge, the habitat link drops, a satellite pass takes over
+  // navigation: the habitat finds you while it can see you; the moment a hill hides you, the satellite takes over, and back again
   const groundY = x => {
     const P = [[0, 380], [150, 372], [260, 345], [330, 280], [400, 250], [470, 262], [520, 330], [620, 360], [900, 368]];
     for (let i = 1; i < P.length; i++) if (x <= P[i][0]) { const a = P[i - 1], b = P[i], k = (x - a[0]) / (b[0] - a[0]), s = k * k * (3 - 2 * k); return a[1] + (b[1] - a[1]) * s; }
     return 368;
   };
-  let pass = false, satK = 0.12, lastFix = 0, back = false, playing = 0;
+  let satK = 0.62, playing = 0;
   function draw() {
-    const v = +$("walkR").value / 100, x = 150 + v * 610, y = groundY(x) - 2, km = v * 3.2;
-    const hab = x <= 420, doubt = hab || pass ? 5 : 5 + (km - lastFix) * 20;
+    const v = +$("walkR").value / 100, x = 150 + v * 610, y = groundY(x) - 2, hab = x <= 418;
     const sx = 120 + satK * 660, sy = 170 - Math.sin(Math.PI * (sx + 20) / 940) * 140;
-    $("astro").setAttribute("transform", `translate(${x} ${y})`);
-    $("doubtC").setAttribute("r", Math.min(90, 10 + doubt * 0.9));
-    $("satG").setAttribute("transform", `translate(${sx} ${sy})`);
-    $("lkHab").setAttribute("d", `M150 294 L ${x} ${y - 30}`); $("lkHab").classList.toggle("off", !hab);
-    $("lkSat").setAttribute("d", `M${sx} ${sy + 8} L ${x} ${y - 30}`); $("lkSat").classList.toggle("off", !pass);
-    $("lkEarth").setAttribute("d", `M${sx + 20} ${sy} L 806 72`); $("lkEarth").classList.toggle("off", !pass);
-    $("sHab").classList.toggle("live", hab); $("sSat").classList.toggle("live", pass);
-    const stage = pass ? 3 : hab ? (back ? 4 : 0) : (x < 520 ? 1 : 2);
-    document.querySelectorAll("#tl li").forEach(li => li.classList.toggle("on", +li.dataset.s === stage));
-    $("now").innerHTML = back && hab ? `<b>Home, back in range.</b> The habitat sees you again: position good to about 5 m, voice instant.` : pass ? `<b>Satellite overhead.</b> It pins you to about 5 m and the route is re-planned from there. Messages to Earth can leave now.`
-      : hab ? `<b>The habitat can see you.</b> Your position is good to about 5 m, and voice reaches home instantly.`
-      : `<b>Behind the ridge, between passes.</b> The suit counts steps on its own, and its doubt grows: <b>± ${Math.round(doubt)} m</b> after ${km.toFixed(1)} km. A satellite pass will fix it.`;
+    $("astro").setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    $("satG").setAttribute("transform", `translate(${sx.toFixed(1)} ${sy.toFixed(1)})`);
+    $("lkHab").setAttribute("d", `M150 294 L ${x.toFixed(1)} ${(y - 30).toFixed(1)}`);
+    $("lkSat").setAttribute("d", `M${sx.toFixed(1)} ${(sy + 8).toFixed(1)} L ${x.toFixed(1)} ${(y - 30).toFixed(1)}`);
+    $("lkEarth").setAttribute("d", `M${(sx + 20).toFixed(1)} ${sy.toFixed(1)} L 806 72`);
+    if (draw.hab !== hab) {                                                   // only touch classes and text when the hand-over happens
+      draw.hab = hab;
+      $("lkHab").classList.toggle("off", !hab); $("lkSat").classList.toggle("off", hab); $("lkEarth").classList.toggle("off", hab);
+      $("sHab").classList.toggle("live", hab); $("sSat").classList.toggle("live", !hab);
+      $("now").innerHTML = hab ? `<b>The habitat sees the astronaut.</b> It tells the suit where it is.` : `<b>The hill blocks the habitat.</b> The satellite takes over right away.`;
+    }
   }
-  $("walkR").addEventListener("input", () => { stop(); back = false; draw(); });
-  // the whole story in 18 seconds: out over the ridge, lost, found by a satellite, home again
-  const ease = k => k * k * (3 - 2 * k);
-  function stop() { if (!playing) return; cancelAnimationFrame(playing); playing = 0; $("playB").setAttribute("aria-pressed", "false"); $("playB").querySelector("span").textContent = "Simulate a walk"; $("passB").disabled = false; }
+  const ease = k => k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  function stop() { if (!playing) return; cancelAnimationFrame(playing); playing = 0; $("playB").setAttribute("aria-pressed", "false"); $("playB").querySelector("span").textContent = "Play the walk"; }
+  $("walkR").addEventListener("input", () => { stop(); draw(); });
   $("playB").onclick = () => {
-    if (playing) { stop(); pass = false; satK = 0.12; draw(); return; }
-    $("playB").setAttribute("aria-pressed", "true"); $("playB").querySelector("span").textContent = "Stop"; $("passB").disabled = true;
-    lastFix = 0; pass = false; back = false; const t0 = performance.now();
-    const frame = () => {
-      const t = (performance.now() - t0) / 1000; let v;
-      if (t < 8) { v = 5 + ease(t / 8) * 80; pass = false; }                                  // walk out, over the ridge
-      else if (t < 9.5) { v = 85; }                                                           // alone: the doubt has grown
-      else if (t < 14) { v = 85; pass = true; satK = 0.18 + (t - 9.5) / 4.5 * 0.7; lastFix = 85 / 100 * 3.2; }   // a pass crosses the sky
-      else if (t < 18) { pass = false; satK = 0.12; back = true; v = 85 - ease((t - 14) / 4) * 77; }             // home
-      else { stop(); back = true; draw(); return; }
-      $("walkR").value = v; draw(); playing = requestAnimationFrame(frame);
+    if (playing) return stop();
+    $("playB").setAttribute("aria-pressed", "true"); $("playB").querySelector("span").textContent = "Stop";
+    const t0 = performance.now(), D = 12000;                                    // out over the hill and back, one smooth loop
+    const frame = now => {
+      const k = Math.min(1, (now - t0) / D), there = k < 0.5 ? ease(k * 2) : ease((1 - k) * 2);
+      $("walkR").value = 5 + there * 80; satK = 0.3 + k * 0.5; draw();
+      if (k < 1) playing = requestAnimationFrame(frame); else stop();
     };
     playing = requestAnimationFrame(frame);
-  };
-  $("passB").onclick = () => {
-    stop(); back = false; pass = true; $("passB").disabled = true; $("passB").textContent = "Satellite overhead";
-    const v = +$("walkR").value / 100, t0 = performance.now();
-    const step = () => { const k = (performance.now() - t0) / 5000; satK = 0.18 + Math.min(1, k) * 0.7; lastFix = +$("walkR").value / 100 * 3.2; draw();
-      if (k < 1) requestAnimationFrame(step); else { pass = false; satK = 0.12; $("passB").disabled = false; $("passB").textContent = "Satellite pass"; draw(); } };
-    requestAnimationFrame(step);
   };
   draw(); bars();
 })();
