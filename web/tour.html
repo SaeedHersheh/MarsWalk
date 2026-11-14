@@ -67,16 +67,15 @@
   .act ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13.5px; color: var(--dim); }
 
   /* ---------- caption: what you are looking at, and how we made it ---------- */
-  .cap { position: fixed; z-index: 12; left: clamp(16px, 3.5vw, 44px); bottom: 104px; width: min(640px, calc(100vw - 32px)); padding: 20px 22px 18px; border-radius: 20px; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--line-2); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    opacity: 0; transform: translateY(10px); transition: opacity 0.45s, transform 0.45s; pointer-events: none; }
+  .cap { position: fixed; z-index: 12; left: 24px; top: 80px; width: min(520px, calc(100vw - 24px)); padding: 18px 20px 16px; border-radius: 18px; background: rgba(8, 11, 17, 0.9); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.09); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    opacity: 0; transform: translateY(8px); transition: opacity 0.35s, transform 0.35s; pointer-events: none; }
   .cap.on { opacity: 1; transform: none; }
-  .cap.right { left: auto; right: clamp(16px, 3.5vw, 44px); width: min(560px, calc(100vw - 32px)); }
-  .cap small { display: flex; gap: 10px; align-items: center; font-size: 11.5px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mars); }
-  .cap small i { font: 500 11.5px var(--f-mono); font-style: normal; letter-spacing: 0.04em; color: var(--faint); }
-  .cap b { display: block; margin: 6px 0 6px; font-size: clamp(22px, 2.6vw, 30px); line-height: 1.15; letter-spacing: -0.01em; color: var(--ink); }
-  .cap p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--text); }
-  .cap .how { display: flex; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); font: 12.5px/1.5 var(--f-mono); color: var(--accent); }
-  .cap .how svg { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+  .cap small { display: flex; gap: 10px; align-items: center; font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--mars); }
+  .cap small i { margin-left: auto; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); font: 500 11px var(--f-mono); font-style: normal; letter-spacing: 0.04em; color: var(--dim); }
+  .cap b { display: block; margin: 8px 0 6px; font-size: clamp(20px, 2vw, 25px); font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; color: var(--ink); }
+  .cap p { margin: 0; font-size: 15px; line-height: 1.6; color: #c3cad6; }
+  .cap .how { display: flex; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(138, 184, 255, 0.07); font: 12px/1.5 var(--f-mono); color: var(--accent); }
+  .cap .how svg { flex: none; width: 15px; height: 15px; margin-top: 2px; }
 
   /* ---------- the pipeline chapter ---------- */
   .pipe { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 80px clamp(16px, 4vw, 48px) 280px; background: radial-gradient(ellipse at 50% 30%, rgba(13, 26, 51, 0.94), rgba(4, 6, 10, 0.97) 70%); opacity: 0; transition: opacity 0.5s; pointer-events: none; }
@@ -141,7 +140,7 @@
   }
   @media (max-width: 640px) {
     .acts { grid-template-columns: 1fr; }
-    .cap { bottom: 92px; padding: 14px 16px; }
+    .cap { padding: 14px 16px; }
     .cap p { font-size: 13.5px; }
     .cap .how { display: none; }
     .player { grid-template-columns: auto minmax(0, 1fr); padding: 8px 10px 8px 8px; gap: 10px; }
@@ -153,7 +152,6 @@
   /* the short demo: a small player in the corner, so you can pause and read */
   body.short .player { left: auto; right: max(16px, env(safe-area-inset-right)); transform: none; width: min(460px, calc(100vw - 32px)); }
   body.short .player .right { display: none; }
-  body.short .cap { bottom: 96px; }
   @media (prefers-reduced-motion: reduce) { .cap, .node, .pipe, .end, .loading { transition: none; } .pipe.on .flow .pulse { animation: none; } }
 </style>
 </head>
@@ -232,7 +230,7 @@
   // page, scene (and its argument), seconds on screen, what to say, how we made it; 'pre' = scenes that rebuild the state a chapter needs when you jump straight to it
   const CH = [
     { a: 0, page: "home", act: "top", t: 7, title: "Marswalk", sub: "A route planner for walking on Mars, and a Mars you can stand on. Two ways in: Plan a trip, or Experience Mars.", how: "Built by AirAwareNetwork for the NASA Space Apps Challenge 2026." },
-    { a: 0, page: "home", act: "#nogps", t: 7, title: "There is no GPS on Mars", sub: "So an astronaut a few kilometres out leans on three things: the suit counting steps, the habitat's radio, and relay satellites passing overhead. Marswalk plans around all three." },
+    { a: 0, page: "home", act: "#nogps .steps", t: 7, title: "There is no GPS on Mars", sub: "So an astronaut a few kilometres out leans on three things: the suit counting steps, the habitat's radio, and relay satellites passing overhead. Marswalk plans around all three." },
     { a: 0, page: "globe", t: 7, title: "Pick anywhere on Mars", sub: "The globe marks landing sites and landmarks. Click any other point and the server builds a 178 km site from NASA terrain in about a minute.", how: "Global MOLA elevation (463 m) and a colour mosaic from NASA Mars Trek; sites built on demand by our Python pipeline." },
     { a: 1, page: "lab", scene: "layer", arg: null, t: 7, title: "Jezero crater, in detail", sub: "Perseverance's landing site, at walking resolution: 20 m terrain and a 6 m photo mosaic from the CTX camera, slopes from HiRISE 1 m where it exists.", how: "Started in QGIS: clipped, reprojected and checked the USGS rasters, then our Python pipeline turned them into map layers." },
     { a: 1, page: "lab", scene: "layer", arg: "slope", t: 6.5, title: "Slope", sub: "How steep the ground is at every spot. Green is an easy walk; red is too steep for a suited astronaut.", how: "NumPy gradient of the elevation model · HiRISE 1 m drives the hazard where it covers." },
@@ -252,7 +250,7 @@
     { a: 4, page: "pav", scene: "sat", pre: ["plan", "walk"], t: 9, title: "A relay pass fixes the position", sub: "A real orbiter track. Ranging and Doppler measure where the astronaut really is; the guide says how far off the suit was, and the route is re-planned from there." },
     { a: 4, page: "pav", scene: "rover", t: 7.5, title: "Or take the crew rover", sub: "A pressurised rover at about 10 km/h on flat ground, up to 20° slopes (assumed). The crew suit up through the suitports at each stop." },
     { a: 4, page: "pav", scene: "explore", t: 8, title: "Experience Mars", sub: "First person at real speed: walk with W A S D or the on-screen stick, look around, and jump in 38 % of Earth's gravity." },
-    { a: 4, page: "pav", scene: "vr", pre: ["explore"], t: 11, title: "And in VR", sub: "Put a phone in a headset: walk where you look, glance left at the card to pause, and hold the dot on a button for 2 seconds." },
+    { a: 4, page: "pav", scene: "vr", pre: ["explore"], pos: "bc", t: 11, title: "And in VR", sub: "Put a phone in a headset: walk where you look, glance left at the card to pause, and hold the dot on a button for 2 seconds." },
   ];
   // ?short=1: the 30-second demo for the Space Apps form. One place, one load, one story: map, navigation, 3D, satellite fix, VR.
   const SHORT = new URLSearchParams(location.search).has("short");
@@ -265,7 +263,7 @@
       { a: 0, page: "pav", scene: "layer", arg: "radiation", t: 5, title: "Radiation", sub: "The daily dose on open ground. High ground has less air above it, so it gets more.", how: "Curiosity's measured 0.67 mSv a day, scaled by the air column and the open sky." },
       { a: 0, page: "pav", scene: "layer", arg: "comms", t: 5, title: "Relay-satellite cover", sub: "Where cliffs and crater walls hide the sky from the relay satellites, so they cannot hear you.", how: "Terrain horizons in 16 directions against each orbiter's real position (NASA JPL)." },
       { a: 0, page: "pav", scene: "plan3d", t: 6, title: "4 · Plan it in 3D", sub: "Tap your stops on the true-scale terrain. Marswalk finds the safest route round the steep red walls." },
-      { a: 0, page: "pav", scene: "vrsat", t: 8.5, title: "5 · Simulate it, in VR", sub: "Walk the plan before anyone goes. Mars has no GPS: look up as a real relay satellite fixes your position, and the card tells you how far off you were." });
+      { a: 0, page: "pav", scene: "vrsat", pos: "bc", t: 8.5, title: "5 · Simulate it, in VR", sub: "Walk the plan before anyone goes. Mars has no GPS: look up as a real relay satellite fixes your position, and the card tells you how far off you were." });
   }
   const PIPE = [
     { c: "#8ab8ff", b: "QGIS", p: "Clip, reproject and check the NASA and USGS rasters: CTX 20 m, HiRISE 1 m, MOLA 463 m.", ic: '<path d="M4 6l8-3 8 3-8 3zM4 12l8 3 8-3M4 18l8 3 8-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' },
@@ -315,7 +313,7 @@
       if (jumped && c.pre) for (const p of c.pre) { send(p); await wait(p === "plan" ? 2600 : p === "explore" ? 3500 : 1800); if (tok !== T.token) return; }
     }
     let w = null; try { w = frame.contentWindow; } catch (e) { w = null; }
-    if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.offsetTop - 40 : 0, behavior: "smooth" }); }
+    if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.getBoundingClientRect().top + w.scrollY - 76 : 0, behavior: "smooth" }); }
     if (c.scene) send(c.scene, c.arg);
     if (c.globe && w && w.GLOBE) w.GLOBE.pick(c.globe);
     if (c.globeDo && w && w.GLOBE) w.GLOBE[c.globeDo]();
@@ -324,8 +322,47 @@
     $("cap").classList.toggle("right", !!c.right);
     $("capT").textContent = c.title; $("capS").textContent = c.sub; $("capHowT").textContent = c.how || ""; $("capHow").hidden = !c.how;
     await wait(250); if (tok !== T.token) return;
-    $("cap").classList.add("on"); T.busy = false;
+    placeCap(c, true); $("cap").classList.add("on"); T.busy = false;
   }
+  // ---------- the caption finds the emptiest corner: it measures what the app has on screen and keeps clear of it ----------
+  function busyRects() {
+    const out = [$("player").getBoundingClientRect()], W = innerWidth, H = innerHeight;
+    let d = null; try { d = frame.contentDocument; } catch (e) { /* other origin */ }
+    if (!d || !d.body) return out;
+    const vw = d.defaultView;
+    for (const el of d.body.querySelectorAll("*")) {
+      const cs = vw.getComputedStyle(el);
+      if (cs.position !== "fixed" || cs.display === "none" || cs.visibility === "hidden" || +cs.opacity < 0.1) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8 || r.width * r.height > W * H * 0.4 || r.bottom < 0 || r.top > H) continue;
+      out.push(r);
+    }
+    // the homepage scrolls, so its content is not 'fixed': keep clear of the headings, text and cards too
+    for (const el of d.querySelectorAll(".hero h1, .hero .lede, .eyebrow, .modes, h2, .intro, .steps, .data")) { const r = el.getBoundingClientRect(); if (r.width > 8 && r.bottom > 0 && r.top < H) out.push(r); }
+    return out;
+  }
+  const CAP = { key: "", x: 0, y: 0 };
+  function spots(w, h) {
+    const W = innerWidth, H = innerHeight, m = W < 640 ? 12 : 24, top = W < 640 ? 64 : 80, p = $("player").getBoundingClientRect();
+    const low = H - m - h, abovePlayer = p.top - 12 - h, cx = (W - w) / 2;
+    return { bl: [m, low], br: [W - m - w, low], bla: [m, abovePlayer], bra: [W - m - w, abovePlayer], bc: [cx, abovePlayer], tl: [m, top], tr: [W - m - w, top], tc: [cx, top] };
+  }
+  function overlap(x, y, w, h, rs) { let s = 0; for (const r of rs) { const ox = Math.min(x + w, r.right) - Math.max(x, r.left), oy = Math.min(y + h, r.bottom) - Math.max(y, r.top); if (ox > 0 && oy > 0) s += ox * oy; } return s; }
+  function placeCap(c, fresh) {
+    const cap = $("cap"), w = cap.offsetWidth, h = cap.offsetHeight, S = spots(w, h), rs = busyRects();
+    const order = c.pos ? [c.pos] : ["bla", "bl", "bra", "br", "tr", "tl", "bc", "tc"];
+    let best = null;
+    order.forEach((k, n) => { const [x, y] = S[k]; const sc = overlap(x, y, w, h, rs) + n * 40; if (!best || sc < best.sc) best = { k, x, y, sc }; });
+    if (!fresh && CAP.key) {                      // already showing: move only if the current spot is now covered and a clearly better one exists
+      const [x, y] = S[CAP.key] || [CAP.x, CAP.y], now = overlap(x, y, w, h, rs);
+      if (now < 400 || best.sc > now / 2) return;
+      cap.classList.remove("on"); setTimeout(() => { put(best); if (T.i >= 0) cap.classList.add("on"); }, 350); return;
+    }
+    put(best);
+  }
+  function put(b) { const cap = $("cap"); CAP.key = b.k; CAP.x = b.x; CAP.y = b.y; cap.style.left = Math.round(b.x) + "px"; cap.style.top = Math.round(b.y) + "px"; }
+  setInterval(() => { if (T.i >= 0 && !T.busy && $("cap").classList.contains("on")) placeCap(CH[T.i], false); }, 700);
+  addEventListener("resize", () => { if (T.i >= 0) placeCap(CH[T.i], true); });
   function finish() { ++T.token; setPlaying(false); segs.forEach(s => { s.firstChild.style.width = "100%"; }); $("cap").classList.remove("on"); $("pipe").classList.remove("on"); $("end").classList.add("on"); send("end"); }
   let last = performance.now();
   function tick() {                                       // a plain timer, so the chapters keep time even when the tab is not in front
