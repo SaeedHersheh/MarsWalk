@@ -632,3 +632,6 @@ body.mode-explore:not(.veh-rover) .radiodock { bottom: calc(var(--tbh) + 140px);
   .rdlinks, .rdquick { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .rdtalk.live { animation: none; } }
+
+/* finger-sized speed buttons on touch screens */
+@media (pointer: coarse) { .spd { min-height: 40px; min-width: 44px; } }

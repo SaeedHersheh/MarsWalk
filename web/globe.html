@@ -116,6 +116,7 @@ details.more[open] > summary::after { content: "–"; }
 
 /* labels on the globe */
 .mk { position: absolute; left: 0; top: 0; pointer-events: auto; border: 0; background: transparent; padding: 0; display: flex; align-items: center; gap: 7px; white-space: nowrap; transition: opacity 0.2s; }
+.mk::before { content: ""; position: absolute; inset: -12px -8px; }   /* a finger-sized tap area without moving the dot */
 .mk i { width: 9px; height: 9px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2px rgba(4, 6, 10, 0.7); flex: none; }
 .mk b { font-weight: 500; font-size: 12.5px; color: #fff; text-shadow: 0 1px 3px #000, 0 0 8px #000; }
 .mk.feature i { display: none; }
@@ -508,7 +509,7 @@ details.more[open] > summary::after { content: "–"; }
   const labelsEl = $("labels");
   function addMarker(p) {
     const b = document.createElement("button");
-    b.type = "button"; b.className = `mk ${p.kind}`; b.innerHTML = `<i></i><b></b>`; b.querySelector("b").textContent = p.name;
+    b.type = "button"; b.className = `mk ${p.kind}`; b.innerHTML = `<i></i><b></b>`; b.querySelector("b").textContent = p.name; b.setAttribute("aria-label", p.name);
     if (p.kind !== "pin") { b.setAttribute("aria-label", `${p.name}, ${fmtLat(p.lat)} ${fmtLon(p.lon)}`); b.addEventListener("click", ev => { ev.stopPropagation(); select(p, true); }); } else b.style.pointerEvents = "none";
     labelsEl.appendChild(b);
     p.el = b; p.anchor = new THREE.Object3D(); p.anchor.position.copy(latLonVec(p.lat, p.lon)); spin.add(p.anchor);
