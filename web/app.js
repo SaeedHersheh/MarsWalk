@@ -1215,26 +1215,43 @@
       const hub = pbr({ color: 0xb9bec4, roughness: 0.35, metalness: 0.85 });
       const red = pbr({ color: 0xfc3d21, roughness: 0.5 }), cells = pbr({ map: CELLS, roughness: 0.3, metalness: 0.5, envMapIntensity: 1.4 });
       const lamp = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
-      const box = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
-      box(2.3, 0.32, 4.4, frame, 0, 0.78, 0);                                         // chassis
-      box(2.25, 1.55, 3.0, shell, 0, 1.75, -0.35);                                    // cabin
-      const nose = box(2.25, 0.95, 1.1, shell, 0, 1.35, 1.6); nose.rotation.x = 0;    // lower front
-      const ws = box(2.1, 0.9, 0.08, glass, 0, 2.05, 1.18); ws.rotation.x = -0.55;      // windscreen, raked back
-      box(2.27, 0.42, 1.6, glass, 0, 2.05, 0.35);                                     // side windows (a band through the cabin)
-      box(2.28, 0.09, 3.0, red, 0, 1.12, -0.35);                                      // stripe
-      box(2.2, 0.05, 2.6, cells, 0, 2.6, -0.4);                                       // solar panel on the roof
-      for (const x of [-0.55, 0.55]) { const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.12, 32), hub); sp.rotation.x = Math.PI / 2; sp.position.set(x, 1.75, -1.9); sp.castShadow = true; g.add(sp); }   // suitports
-      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 10), hub); mast.position.set(0.8, 3.05, -1.4); g.add(mast);
-      const dish = new THREE.Mesh(new THREE.SphereGeometry(0.32, 24, 12, 0, Math.PI * 2, 0, 0.9), shell); dish.material.side = THREE.DoubleSide; dish.rotation.x = -2.3; dish.position.set(0.8, 3.5, -1.4); g.add(dish);
-      for (const x of [-0.75, 0.75]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.12, 0.04), lamp); l.position.set(x, 1.55, 2.16); g.add(l); }
+      const gold = pbr({ color: 0xc9a65a, roughness: 0.35, metalness: 0.9, envMapIntensity: 1.2 });       // foil, like the wrap on NASA hardware
+      const mesh = pbr({ color: 0x8d9298, roughness: 0.6, metalness: 0.7, bumpMap: NOISE, bumpScale: 0.03 }); // woven wire tyres, as on the Apollo rover
+      const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
+      const box = (w, h, d, m, x, y, z) => add(new THREE.BoxGeometry(w, h, d), m, x, y, z);
+      // a pressurised crew rover in the style of NASA's Space Exploration Vehicle: a rounded cabin with a big bubble window, six wheels on rocker arms
+      box(2.2, 0.26, 4.6, frame, 0, 0.95, 0);                                            // chassis deck
+      box(2.0, 0.18, 3.6, gold, 0, 0.78, 0);                                             // foil-wrapped equipment bay under the deck
+      add(new THREE.CylinderGeometry(1.08, 1.08, 2.7, 40, 1, true), shell, 0, 2.05, -0.35, Math.PI / 2);        // the cabin: a pressure tube lying along the rover
+      add(new THREE.SphereGeometry(1.08, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 2.05, -1.7, -Math.PI / 2).scale.set(1, 0.55, 1);   // flat rear end cap
+      const dome = pbr({ color: 0x3d6a92, roughness: 0.04, metalness: 0.35, envMapIntensity: 2.2, transparent: true, opacity: 0.82 });   // tinted visor glass
+      const bub = add(new THREE.SphereGeometry(1.08, 40, 24, 0, Math.PI * 2, 0, Math.PI / 2), dome, 0, 2.05, 1.0, Math.PI / 2); bub.scale.set(1, 0.85, 1);   // the bubble window at the front
+      add(new THREE.CylinderGeometry(0.98, 0.98, 1.6, 32), frame, 0, 2.05, 0.2, Math.PI / 2);   // dark cabin inside, seen through the bubble
+      add(new THREE.TorusGeometry(1.08, 0.06, 12, 48), frame, 0, 2.05, 1.0);            // window frame ring
+      box(2.2, 0.32, 2.0, glass, 0, 2.25, -0.25).scale.set(1.0, 1, 1);                   // side window band
+      add(new THREE.TorusGeometry(1.09, 0.05, 10, 48), red, 0, 2.05, -1.25);             // a red band round the cabin
+      for (const x of [-0.5, 0.5]) { add(new THREE.CylinderGeometry(0.36, 0.36, 0.14, 32), hub, x, 2.0, -2.32, Math.PI / 2); add(new THREE.TorusGeometry(0.36, 0.05, 10, 32), frame, x, 2.0, -2.38); }   // suitports on the back
+      box(1.7, 0.5, 0.5, frame, 0, 1.22, -2.15);                                         // rear porch under the suitports
+      // solar wings on a roof mast, tilted to the Sun
+      box(0.12, 0.5, 0.12, hub, 0, 3.3, -0.6);
+      for (const s of [-1, 1]) { const w = box(1.7, 0.04, 1.3, cells, s * 1.05, 3.55, -0.6); w.rotation.z = s * 0.18; }
+      box(0.5, 0.06, 1.3, frame, 0, 3.53, -0.6);
+      // a high-gain antenna on a mast, and a smaller one
+      add(new THREE.CylinderGeometry(0.035, 0.035, 1.1, 10), hub, -0.75, 3.35, -1.45);
+      const dish = add(new THREE.SphereGeometry(0.36, 24, 12, 0, Math.PI * 2, 0, 0.85), gold, -0.75, 3.95, -1.45, -2.2); dish.material.side = THREE.DoubleSide;
+      add(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8), hub, 0.75, 3.3, -1.5);
+      // lights and cameras on the nose
+      for (const x of [-0.75, 0.75]) { add(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 16), lamp, x, 1.32, 2.33, Math.PI / 2); }
+      box(1.9, 0.3, 0.3, frame, 0, 1.15, 2.25);                                          // front bumper
+      for (const x of [-0.4, 0.4]) box(0.16, 0.16, 0.2, frame, x, 3.12, 0.55);           // stereo cameras on the roof front
       ud.wheels = [];
-      for (const z of [-1.5, 0, 1.5]) for (const x of [-1.32, 1.32]) {
-        const w = new THREE.Group(); w.position.set(x, 0.5, z);
-        const t = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.34, 28), tyre); t.rotation.z = Math.PI / 2; t.castShadow = true; w.add(t);
-        const h = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.36, 16), hub); h.rotation.z = Math.PI / 2; w.add(h);
-        for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.06, 0.85), hub); sp.rotation.x = k * Math.PI / 4; w.add(sp); }      // spokes, so the turning shows
+      for (const z of [-1.7, 0, 1.7]) for (const x of [-1.35, 1.35]) {
+        const w = new THREE.Group(); w.position.set(x, 0.55, z);
+        const t = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.42, 32), mesh); t.rotation.z = Math.PI / 2; t.castShadow = true; w.add(t);
+        for (let k = 0; k < 10; k++) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.12), frame); const a = k * Math.PI / 5; c.position.set(0, Math.cos(a) * 0.55, Math.sin(a) * 0.55); c.rotation.x = -a; w.add(c); }   // tread chevrons, so the turning shows
+        const h = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.46, 18), hub); h.rotation.z = Math.PI / 2; w.add(h);
         g.add(w); ud.wheels.push(w);
-        box(0.42, 0.06, 1.15, frame, x, 1.06, z);                                     // fender
+        box(0.16, 0.16, 0.9, frame, x * 0.82, 0.8, z * 0.75);                            // rocker arm to the wheel
       }
       return g;
     }
@@ -1775,13 +1792,14 @@
       astro.visible = !T3.fp && !inRover; blob.visible = !T3.fp && !inRover; if (T3.fp || inRover) astroTag.visible = false;
       if (T3.fp) {
         ctl.enabled = false;
-        const d = walking ? new THREE.Vector3(k.hdx, 0, -k.hdy) : new THREE.Vector3(Math.sin(astro.rotation.y), 0, Math.cos(astro.rotation.y));
-        if (d.lengthSq() > 1e-9) { d.normalize(); if (!T3.fpDir) T3.fpDir = d.clone(); else T3.fpDir.lerp(d, 1 - Math.exp(-dtr * (walking && k.manual ? 14 : 3.5))).normalize(); }
-        const L = T3.look, moving = walking && !k.still && !walk.busy;
+        const d = inRover && T3.rvHy != null ? new THREE.Vector3(Math.sin(T3.rvHy), 0, -Math.cos(T3.rvHy))          // in the rover: face where the rover points (already smoothed)
+          : walking ? new THREE.Vector3(k.hdx, 0, -k.hdy) : new THREE.Vector3(Math.sin(astro.rotation.y), 0, Math.cos(astro.rotation.y));
+        if (d.lengthSq() > 1e-9) { d.normalize(); if (!T3.fpDir) T3.fpDir = d.clone(); else T3.fpDir.lerp(d, 1 - Math.exp(-dtr * (inRover ? 6 : walking && k.manual ? 14 : 3.5))).normalize(); }
+        const L = T3.look, moving = walking && !k.still && !walk.busy && !inRover;     // no footsteps in a rover: no bob, no sway
         if (moving && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8);                // the head drifts back to face the way you walk
         const f = T3.fpDir.clone().applyAxisAngle(UP, L.yaw), right = new THREE.Vector3(-f.z, 0, f.x);
         const bob = moving ? Math.abs(Math.cos(T3.phase)) * 0.05 : 0, sway = moving ? Math.sin(T3.phase) * 0.03 : 0;
-        if (inRover) { cam.position.copy(here).addScaledVector(T3.fpDir, 1.3).addScaledVector(right, 0.45); cam.position.y = rover.position.y + 2.15; }   // driver's seat, behind the windscreen
+        if (inRover) { cam.position.copy(here).addScaledVector(T3.fpDir, 1.3).addScaledVector(right, 0.45); cam.position.y = rover.position.y + 2.15; if (moving === false && walking && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8); }   // driver's seat, behind the windscreen
         else { cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob; }
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
         if (T3.vr && T3.vr.q) { T3.vrDt = dtr; vrDraw(here, jy); return; }
