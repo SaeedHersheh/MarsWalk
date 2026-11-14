@@ -1,5 +1,6 @@
 # Marswalk on Hugging Face Spaces (or any Docker host). Serves the app on port 7860.
 FROM python:3.13-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libexpat1 libgomp1 && rm -rf /var/lib/apt/lists/*
 RUN useradd -m -u 1000 user
 WORKDIR /home/user/app
 COPY --chown=user requirements-deploy.txt .
