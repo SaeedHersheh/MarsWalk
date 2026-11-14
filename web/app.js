@@ -708,10 +708,20 @@
     walk.manual = false; T3.dirty = true; syncDrive();
   }
   const stick = { x: 0, y: 0 };
+  function padAxes() {                                  // first connected gamepad's left stick, or null when it is centred
+    const g = navigator.getGamepads ? [...navigator.getGamepads()].find(x => x && x.connected) : null; if (!g || g.axes.length < 2) return null;
+    const x = g.axes[0], y = -g.axes[1]; return Math.abs(x) > 0.15 || Math.abs(y) > 0.15 ? [x, y] : null;
+  }
+  function padTick() {
+    const g = navigator.getGamepads ? [...navigator.getGamepads()].find(x => x && x.connected) : null; if (!g) return;
+    const a = !!(g.buttons[0] && g.buttons[0].pressed); if (a && !padTick.a) jump(); padTick.a = a;
+    if (walk.on && !walk.manual && padAxes()) takeControl();
+  }
   function driveInput() {
     const k = walk.keys || {};
     let turn = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0), fwd = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0);
     if (Math.abs(stick.x) > 0.12 || Math.abs(stick.y) > 0.12) { turn = stick.x; fwd = stick.y; }
+    const gp = padAxes(); if (gp) { turn = gp[0]; fwd = gp[1]; }
     return [turn, fwd];
   }
   function offRoute(r, x, y) { let m = 1e12; for (let i = 0; i < r.x.length; i += 2) { const d = (r.x[i] - x) ** 2 + (r.y[i] - y) ** 2; if (d < m) m = d; } return Math.sqrt(m); }
@@ -817,7 +827,7 @@
   }
   function tick(now) {
     requestAnimationFrame(tick);
-    const dtReal = Math.min(0.5, (now - (walk.last || now)) / 1000); walk.last = now;
+    const dtReal = Math.min(0.5, (now - (walk.last || now)) / 1000); walk.last = now; padTick();
     if (walk.on && !walk.busy) {
       walk.simT += dtReal * S.speed;
       if (walk.manual) manualStep(dtReal, now); else {
@@ -1333,6 +1343,53 @@
       cv.addEventListener("wheel", e => { if (!T3.fp) return; e.preventDefault(); cam.fov = Math.min(80, Math.max(25, cam.fov * (e.deltaY > 0 ? 1.07 : 0.93))); cam.updateProjectionMatrix(); }, { passive: false });
     }
     const UP = new THREE.Vector3(0, 1, 0);
+    /* Phone VR (Cardboard, Gear VR as a holder): the screen is split into a left and a right eye 6.4 cm apart,
+       and the phone's gyroscope turns the view. The body still faces the way the astronaut walks; your head looks around from there.
+       A panel below eye level carries the HUD: look down to read it. No lens distortion correction. */
+    const camE = new THREE.PerspectiveCamera(80, 1, 0.1, 130000 * K), qF = new THREE.Quaternion(), qY = new THREE.Quaternion(), vF = new THREE.Vector3();
+    const hudC = document.createElement("canvas"); hudC.width = 1024; hudC.height = 520;
+    const hudT = new THREE.CanvasTexture(hudC); hudT.encoding = THREE.sRGBEncoding;
+    const vrHud = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.508), new THREE.MeshBasicMaterial({ map: hudT, transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    vrHud.renderOrder = 20; vrHud.visible = false; sc.add(vrHud);
+    function drawVrHud() {
+      const x = hudC.getContext("2d"), W = hudC.width, H = hudC.height, tx = id => ($(id) && $(id).textContent) || "";
+      x.clearRect(0, 0, W, H); x.fillStyle = "rgba(6, 9, 14, 0.86)"; x.beginPath(); x.roundRect ? x.roundRect(4, 4, W - 8, H - 8, 36) : x.rect(4, 4, W - 8, H - 8); x.fill();
+      x.strokeStyle = "rgba(138, 184, 255, 0.55)"; x.lineWidth = 4; x.stroke();
+      x.fillStyle = "#ffffff"; x.font = "600 54px Inter, sans-serif"; x.fillText(walk.on ? tx("hudNext") : "Press play to start the walk", 44, 92);
+      x.font = "500 38px 'IBM Plex Mono', monospace";
+      if (walk.on) {
+        x.fillStyle = "#8f9cb1"; x.fillText("Position", 44, 160); x.fillText("Habitat", 360, 160); x.fillText("Satellite", 660, 160);
+        x.fillStyle = $("hudPos").style.color && $("hudPos").style.color.startsWith("var") ? "#ffffff" : "#ffffff";
+        x.fillText(tx("hudPos"), 44, 210); x.fillText(tx("hudHab").replace("linked · ", "ok ").replace("hidden by terrain", "blocked"), 360, 210); x.fillText(tx("hudLink").slice(0, 16), 660, 210);
+      }
+      const g = LOG[0];
+      if (g) {
+        x.fillStyle = g.color || "#8ab8ff"; x.font = "600 40px Inter, sans-serif"; x.fillText(g.title.slice(0, 40), 44, 290);
+        x.fillStyle = "#d6dce7"; x.font = "400 34px Inter, sans-serif";
+        const words = String(g.msg).split(" "); let line = "", y = 340, n = 0;
+        for (const w of words) { const t = line ? line + " " + w : w; if (x.measureText(t).width > W - 90) { x.fillText(line, 44, y); y += 46; line = w; if (++n === 3) { line = ""; break; } } else line = t; }
+        if (line) x.fillText(line, 44, y);
+      }
+      hudT.needsUpdate = true;
+    }
+    function vrDraw(here, jy) {
+      const V = T3.vr, fd = T3.fpDir || new THREE.Vector3(0, 0, -1), bodyYaw = Math.atan2(-fd.x, -fd.z);
+      if (V.yaw0 == null) { vF.set(0, 0, -1).applyQuaternion(V.q); V.yaw0 = Math.atan2(-vF.x, -vF.z) - (V.bodyAt || 0); }
+      qY.setFromAxisAngle(UP, bodyYaw - V.yaw0); qF.copy(qY).multiply(V.q);
+      cam.position.copy(here); cam.position.y = here.y + 1.68 + jy; cam.quaternion.copy(qF);
+      ctl.target.copy(cam.position).add(vF.set(0, 0, -3).applyQuaternion(qF));
+      const fl = new THREE.Vector3(fd.x, 0, fd.z).normalize();
+      vrHud.position.copy(cam.position).addScaledVector(fl, 0.95); vrHud.position.y -= 0.68; vrHud.lookAt(cam.position); vrHud.visible = true;
+      const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; drawVrHud(); }
+      const W = cv.clientWidth, H = cv.clientHeight, half = W / 2, rt = new THREE.Vector3(1, 0, 0).applyQuaternion(qF);
+      camE.fov = 80; camE.aspect = half / H; camE.near = 0.1; camE.far = cam.far; camE.updateProjectionMatrix();
+      rn.setScissorTest(true);
+      for (const sd of [-1, 1]) {
+        camE.position.copy(cam.position).addScaledVector(rt, sd * 0.032); camE.quaternion.copy(qF);
+        const x0 = sd < 0 ? 0 : half; rn.setViewport(x0, 0, half, H); rn.setScissor(x0, 0, half, H); rn.render(sc, camE);
+      }
+      rn.setScissorTest(false); rn.setViewport(0, 0, W, H);
+    }
     T3.api = {
       lookSat: () => { if (!T3.satDir) return; setCam("free", true); const h0 = T3.herePos, d = T3.satDir.clone(), flat = d.clone().setY(0); if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1); flat.normalize(); T3.skyLook = true; cam.position.copy(h0).addScaledVector(flat, -600 * K); cam.position.y += 250 * K; ctl.target.copy(cam.position).addScaledVector(d, 2600 * K); },
       setLite: v => {
@@ -1343,7 +1400,8 @@
       zoom: f => { if (T3.fp) { cam.fov = Math.min(80, Math.max(25, cam.fov * f)); cam.updateProjectionMatrix(); return; } if (T3.chase) { T3.chaseK = Math.min(14, Math.max(0.35, (T3.chaseK || 1) * f)); return; } const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
       reset: () => { setCam("free", true); homeCam(); },
       backOff: () => { const d = ctl.target.clone().sub(cam.position).setY(0); if (d.lengthSq() < 1e-6) d.set(0, 0, -1); d.normalize(); ctl.target.copy(cam.position).addScaledVector(d, 2); cam.position.addScaledVector(d, -10); cam.position.y += 4; },
-      fov: v => { cam.fov = v; cam.updateProjectionMatrix(); }, top: () => { T3.skyLook = false; const t = ctl.target; cam.position.set(t.x, t.y + 14000 * K, t.z + 1); },
+      fov: v => { cam.fov = v; cam.updateProjectionMatrix(); },
+      vrPixels: on => { rn.setPixelRatio(on ? Math.min(devicePixelRatio || 1, 1.5) : Math.min(devicePixelRatio || 1, 2)); }, top: () => { T3.skyLook = false; const t = ctl.target; cam.position.set(t.x, t.y + 14000 * K, t.z + 1); },
     };
 
     T3.render = () => {
@@ -1467,11 +1525,13 @@
         const bob = moving ? Math.abs(Math.cos(T3.phase)) * 0.05 : 0, sway = moving ? Math.sin(T3.phase) * 0.03 : 0;
         cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob;
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
+        if (T3.vr && T3.vr.q) { vrDraw(here, jy); return; }
+        vrHud.visible = false;
         cam.lookAt(ctl.target); cam.rotateZ(-sway * 0.5);
         rn.render(sc, cam);
         return;
       }
-      ctl.enabled = true;
+      ctl.enabled = true; vrHud.visible = false;
       if (T3.chase && !T3.drag) {
         const dist = chaseBase() * (T3.chaseK || 1);
         if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; } }
@@ -1511,8 +1571,65 @@
     const on = S.view === "3d" && T3.cam3 !== "free" && matchMedia("(pointer: coarse)").matches;
     $("jumpBtn").hidden = !on; document.body.classList.toggle("canjump", on);
   }
+  /* ---------- phone VR ---------- */
+  const vrCss = document.createElement("style");
+  vrCss.textContent = `
+    body.vr > *:not(#view3d):not(#vrBar) { display: none !important; }
+    body.vr #view3d { position: fixed; inset: 0 !important; width: 100vw !important; height: 100vh !important; height: 100dvh !important; cursor: none; }
+    body.vr::after { content: ""; position: fixed; z-index: 5; top: 0; bottom: 0; left: 50%; width: 2px; margin-left: -1px; background: #000; pointer-events: none; }
+    .vrbar { position: fixed; z-index: 900; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 12px; padding: 12px; border-radius: 999px; background: rgba(10, 14, 21, 0.94); border: 1px solid #2b3649; }
+    .vrbar button { padding: 12px 20px; border-radius: 999px; border: 1px solid #2b3649; background: transparent; color: #fff; font: 600 15px Inter, sans-serif; }
+    .vrbar button.x { background: #fc3d21; border-color: #fc3d21; }
+    #t3vr svg { width: 18px; height: 18px; margin-right: 6px; }`;
+  document.head.appendChild(vrCss);
+  {
+    const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.id = "t3vr"; b.title = "Phone VR: put the phone in a Cardboard or Gear VR holder";
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v6a2.5 2.5 0 0 1-2.5 2.5h-3l-2-2.5h-3L8.5 17h-3A2.5 2.5 0 0 1 3 14.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="11.5" r="1.6" fill="currentColor"/><circle cx="16" cy="11.5" r="1.6" fill="currentColor"/></svg>VR';
+    b.hidden = !matchMedia("(pointer: coarse)").matches; b.onclick = () => vrEnter();
+    $("tools3d").appendChild(b);
+    const bar = document.createElement("div"); bar.className = "vrbar"; bar.id = "vrBar"; bar.hidden = true;
+    bar.innerHTML = '<button type="button" id="vrCenter">Recenter</button><button type="button" class="x" id="vrExit">Exit VR</button>';
+    document.body.appendChild(bar);
+  }
+  const vrQ = new THREE.Quaternion(), vrE = new THREE.Euler(), vrZ = new THREE.Vector3(0, 0, 1), vrQ1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)), vrQ2 = new THREE.Quaternion();
+  function onOri(e) {                                     // the standard device-orientation to camera conversion (as three.js DeviceOrientationControls)
+    if (!T3.vr || e.alpha == null) return;
+    const D = Math.PI / 180, orient = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * D;
+    vrE.set(e.beta * D, e.alpha * D, -e.gamma * D, "YXZ"); vrQ.setFromEuler(vrE).multiply(vrQ1).multiply(vrQ2.setFromAxisAngle(vrZ, -orient));
+    if (!T3.vr.q) T3.vr.q = vrQ.clone(); else T3.vr.q.slerp(vrQ, 0.6);
+  }
+  async function vrEnter() {
+    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") {
+      await DeviceOrientationEvent.requestPermission().catch(() => "denied");      // iPhone asks here; elsewhere the 2 s check below says if no data comes
+    }
+    try { await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) { /* not allowed here */ }
+    try { await screen.orientation.lock("landscape"); } catch (e) { /* turn the phone sideways yourself */ }
+    try { T3.wake = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; } catch (e) { T3.wake = null; }
+    if (S.view !== "3d") setView("3d");
+    T3.vrLite = T3.lite; if (T3.api) { if (!T3.lite) T3.api.setLite(true); T3.api.vrPixels(true); }
+    setCam("fp", true); if (walk.on && S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); }
+    T3.vr = { q: null, yaw0: null }; addEventListener("deviceorientation", onOri);
+    document.body.classList.add("vr"); T3.dirty = true;
+    setTimeout(() => { if (T3.vr && !T3.vr.q) { vrExit(); toast("No gyroscope data", "This browser gave no motion data. Open the page over https (the 8443 server) in Chrome on the phone.", "#F0616B"); } }, 2000);
+    if (!walk.on && S.route) guide("VR on", "Put the phone in the headset. Look down to read the panel. The walk starts in five seconds and goes at real speed. A Bluetooth controller walks and jumps. Tap the screen to recenter or leave VR.", "#8ab8ff");
+    if (!walk.on && S.route) setTimeout(() => { if (T3.vr && !walk.on) startWalk(); }, 5000);
+  }
+  function vrExit() {
+    if (!T3.vr) return;
+    removeEventListener("deviceorientation", onOri); T3.vr = null; document.body.classList.remove("vr"); $("vrBar").hidden = true;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    try { screen.orientation.unlock(); } catch (e) { /* fine */ }
+    if (T3.wake) { T3.wake.release().catch(() => {}); T3.wake = null; }
+    if (T3.api) { T3.api.vrPixels(false); if (!T3.vrLite) T3.api.setLite(false); }
+    T3.dirty = true;
+  }
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && T3.vr && T3.vr.q) vrExit(); });
+  $("view3d").addEventListener("pointerdown", () => { if (!T3.vr) return; const bar = $("vrBar"); bar.hidden = false; clearTimeout(bar.t); bar.t = setTimeout(() => { bar.hidden = true; }, 4000); });
+  $("vrExit").onclick = vrExit;
+  $("vrCenter").onclick = () => { if (T3.vr) T3.vr.yaw0 = null; $("vrBar").hidden = true; };
   // a standing jump in Mars gravity (3.71 m/s2): about 40 cm up and nearly a second in the air
   function jump() { if (S.view !== "3d" || T3.jmp) return; T3.jmp = { t: 0 }; }
+  T3.vrTest = { enter: () => vrEnter(), exit: () => vrExit() };
 
   /* ---------- controls ---------- */
   $("v-2d").onclick = () => setView("2d"); $("v-3d").onclick = () => setView("3d");
