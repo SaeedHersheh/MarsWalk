@@ -699,7 +699,7 @@
     walk.manual = true; walk.still = true; walk.blocked = 0; walk.ri = Math.max(0, q.i - 1); syncDrive(); T3.dirty = true;
     if (S.speed > 30) { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
     camWalk();
-    toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#8ab8ff");
+    if (!T3.vr) toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#8ab8ff");
   }
   async function releaseControl() {
     if (!walk.manual || walk.busy) return;
@@ -718,6 +718,11 @@
     if (walk.on && !walk.manual && padAxes()) takeControl();
   }
   function driveInput() {
+    if (T3.vr && T3.vrHead) {                             // VR: walk where you look at a steady pace; look down at the panel to stop
+      const h = T3.vrHead, gp = padAxes(); let e = h.hd - walk.hd; e = Math.atan2(Math.sin(e), Math.cos(e));
+      const f = gp && Math.abs(gp[1]) > 0.15 ? gp[1] : h.pitch < -0.55 ? 0 : 1, t = Math.max(-1, Math.min(1, e * 1.4));
+      return [t * (f < 0 ? -1 : 1), f];
+    }
     const k = walk.keys || {};
     let turn = (k.d || k.arrowright ? 1 : 0) - (k.a || k.arrowleft ? 1 : 0), fwd = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0);
     if (Math.abs(stick.x) > 0.12 || Math.abs(stick.y) > 0.12) { turn = stick.x; fwd = stick.y; }
@@ -731,7 +736,7 @@
     const sl0 = slopeAt(walk.mx, walk.my) ?? 0, x0 = walk.mx, y0 = walk.my;
     let step = 0; walk.still = Math.abs(fwd) < 0.05;
     if (!walk.still) {
-      const v = 1.25 * Math.max(0.2, 1 - sl0 / 32) * (fwd < 0 ? 0.5 : 1);                   // m/s in a suit, slower on slope
+      const v = 1.25 * (T3.vr ? 1.5 : 1) * Math.max(0.2, 1 - sl0 / 32) * (fwd < 0 ? 0.5 : 1);     // VR: a brisk 1.9 m/s on the flat                   // m/s in a suit, slower on slope
       step = v * Math.abs(fwd) * simDt;
       const sg = Math.sign(fwd), nx = walk.mx + Math.sin(walk.hd) * step * sg, ny = walk.my + Math.cos(walk.hd) * step * sg, sl = slopeAt(nx, ny);
       if (sl == null || nx < DX * 2 || ny < DY * 2 || nx > M.width_m - DX * 2 || ny > M.height_m - DY * 2) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Edge of the mapped area", "Turn back.", "#F5B85B"); } }
@@ -1355,7 +1360,9 @@
       const x = hudC.getContext("2d"), W = hudC.width, H = hudC.height, tx = id => ($(id) && $(id).textContent) || "";
       x.clearRect(0, 0, W, H); x.fillStyle = "rgba(6, 9, 14, 0.86)"; x.beginPath(); x.roundRect ? x.roundRect(4, 4, W - 8, H - 8, 36) : x.rect(4, 4, W - 8, H - 8); x.fill();
       x.strokeStyle = "rgba(138, 184, 255, 0.55)"; x.lineWidth = 4; x.stroke();
-      x.fillStyle = "#ffffff"; x.font = "600 54px Inter, sans-serif"; x.fillText(walk.on ? tx("hudNext") : "Press play to start the walk", 44, 92);
+      x.fillStyle = "#ffffff"; x.font = "600 54px Inter, sans-serif"; x.fillText(walk.on ? tx("hudNext") : "Starting the walk…", 44, 92);
+      x.fillStyle = "#8ab8ff"; x.font = "500 30px Inter, sans-serif"; x.fillText("Stopped while you read this · look up to walk", 44, H - 34);
+      x.fillStyle = "#ffffff";
       x.font = "500 38px 'IBM Plex Mono', monospace";
       if (walk.on) {
         x.fillStyle = "#8f9cb1"; x.fillText("Position", 44, 160); x.fillText("Habitat", 360, 160); x.fillText("Satellite", 660, 160);
@@ -1373,12 +1380,14 @@
       hudT.needsUpdate = true;
     }
     function vrDraw(here, jy) {
-      const V = T3.vr, fd = T3.fpDir || new THREE.Vector3(0, 0, -1), bodyYaw = Math.atan2(-fd.x, -fd.z);
-      if (V.yaw0 == null) { vF.set(0, 0, -1).applyQuaternion(V.q); V.yaw0 = Math.atan2(-vF.x, -vF.z) - (V.bodyAt || 0); }
-      qY.setFromAxisAngle(UP, bodyYaw - V.yaw0); qF.copy(qY).multiply(V.q);
+      const V = T3.vr, fd = T3.fpDir || new THREE.Vector3(0, 0, -1);
+      if (V.yaw0 == null) { vF.set(0, 0, -1).applyQuaternion(V.q); V.yaw0 = Math.atan2(-vF.x, -vF.z); V.calib = Math.atan2(-fd.x, -fd.z) - V.yaw0; }   // recenter: straight ahead = the way you face now
+      const gp = padAxes(); if (gp && Math.abs(gp[0]) > 0.15) V.calib -= gp[0] * 1.6 * (T3.vrDt || 0.016);
+      qY.setFromAxisAngle(UP, V.calib); qF.copy(qY).multiply(V.q);
+      { const hv = vF.set(0, 0, -1).applyQuaternion(qF); T3.vrHead = { hd: Math.atan2(hv.x, -hv.z), pitch: Math.asin(Math.max(-1, Math.min(1, hv.y))) }; }
       cam.position.copy(here); cam.position.y = here.y + 1.68 + jy; cam.quaternion.copy(qF);
       ctl.target.copy(cam.position).add(vF.set(0, 0, -3).applyQuaternion(qF));
-      const fl = new THREE.Vector3(fd.x, 0, fd.z).normalize();
+      const fl = new THREE.Vector3(Math.sin(T3.vrHead.hd), 0, -Math.cos(T3.vrHead.hd));
       vrHud.position.copy(cam.position).addScaledVector(fl, 0.95); vrHud.position.y -= 0.68; vrHud.lookAt(cam.position); vrHud.visible = true;
       const now = performance.now(); if (now - (V.hudAt || 0) > 500) { V.hudAt = now; drawVrHud(); }
       const W = cv.clientWidth, H = cv.clientHeight, half = W / 2, rt = new THREE.Vector3(1, 0, 0).applyQuaternion(qF);
@@ -1525,7 +1534,7 @@
         const bob = moving ? Math.abs(Math.cos(T3.phase)) * 0.05 : 0, sway = moving ? Math.sin(T3.phase) * 0.03 : 0;
         cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob;
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
-        if (T3.vr && T3.vr.q) { vrDraw(here, jy); return; }
+        if (T3.vr && T3.vr.q) { T3.vrDt = dtr; vrDraw(here, jy); return; }
         vrHud.visible = false;
         cam.lookAt(ctl.target); cam.rotateZ(-sway * 0.5);
         rn.render(sc, cam);
@@ -1611,12 +1620,13 @@
     T3.vr = { q: null, yaw0: null }; addEventListener("deviceorientation", onOri);
     document.body.classList.add("vr"); T3.dirty = true;
     setTimeout(() => { if (T3.vr && !T3.vr.q) { vrExit(); toast("No gyroscope data", "This browser gave no motion data. Open the page over https (the 8443 server) in Chrome on the phone.", "#F0616B"); } }, 2000);
-    if (!walk.on && S.route) guide("VR on", "Put the phone in the headset. Look down to read the panel. The walk starts in five seconds and goes at real speed. A Bluetooth controller walks and jumps. Tap the screen to recenter or leave VR.", "#8ab8ff");
-    if (!walk.on && S.route) setTimeout(() => { if (T3.vr && !walk.on) startWalk(); }, 5000);
+    if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look, so turn your head to steer. Look down at the panel to stop and read it, look up to walk on.", "#8ab8ff");
+    else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
+    T3.vr.go = setTimeout(() => { if (!T3.vr || !S.route) return; if (!walk.on) startWalk(); takeControl(); if (S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); } }, 5000);
   }
   function vrExit() {
     if (!T3.vr) return;
-    removeEventListener("deviceorientation", onOri); T3.vr = null; document.body.classList.remove("vr"); $("vrBar").hidden = true;
+    removeEventListener("deviceorientation", onOri); clearTimeout(T3.vr.go); T3.vr = null; T3.vrHead = null; document.body.classList.remove("vr"); $("vrBar").hidden = true;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     try { screen.orientation.unlock(); } catch (e) { /* fine */ }
     if (T3.wake) { T3.wake.release().catch(() => {}); T3.wake = null; }
