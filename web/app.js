@@ -1182,7 +1182,7 @@
       mk(g, new THREE.BoxGeometry(0.12, 0.035, 0.006), led, -0.04, 1.36, 0.252);
       [0xc0392b, 0x2e6fd0, 0xd9b23a].forEach((c, i) => { mk(g, cyl(0.014, 0.014, 0.02, 12), pbr({ color: c, roughness: 0.6 }), 0.075, 1.365 - i * 0.05, 0.258).rotation.x = Math.PI / 2; });
       mk(g, cyl(0.011, 0.011, 0.3, 10), metal, 0, 1.185, 0.2).rotation.z = Math.PI / 2;
-      { const patch = new THREE.TextureLoader().load("img/brand/logo-192.png"); patch.encoding = THREE.sRGBEncoding;                 // team patch on the chest
+      { const patch = new THREE.TextureLoader().load("img/brand/logo-192.png?v=1794691885"); patch.encoding = THREE.sRGBEncoding;                 // team patch on the chest
         const pm = mk(g, new THREE.CircleGeometry(0.036, 24), new THREE.MeshStandardMaterial({ map: patch, roughness: 0.8 }), -0.115, 1.435, 0.179); pm.castShadow = false; }
       // arms: shoulder -> upper arm -> ribbed elbow -> forearm -> wrist ring -> glove
       const arm = (sx, name) => {
