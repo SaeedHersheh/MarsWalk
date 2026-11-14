@@ -68,9 +68,11 @@ def build(lat, lon, name=None, log=print):
         with rasterio.open("/vsicurl/" + MOLA) as d:
             R, res = 3396190.0, d.res[0]
             left0, top0 = d.bounds.left, d.bounds.top
-            col = int(np.clip((R * np.radians(lon) - left0) / res - N / 2, 0, d.width - N))
+            # the MOLA grid is equal-angle, so a degree of longitude shrinks towards the poles: take more columns there so the site stays square on the ground
+            NW = int(min(round(N / max(np.cos(np.radians(lat)), 0.2)), 3 * N))
+            col = int(np.clip((R * np.radians(lon) - left0) / res - NW / 2, 0, d.width - NW))
             row = int(np.clip((top0 - R * np.radians(lat)) / res - N / 2, 0, d.height - N))
-            z = d.read(1, window=Window(col, row, N, N)).astype("float32")
+            z = d.read(1, window=Window(col, row, NW, N)).astype("float32")
             nodata = d.nodata
     log(f"MOLA window {z.shape} in {time.time()-t0:.0f}s")
     valid = z != nodata
@@ -82,7 +84,7 @@ def build(lat, lon, name=None, log=print):
     DY, DX = float(res), float(res * np.cos(np.radians(lat0)))
 
     dists = np.unique(np.round(np.geomspace(DY, HORIZON_MAX_M, 30) / DY).astype(int)) * DY
-    hor = np.zeros((N_AZ, N, N), "uint8")
+    hor = np.zeros((N_AZ, N, NW), "uint8")
     for k in range(N_AZ):
         az = np.radians(k * 360.0 / N_AZ)
         best = np.zeros_like(z)
@@ -100,9 +102,9 @@ def build(lat, lon, name=None, log=print):
     np.round(z).astype("<i2").tofile(os.path.join(ROOT, "web/data/sites", sid + ".bin"))   # metres
 
     # basemap: Viking colour x MOLA relief
-    lon_a, lon_b = np.degrees(left / R), np.degrees((left + N * res) / R)
+    lon_a, lon_b = np.degrees(left / R), np.degrees((left + NW * res) / R)
     lat_b, lat_a = np.degrees(top / R), np.degrees((top - N * res) / R)
-    out_h = 1536; out_w = int(round(out_h * DX / DY))
+    out_h = 1536; out_w = int(round(out_h * NW * DX / (N * DY)))
     gr, gc = np.gradient(z, DY, DX)
     nn = np.sqrt(gc**2 + gr**2 + 1)
     shade = np.clip((gc * 0.5 + gr * 0.5 + 0.707) / nn / 0.707, 0.2, 1.5)      # light from the north-west
@@ -117,9 +119,9 @@ def build(lat, lon, name=None, log=print):
     rgb = np.clip(img * (0.62 + 0.4 * np.clip(shade[..., None], 0.3, 1.15)), 0, 255).astype("uint8")
     Image.fromarray(rgb).save(os.path.join(ROOT, "web/img/sites", sid + ".jpg"), quality=88)
 
-    cz = float(z[N // 2, N // 2])
+    cz = float(z[N // 2, NW // 2])
     meta = {
-        "W": N, "H": N, "DX": DX, "DY": DY, "width_m": N * DX, "height_m": N * DY,
+        "W": NW, "H": N, "DX": DX, "DY": DY, "width_m": NW * DX, "height_m": N * DY,
         "eqc_left": left, "eqc_top": top, "eqc_res": float(res), "R": R, "lat0": lat0, "n_az": N_AZ,
         "zmin": float(z.min()), "zmax": float(z.max()),
         "source": f"MOLA MEGDR 463 m elevation (Mars Global Surveyor); image: {src}",

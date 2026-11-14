@@ -259,7 +259,7 @@
     try {
       const r = await requestRoute(stops, departT());
       if (seq !== planSeq) return;
-      r.stopsReq = stops; S.route = r; $("planState").textContent = "";
+      smoothRoute(r); r.stopsReq = stops; S.route = r; $("planState").textContent = "";
     } catch (e) {
       if (seq !== planSeq) return;
       S.route = null; $("planState").textContent = ""; toast("No route", e.message, "#F0616B");
@@ -647,6 +647,20 @@
     if (MODE === "explore" && $("explore")) { $("exGo").textContent = "Walk again"; $("exRover").textContent = "Drive again"; setTimeout(() => { $("explore").hidden = false; }, msg ? 2500 : 0); }
     drawStops(); showRoute();
   }
+  /* The planner's path runs cell to cell (20 m at Jezero, 463 m on the global sites), so it turns in sharp 45° steps.
+     Round those corners once, for the line on the map and for the astronaut or rover moving along it. Stops stay exactly where they are. */
+  function smoothRoute(r) {
+    const n = r.x.length; if (!n || n < 4 || r._smooth) return r;
+    const pin = new Uint8Array(n); pin[0] = pin[n - 1] = 1; (r.stop_idx || []).forEach(i => { if (i >= 0 && i < n) pin[i] = 1; });
+    for (let i = 1; i < n; i++) if (r.x[i] === r.x[i - 1] && r.y[i] === r.y[i - 1]) pin[i] = pin[i - 1] = 1;          // a wait in place (sampling): keep it still
+    let x = Array.from(r.x), y = Array.from(r.y);
+    for (let pass = 0; pass < 6; pass++) {
+      const nx = x.slice(), ny = y.slice();
+      for (let i = 1; i < n - 1; i++) if (!pin[i]) { nx[i] = 0.25 * x[i - 1] + 0.5 * x[i] + 0.25 * x[i + 1]; ny[i] = 0.25 * y[i - 1] + 0.5 * y[i] + 0.25 * y[i + 1]; }
+      x = nx; y = ny;
+    }
+    r.x = x; r.y = y; r._smooth = true; return r;
+  }
   function posOn(r, el) {
     let i = 1; const t = r.t; if (walk._i && t[walk._i - 1] <= el) i = walk._i;
     while (i < t.length - 1 && t[i] < el) i++;
@@ -661,7 +675,7 @@
     setTimeout(() => { if (walk.busy) { $("hudNext").textContent = "Planning the new route…"; $("hudSub").textContent = "The clock is paused for a moment"; } }, 0);    // say so instead of freezing
     try {
       const r = await requestRoute([from, ...stops], walk.simT);
-      r.stopsReq = [from, ...stops]; walk.route = r; walk.t0 = walk.simT; walk._i = 0; walk._painted = -1; walk.dAlong = 0; walk.ri = 0; walk.px = null; walk.loose = false;
+      smoothRoute(r); r.stopsReq = [from, ...stops]; walk.route = r; walk.t0 = walk.simT; walk._i = 0; walk._painted = -1; walk.dAlong = 0; walk.ri = 0; walk.px = null; walk.loose = false;
       if (!opt.quiet) { if (opt.lead != null) guide(opt.title || "Route updated", opt.words === false ? opt.lead : `${opt.lead} ${routeWords(r, opt.oldRem)}`.trim(), color, opt.log); else toast(opt.title || "Route updated", why, color); }
       T3.dirty = true;
     } catch (e) { if (!opt.soft) toast("Could not plan a route", e.message, "#F0616B"); }
@@ -1674,7 +1688,23 @@
 
       // the astronaut: walks along the route; waits outside the airlock otherwise
       const k = T3.walker, walking = walk.on && !!k, u = astro.userData;
-      const here = walking ? P(k.x, k.y, 0) : P(IDLE[0], IDLE[1], 0); here.y = ground(walking ? k.x : IDLE[0], walking ? k.y : IDLE[1]);
+      // The rover drives a smoothed line: the route is drawn on 20 m cells and position fixes jump it, so it glides towards the planned
+      // point like a vehicle (snapping only for real teleports), and it points where it is actually going.
+      let wx = walking ? k.x : IDLE[0], wy = walking ? k.y : IDLE[1];
+      if (walking && S.vehicle === "rover") {
+        const R = T3.rvPos;
+        if (!R || Math.hypot(k.x - R.x, k.y - R.y) > 400) T3.rvPos = { x: k.x, y: k.y, vx: 0, vy: 0, hd: T3.rvPos ? T3.rvPos.hd : null };
+        else {
+          const w = 2.6 * Math.max(1, S.speed / 6), n = Math.min(60, Math.ceil(Math.min(dtr, 0.1) * w / 0.2));   // stiffer at fast time rates, so it never trails far behind
+          for (let i = 0, h = Math.min(dtr, 0.1) / n; i < n; i++) {                                             // a critically damped spring: no overshoot, no wobble
+            const ax = (k.x - R.x) * w * w - 2 * w * R.vx, ay = (k.y - R.y) * w * w - 2 * w * R.vy;
+            R.vx += ax * h; R.vy += ay * h; R.x += R.vx * h; R.y += R.vy * h;
+          }
+          if (Math.hypot(R.vx, R.vy) > 0.3) R.hd = Math.atan2(R.vx, R.vy);
+        }
+        wx = T3.rvPos.x; wy = T3.rvPos.y;
+      } else T3.rvPos = null;
+      const here = P(wx, wy, 0); here.y = ground(wx, wy);
       astro.position.copy(here);
       blob.position.copy(here); blob.position.y += 0.035;
       if (walking) {
@@ -1711,12 +1741,13 @@
       if (RV) {
         // driving: the crew are inside. Parked: beside the airlock, nose out
         const hvx = hab.position.x + M.width_m / 2 - IDLE[0], hvy = M.height_m / 2 - hab.position.z - IDLE[1], hl = Math.hypot(hvx, hvy) || 1;   // from the airlock to the dome
-        const hyT = walking && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                   // parked nose away from the dome
+        const hyT = walking && T3.rvPos && T3.rvPos.hd != null ? T3.rvPos.hd                                                                         // the way it is actually moving
+          : walking && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                          // parked nose away from the dome
         // a vehicle steers and rides on its suspension: ease the heading, height and tilt instead of snapping to every bend and bump
         const ez = r => 1 - Math.exp(-dtr * r);
         if (T3.rvHy == null || !walking) T3.rvHy = hyT; else T3.rvHy += Math.atan2(Math.sin(hyT - T3.rvHy), Math.cos(hyT - T3.rvHy)) * ez(2.2);
         const hy = T3.rvHy;
-        const fx = Math.sin(hy), fy = Math.cos(hy), mx0 = walking ? k.x : IDLE[0] - hvy / hl * 7, my0 = walking ? k.y : IDLE[1] + hvx / hl * 7;       // 7 m to the side of the airlock
+        const fx = Math.sin(hy), fy = Math.cos(hy), mx0 = walking ? wx : IDLE[0] - hvy / hl * 7, my0 = walking ? wy : IDLE[1] + hvx / hl * 7;       // 7 m to the side of the airlock
         const gz = (a, b) => ground(Math.min(M.width_m, Math.max(0, mx0 + a * fx - b * fy)), Math.min(M.height_m, Math.max(0, my0 + a * fy + b * fx)));
         const zf = gz(1.6, 0), zb = gz(-1.6, 0), zl = gz(0, 1.3), zr = gz(0, -1.3), yT = (zf + zb + zl + zr) / 4, pT = -Math.atan2(zf - zb, 3.2), rT = Math.atan2(zl - zr, 2.6);
         const S2 = T3.rvSus || (T3.rvSus = { y: yT, p: pT, r: rT }), big = Math.abs(S2.y - yT) > 30 || !walking;
@@ -1811,7 +1842,7 @@
       ctl.enabled = true; vrHud.visible = false; vrRad.visible = false; reticle.visible = false;
       if (T3.chase && !T3.drag) {
         const dist = chaseBase() * (T3.chaseK || 1);
-        if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); if (!T3.dir) T3.dir = d; else T3.dir.lerp(d, 1 - Math.exp(-dtr * 1.6)).normalize(); } }   // the camera turns gently, not at every bend of the path
+        if (walking) { const d = S.vehicle === "rover" && T3.rvHy != null ? new THREE.Vector3(Math.sin(T3.rvHy), 0, -Math.cos(T3.rvHy)) : new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); if (!T3.dir) T3.dir = d; else T3.dir.lerp(d, 1 - Math.exp(-dtr * 1.6)).normalize(); } }   // the camera turns gently, not at every bend of the path
         const back = walking ? (T3.dir || new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(-Math.sin(hab.rotation.y + 0.35), 0, -Math.cos(hab.rotation.y + 0.35));   // idle: stand in front of the astronaut, habitat behind
         const want = here.clone().addScaledVector(back, -dist); want.y = here.y + 1.3 + dist * 0.36;
         const gy = ground(Math.min(M.width_m, Math.max(0, want.x + M.width_m / 2)), Math.min(M.height_m, Math.max(0, M.height_m / 2 - want.z))) + 0.7; if (want.y < gy) want.y = gy;
