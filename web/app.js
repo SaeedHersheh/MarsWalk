@@ -89,7 +89,11 @@
 
   /* ---------- state ---------- */
   const S = {
-    stops: SITE === "jezero" ? [[15100, 16000], [12700, 16300]] : [],     // science stops (x east, y north, metres)
+    stops: (() => {                                                     // science stops (x east, y north, metres): from the link if it carries a route, else Jezero's demo stops
+      const q = new URLSearchParams(location.search).get("stops"), mode = new URLSearchParams(location.search).get("mode");
+      const st = q && mode !== "explore" ? q.split(";").map(v => v.split(",").map(Number)).filter(p => p.length === 2 && p.every(Number.isFinite)) : [];
+      return st.length ? st : SITE === "jezero" ? [[15100, 16000], [12700, 16300]] : [];
+    })(),
     roundTrip: true, vehicle: "foot", style: "safe", weights: { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, maxSlope: 18,
     departOff: 0,                                 // minutes after "now"
     base: "ortho", layers: new Set(), opacity: 0.8,
@@ -266,7 +270,7 @@
     const r = S.route;
     if (r) paintRoute(r); else { routeCase.setLatLngs([]); routeLine.clearLayers(); }
     syncWalk();
-    if (!r) { drawNav(); $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("moreStats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
+    if (!r) { drawNav(); if (T3.syncFlow) T3.syncFlow(); $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("moreStats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
     const mx = r.slope_mix || { green: 100, yellow: 0, steep: 0 }, f0 = v => Math.round(v);
     $("verdict").className = "verdict " + (mx.steep > 0.5 ? "bad" : mx.yellow > 3 ? "warn" : "ok");
     $("verdict").textContent = mx.steep > 0.5 ? `${f0(mx.steep)} % of this route is steep (over 15°). Steepest ${r.max_slope.toFixed(0)}°.`
@@ -287,7 +291,7 @@
     $("warns").innerHTML = r.warnings.map(w => `<div class="warn">${w}</div>`).join("") +
       `<p class="note">Radiation on this walk: ${(r.dose_msv * 1000).toFixed(0)} µSv (${r.career_pct.toFixed(3)} % of the ${M.rad ? M.rad.career : 600} mSv career limit). Standing still in the open here costs about ${r.rad_day_avg.toFixed(2)} mSv a day.</p>`;
     $("contacts").innerHTML = r.contacts.map(c => `<div><i class="dot" style="background:${ORB[c.orbiter].c}"></i><span>${c.orbiter} ${c.start ? fUTC(c.start) + " UTC" : "blocked"}</span><span>${c.minutes} min · ${c.max_el}°${c.blocked_min ? ` · ${c.blocked_min} blocked` : ""}</span></div>`).join("");
-    drawProfile(); drawTimeline(); drawNav(); T3.dirty = true;
+    drawProfile(); drawTimeline(); drawNav(); T3.dirty = true; if (T3.syncFlow) T3.syncFlow();
   }
 
   /* ---------- navigation forecast ----------
@@ -2213,15 +2217,23 @@
 
   /* ---------- the two ways in: Plan a trip / Experience Mars ---------- */
   {
+    // the route travels with you: Plan -> Experience opens with the same stops and the same way of travelling, ready to Start
     const other = MODE === "explore" ? "plan" : "explore";
-    $("modeLink").href = `index.html?site=${encodeURIComponent(SITE)}&mode=${other}`;
-    $("modeLink").querySelector("span").textContent = MODE === "explore" ? "Plan a trip here" : "Experience this place";
-    $("modeLink").hidden = MODE === "full";
-    $("brandLink").href = "/";
-    if (MODE === "plan") {
-      $("hint").textContent = "Tap the map to add a waypoint. The band under the route shows how sure your position will be.";
-      document.querySelector(".nextstep").textContent = "Switch to 3D to see the ground, or open Experience to walk it yourself.";
+    const linkFor = mode => { const st = S.stops.map(([x, y]) => `${Math.round(x)},${Math.round(y)}`).join(";"); return `index.html?site=${encodeURIComponent(SITE)}&mode=${mode}${st ? "&stops=" + st : ""}${S.vehicle === "rover" ? "&vehicle=rover" : ""}`; };
+    const glob = document.querySelector("a.back:not(.modelink)"); if (glob) glob.href = MODE === "full" ? "globe.html" : `globe.html?mode=${MODE}`;     // back to the globe, in the same mode
+    $("brandLink").href = "/"; $("modeLink").hidden = MODE === "full";
+    function syncFlow() {
+      if (MODE === "full") return;
+      const has = S.stops.length > 0 && !!S.route;
+      $("modeLink").href = linkFor(other);
+      $("modeLink").querySelector("span").textContent = MODE === "explore" ? "Plan a trip here" : has ? "Walk this route" : "Experience this place";
+      if (MODE === "plan") {
+        const ns = document.querySelector(".nextstep");
+        ns.innerHTML = has ? `<a class="flowgo" href="${linkFor("explore")}"><b>Walk this route in first person</b><span>Same stops, ${S.vehicle === "rover" ? "by rover" : "on foot"}, in 3D or VR</span><i aria-hidden="true">→</i></a>` : "Tap the map to add your first stop. The route appears as soon as there is one.";
+      }
     }
+    T3.syncFlow = syncFlow; syncFlow();
+    if (MODE === "plan") $("hint").textContent = "Tap the map to add a waypoint. The band under the route shows how sure your position will be.";
   }
   if (MODE === "explore") {
     /* Experience Mars: the panels go, the astronaut steps out of the airlock, and you are behind the visor.
@@ -2251,7 +2263,7 @@
     function chooseDest() {
       return new Promise(res => {
         const R0 = S.vehicle === "rover" ? 8000 : 3500, bar = $("exPick"), go = $("exStart"), rv = S.vehicle === "rover";
-        S.stops = []; S.roundTrip = false; plan(0);
+        S.stops = T3.carried && T3.carried.length ? T3.carried : []; T3.carried = null; S.roundTrip = false; plan(0);
         setView("2d"); map.fitBounds(L.latLngBounds([ll(HAB[0] - R0, HAB[1] - R0), ll(HAB[0] + R0, HAB[1] + R0)]), { animate: false });
         const sync = () => {
           const n = S.stops.length, r = S.route && S.route.stop_idx.length === n + 1 ? S.route : null;
@@ -2282,6 +2294,16 @@
       try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
     }
     $("exGo").onclick = () => stepOut("foot"); $("exRover").onclick = () => stepOut("rover");
+    {   // came from Plan a trip with a route: say so on the card, and keep the stops for the next step
+      const q = new URLSearchParams(location.search).get("stops");
+      const st = q ? q.split(";").map(v => v.split(",").map(Number)).filter(p => p.length === 2 && p.every(Number.isFinite) && p[0] > 0 && p[1] > 0 && p[0] < M.width_m && p[1] < M.height_m) : [];
+      if (st.length) {
+        T3.carried = st;
+        const rv = new URLSearchParams(location.search).get("vehicle") === "rover";
+        ex.querySelector("p:not(.exfacts)").textContent = `Your planned route is ready: ${st.length} stop${st.length > 1 ? "s" : ""}. Choose how to travel; you can still add or remove stops before you press Start simulation.`;
+        if (rv) { const a = $("exGo"), b = $("exRover"); b.after(a); }        // the way you planned comes first
+      }
+    }
     ex.hidden = false;
   }
 

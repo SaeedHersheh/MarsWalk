@@ -586,3 +586,12 @@ body.ex-picking .timebar, body.ex-picking .tools3d, body.ex-picking .stick, body
 #exStart:disabled { opacity: 0.4; cursor: default; }
 #exStart:not(:disabled):hover { background: #ffb08a; }
 .expick { top: auto !important; bottom: calc(20px + env(safe-area-inset-bottom)); }   /* the plan-and-start bar sits at the bottom, under your thumb */
+
+/* Plan -> Experience: one clear next step under the plan */
+.nextstep { display: block !important; }
+.flowgo { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; padding: 16px 18px; border-radius: 16px; text-decoration: none; background: linear-gradient(120deg, rgba(255, 154, 107, 0.16), rgba(255, 154, 107, 0.04)); border: 1px solid var(--mars); transition: transform 0.2s, background 0.2s; }
+.flowgo:hover { transform: translateY(-2px); background: rgba(255, 154, 107, 0.22); }
+.flowgo b { color: var(--ink); font-size: 15.5px; }
+.flowgo span { grid-column: 1; color: var(--dim); font-size: 13px; }
+.flowgo i { grid-row: 1 / 3; grid-column: 2; font-style: normal; font-size: 22px; color: var(--mars); }
+body:not(.mode-plan) .nextstep { display: none !important; }
