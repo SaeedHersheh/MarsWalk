@@ -572,3 +572,8 @@ body.mode-explore .modelink { border-color: var(--accent); }
 body.ex-picking .leaflet-container { cursor: crosshair; }
 body.ex-picking .timebar, body.ex-picking .tools3d, body.ex-picking .stick, body.ex-picking .jumpbtn { display: none !important; }
 @media (max-width: 980px) { .expick { top: calc(var(--bar) + 10px + env(safe-area-inset-top)); border-radius: 20px; padding: 12px; } .expick b { width: 100%; text-align: center; } }
+
+/* tutorial: the homepage's Mars orange for the spotlight and the step counter */
+.tutspot { border-color: var(--mars); box-shadow: 0 0 0 9999px rgba(2, 4, 8, 0.6), 0 0 30px rgba(255, 154, 107, 0.35); }
+.tutcard { border-radius: 18px; padding: 22px 22px 18px; }
+.tutcard b { font-size: 19px; font-weight: 700; }

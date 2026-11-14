@@ -784,6 +784,7 @@
     if (walk.on && !walk.manual && padAxes()) takeControl();
   }
   function driveInput() {
+    if (T3.vr && T3.vrHold) return [0, 0];               // tour: standing still while looking round
     if (T3.vr && T3.vrHead) {                             // VR: walk where you look at a steady pace; look down at the panel to stop
       const h = T3.vrHead, gp = padAxes(); let e = h.hd - walk.hd; e = Math.atan2(Math.sin(e), Math.cos(e));
       const f = gp && Math.abs(gp[1]) > 0.15 ? gp[1] : h.atCard || h.pitch < -0.55 ? 0 : 1, t = h.atCard || Math.abs(e) > 0.32 ? 0 : Math.max(-1, Math.min(1, e * 3));      // small head turns steer; look further aside to look around without turning
@@ -1527,6 +1528,8 @@
       hudT.needsUpdate = true;
     }
     // tour: the head angles (yaw, pitch) that put the dot on a card button
+    T3.vrAimDir = dir => { const d = dir.clone().normalize().applyQuaternion(qY.clone().invert()); return [Math.atan2(-d.x, -d.z), Math.asin(Math.max(-1, Math.min(1, d.y)))]; };
+    T3.vrAimCard = () => { vrHud.updateMatrixWorld(); const d = new THREE.Vector3(0, 0.18, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert()); return [Math.atan2(-d.x, -d.z), Math.asin(d.y)]; };
     T3.vrAim = id => {
       const b = VR_BTNS.find(v => v.id === id); vrHud.updateMatrixWorld();
       const d = new THREE.Vector3(((b.x + b.w / 2) / hudC.width - 0.5) * 1.05, (0.5 - (b.y + b.h / 2) / hudC.height) * 0.90125, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert());
@@ -2279,17 +2282,24 @@
   {
     const T = { i: -1 }, phone = () => mq.matches;
     const panel = p => { if (!phone()) showPanel(true); openSheet(p); };
+    const lay = n => { S.layers.clear(); if (n) S.layers.add(n); document.querySelectorAll(".lay[data-l]").forEach(b => b.setAttribute("aria-pressed", String(S.layers.has(b.dataset.l)))); syncLayers(); };
+    const flat = () => { if (S.view !== "2d") setView("2d"); };
     const STEPS = [
-      { t: "Welcome to Marswalk", x: "Marswalk plans a safe walk for an astronaut on Mars, on real NASA terrain, and shows how relay satellites keep track of where they are. This takes about a minute." },
+      { t: "Welcome to the planner", pre: () => { flat(); lay(null); }, x: "This is the place you picked, as a working map on real NASA terrain. In about a minute you'll see how to plan a walk here, read the ground with the layers, and check how the astronaut will be tracked without GPS." },
       { sel: "#map", soft: true, pre: () => { setView("2d"); if (phone()) closeSheet(); }, t: "The map", x: "This is the ground around the habitat, marked H. Tap anywhere to add a waypoint, and drag a marker to move it. The route is planned again each time." },
       { sel: "#stops", pre: () => panel("mission"), t: "Plan: your waypoints", x: "Your stops are listed here in walking order. Remove one with the ×, or choose whether the walk ends back at the habitat." },
       { sel: "#styles", pre: () => panel("mission"), t: "Plan: how careful to be", x: "Safest keeps to flat ground even if it is longer. Fastest takes the short way over steeper ground. Balanced sits between the two." },
+      { sel: ".veh", pre: () => panel("mission"), t: "Plan: on foot or by rover", x: "Two astronauts walking, or a pressurised crew rover at about 10 km/h. The route, its time and the slopes it will take change with the choice." },
       { sel: "#stats", alt: "#verdict", pre: () => panel("mission"), t: "Plan: check the walk", x: "Distance, time, climb, radiation dose and how steep it gets, with a plain-words verdict above." },
-      { sel: "#layerChips", pre: () => panel("layers"), t: "Layers", x: "Colour the map by slope, radiation, ground temperature, sunlight, or where the radio reaches. One tap turns a layer on or off." },
-      { sel: "#nextPass", pre: () => panel("relay"), t: "Radio: satellites overhead", x: "Mars has no GPS. Relay orbiters pass overhead a few times a day. This shows the next pass. While one is up you can talk to Earth, and it measures where you really are." },
+      { sel: "#navBox", pre: () => { panel("mission"); setTimeout(() => { const nb = $("navBox"); if (nb) nb.scrollIntoView({ block: "center" }); }, 60); }, t: "Plan: navigation without GPS", x: "How sure the astronaut's position will be along the route. The band under the route turns green near the habitat and at each satellite pass, and amber to red where the suit's own estimate has drifted. Pins mark each satellite fix." },
+      { sel: "#layerChips", pre: () => { flat(); panel("layers"); lay(null); }, t: "Layers: read the ground", x: "Each layer colours the map with one thing that matters on a walk. One tap turns a layer on or off; the opacity slider lets the ground show through." },
+      { sel: "#map", soft: true, pre: () => { flat(); panel("layers"); lay("slope"); }, t: "Slope, switched on", x: "This is the Slope layer, live: green is an easy walk, amber is tiring, red is too steep for a suit. The planner keeps the route off the red. The legend shows the scale." },
+      { sel: "#map", soft: true, pre: () => { flat(); panel("layers"); lay("radiation"); }, t: "Radiation, switched on", x: "Daily dose on open ground, from Curiosity's measurement scaled by the air above and how much sky the terrain leaves open. Ground temperature, sunlight, relay obstruction, habitat radio and traversal cost work the same way." },
+      { sel: "#nextPass", pre: () => { lay(null); panel("relay"); }, t: "Radio: satellites overhead", x: "Mars has no GPS. Relay orbiters pass overhead a few times a day. This shows the next pass. While one is up you can talk to Earth, and it measures where you really are." },
       { sel: "#timebar", pre: () => { if (phone()) closeSheet(); }, t: "Time bar", x: "Press play to walk the route. The clock is the time at the site, the strip shows daylight and satellite passes, and ×1 to ×600 sets how fast time runs." },
-      { sel: ".viewbar .seg", pre: () => { if (phone()) closeSheet(); }, t: "Map or 3D", x: "3D shows the terrain at true scale. There you can orbit, follow the astronaut, or go first person, take control and walk yourself. On a phone, the VR button puts the walk in a headset." },
-      { sel: "#logBtn", t: "The guide and the bell", x: "During a walk a guide tells you in words what is happening: a satellite coming, how far off your position was, the new route. Every message is kept behind the bell." },
+      { sel: ".viewbar .seg", pre: () => { lay(null); flat(); if (phone()) closeSheet(); }, t: "Map or 3D", x: "Switch between this map and the 3D view of the same place." },
+      { sel: "#view3d", soft: true, pre: () => { if (phone()) closeSheet(); setView("3d"); }, t: "The ground in 3D", x: "Real terrain at true scale: a 1.9 m astronaut beside an 8.4 m habitat. Drag to turn the view, scroll or pinch to zoom. To walk it yourself in first person, or in VR, open Experience this place in the top bar." },
+      { sel: "#logBtn", pre: () => flat(), t: "The guide and the bell", x: "During a walk a guide tells you in words what is happening: a satellite coming, how far off your position was, the new route. Every message is kept behind the bell." },
       { sel: "a.back", alt: ".brand", last: true, t: "Anywhere on Mars", x: "Tap Globe, or the Marswalk logo, to pick any other place on Mars and plan a walk there." },
     ];
     const root = document.createElement("div"); root.className = "tut"; root.hidden = true;
@@ -2305,24 +2315,25 @@
       const W = innerWidth, H = innerHeight, cw = Math.min(380, W - 24), pad = 8;
       let r = el && !st.soft ? el.getBoundingClientRect() : null;
       if (r && phone() && r.height > H * 0.4) r = { left: r.left, right: r.right, top: r.top, width: r.width, height: H * 0.4, bottom: r.top + H * 0.4 };   // a long list: light up the top of it, leave room for the card
-      card.style.width = cw + "px"; root.classList.toggle("dim", !r); spot.style.display = r ? "block" : "none";
+      card.style.width = cw + "px"; root.classList.toggle("dim", !r && !st.soft); spot.style.display = r ? "block" : "none";      // a "soft" step shows the map itself, undimmed
       if (r) Object.assign(spot.style, { left: Math.max(4, r.left - pad) + "px", top: Math.max(4, r.top - pad) + "px", width: Math.min(W - 8, r.width + 2 * pad) + "px", height: Math.min(H - Math.max(4, r.top - pad) - 4, r.height + 2 * pad) + "px" });
       const ch = card.offsetHeight; let x, y;
-      if (!r) { x = (W - cw) / 2; y = phone() ? H * 0.2 : (H - ch) / 2; }
+      if (!r && st.soft) { x = phone() ? 12 : W - cw - 28; y = phone() ? Math.max(8, H - ch - 150) : Math.max(70, H - ch - 130); }      // out of the way, so the layer or the 3D view can be seen
+      else if (!r) { x = (W - cw) / 2; y = phone() ? H * 0.2 : (H - ch) / 2; }
       else if (!phone() && r.right + cw + 36 < W && r.height > 110) { x = r.right + 24; y = Math.min(H - ch - 16, Math.max(16, r.top - pad)); }
       else { x = Math.min(W - cw - 12, Math.max(12, r.left + r.width / 2 - cw / 2)); y = r.bottom + 20 + ch < H - 8 ? r.bottom + 20 : r.top - ch - 20; if (y < 8) y = 8; }
       card.style.left = Math.round(x) + "px"; card.style.top = Math.round(y) + "px";
     }
     function show(i) {
       T.i = i; const st = STEPS[i]; if (st.pre) st.pre();
-      $("tutN").textContent = `${i + 1} of ${STEPS.length}`; $("tutT").textContent = st.t; $("tutX").textContent = st.x;
+      $("tutN").textContent = `Step ${i + 1} of ${STEPS.length} · the planner`; $("tutT").textContent = st.t; $("tutX").textContent = st.x;
       $("tutBack").hidden = i === 0; $("tutSkip").hidden = !!st.last; $("tutNext").textContent = st.last ? "Done" : "Next"; $("tutTour").hidden = !st.last;
       root.hidden = false;
       const el = st.sel && !st.soft ? document.querySelector(st.sel) : null; if (seen(el)) el.scrollIntoView({ block: "center" });
       place(); setTimeout(place, 80); setTimeout(place, 340);            // again once the panel or sheet has finished moving
       $("tutNext").focus({ preventScroll: true });
     }
-    function end() { root.hidden = true; T.i = -1; if (phone()) closeSheet(); else openSheet("mission"); $("helpBtn").focus({ preventScroll: true }); }
+    function end() { root.hidden = true; T.i = -1; lay(null); flat(); if (phone()) closeSheet(); else openSheet("mission"); $("helpBtn").focus({ preventScroll: true }); }
     $("helpBtn").onclick = () => { if (walk.on) return toast("End the walk first", "The tutorial shows the planning screens. Press stop, then open it again.", "#F5B85B"); show(0); };
     $("tutNext").onclick = () => T.i >= STEPS.length - 1 ? end() : show(T.i + 1);
     $("tutBack").onclick = () => T.i > 0 && show(T.i - 1);
@@ -2383,7 +2394,34 @@
           h.yaw += (a2[0] - h.yaw) * (0.06 + 0.3 * k); h.pitch += (a2[1] - h.pitch) * (0.06 + 0.3 * k); performance.now() - t0 < 3700 ? setTimeout(st, 16) : res(); }; st(); });
         await ease([T3.vr.head.yaw, T3.vr.head.pitch], [0, 0.03], 1000);
       },
-      async end() { vrDemo(false); },
+      async end() { vrDemo(false); T3.vrHold = false; },
+      // ---- the short demo: 2 read the ground, 3 plan in 3D, 4 stand there in VR while a satellite fixes you ----
+      async layers() {
+        ui(); T3.tourOrbit = 0; T3.fly = null; setView("2d"); document.body.classList.add("tour-legend");
+        if (S.stops.length) { S.stops = []; plan(0); }
+        map.fitBounds(L.latLngBounds([ll(HAB[0] - 26000, HAB[1] + 14000), ll(HAB[0] + 26000, HAB[1] - 30000)]), { animate: false });
+        for (const n of ["slope", "radiation", "comms", "hab"]) { S.layers.clear(); S.layers.add(n); S.opacity = 0.8; syncLayers(); await wait(2100); }
+      },
+      async plan3d() {
+        ui(); S.layers.clear(); S.layers.add("slope"); S.opacity = 0.55; syncLayers();
+        setView("3d"); setCam("free", true); T3.api.flyTo(HAB[0] + 2000, HAB[1] - 7000, 34000, 19000, 10, 2.5); T3.tourOrbit = 0.035;
+        S.stops = []; plan(0); await wait(700); S.stops = [PITS[0]]; plan(0); await wait(1700); S.stops = [PITS[0], PITS[1]]; plan(0);
+      },
+      async vrsat() {
+        ui(); T3.tourOrbit = 0; S.layers.clear(); syncLayers();
+        for (let i = 0; i < 60 && !(S.route && S.route.stop_idx.length >= 3); i++) await wait(100);
+        setView("3d"); if (!walk.on) startWalk(); if (!walk.manual) takeControl();
+        const vx = PITS[1][0] + 600, vy = PITS[1][1] - 1500;                    // out on the floor of the deep caldera
+        walk.mx = vx - walk.drift[0]; walk.my = vy - walk.drift[1]; walk.hd = 0.2; walk.rest = [PITS[1], HAB]; walk.ri = 0;
+        reroute([vx, vy], walk.rest, "", "#8ab8ff", { soft: true, quiet: true });
+        T3.vrHold = true; walk.fixKey = null; walk.lockKey = "";
+        { const b = document.querySelector('.spd[data-s="30"]'); if (b) b.click(); }      // ×30: the satellite stays up for the whole chapter
+        for (let n = 0; n < 8; n++) { const np = DB.passes.find(q => q.start > walk.simT + 20); if (!np || np.orbiter !== "Mars Express") break; walk.simT += np.end + 30 - walk.simT; }
+        skipToPass(); vrDemo(true); await wait(500);
+        const track = (fn, ms) => new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a = fn(); if (a) { const k = Math.min(1, (performance.now() - t0) / 700); h.yaw += (a[0] - h.yaw) * (0.05 + 0.25 * k); h.pitch += (a[1] - h.pitch) * (0.05 + 0.25 * k); } performance.now() - t0 < ms ? setTimeout(st, 16) : res(); }; st(); });
+        await track(() => T3.satDir ? T3.vrAimDir(T3.satDir) : [0.2, 0.5], 4600);          // look up: the satellite crossing the sky, the radio link drawn to it
+        await track(() => T3.vrAimCard(), 3800);                                            // then the card: what the satellite found
+      },
       async walksat() { await SCENES.walk(); await wait(1600); await SCENES.sat(); },      // the 30-second cut: walk, then a relay pass fixes the position
       // ---- chapters for the full tour (tour.html) ----
       async layer(n) {                                                  // one data layer on the map, with its legend

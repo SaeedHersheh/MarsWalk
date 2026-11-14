@@ -150,6 +150,29 @@ details.more[open] > summary::after { content: "–"; }
   .hintpill { font-size: 13.5px; }
 }
 @media (prefers-reduced-motion: reduce) { .mk { transition: none; } .busy i { animation: none; } }
+
+/* ---------- tutorial: a spotlight on one part of the page and a card that explains it ---------- */
+.tut { position: fixed; inset: 0; z-index: 950; }
+.tutblock { position: absolute; inset: 0; }
+.tut.dim .tutblock { background: rgba(2, 4, 8, 0.62); }
+.tutspot { position: absolute; border-radius: 14px; border: 2px solid #ff9a6b; box-shadow: 0 0 0 9999px rgba(2, 4, 8, 0.6), 0 0 30px rgba(255, 154, 107, 0.35); pointer-events: none; transition: left 0.25s, top 0.25s, width 0.25s, height 0.25s; }
+.tutcard { position: absolute; display: grid; gap: 10px; padding: 22px 22px 18px; background: rgba(10, 14, 21, 0.97); border: 1px solid #2b3649; border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6); color: #d6dce7; transition: left 0.25s, top 0.25s; }
+.tutcard small { font: 500 12px "IBM Plex Mono", monospace; letter-spacing: 0.08em; color: #ff9a6b; }
+.tutcard b { font-size: 19px; font-weight: 700; line-height: 1.25; color: #fff; }
+.tutcard p { margin: 0; font-size: 14.5px; line-height: 1.6; }
+.tutdots { display: flex; gap: 5px; margin-top: 2px; }
+.tutdots i { width: 18px; height: 4px; border-radius: 2px; background: #2b3649; }
+.tutdots i.on { background: #ff9a6b; }
+.tutbtns { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.tutbtns span { flex: 1; }
+.tutbtns button { font: 600 14px Inter, sans-serif; padding: 9px 16px; border-radius: 999px; border: 1px solid #2b3649; background: transparent; color: #d6dce7; cursor: pointer; }
+.tutbtns button:hover { border-color: #8ab8ff; color: #fff; }
+.tutbtns .next { border: 0; background: #1a66e8; color: #fff; padding: 9px 22px; }
+.tutbtns .next:hover { background: #3b82f6; }
+.tutbtns .next.go { background: #ff9a6b; color: #04060a; }
+#cPlan.pulse { animation: pulse 1.1s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(138, 184, 255, 0.35), 0 0 28px rgba(138, 184, 255, 0.6); } }
+@media (prefers-reduced-motion: reduce) { .tutspot, .tutcard { transition: none; } }
 </style>
 </head>
 <body>
@@ -840,6 +863,72 @@ details.more[open] > summary::after { content: "–"; }
   const h = location.hash.slice(1);
   setView(h === "map" ? "map" : "globe");
   if (document.fonts) document.fonts.ready.then(() => { if (S.view === "map") map.draw(); });
+  /* ---------- tutorial (globe.html?tutorial=1, from the homepage): how to choose a place, then on to the planner ---------- */
+  {
+    const jez = PLACES.find(q => /Perseverance/.test(q.name)) || PLACES[0];
+    const STEPS = [
+      { t: "Welcome to Mars", x: "This is the real shape and colour of Mars, from NASA's Mars Global Surveyor. Drag to turn it; scroll or pinch to zoom in. Everything starts here: you choose where on Mars you want to go.", pre: () => { setPanel(false); if (S.view !== "globe") setView("globe"); } },
+      { sel: ".viewbar .seg", t: "Globe or flat map", x: "Switch to a flat map of the whole planet whenever that is easier to read. Both show the same layers and places." },
+      { sel: "#panelBtn", t: "The layers button", x: "Everything you can show on the planet is behind this button. Let's open it.", pre: () => setPanel(false) },
+      { sel: "#panel .sec", t: "Base map: elevation", x: "Colour the planet by height, in km above Mars \u201csea level\u201d. Olympus Mons and the Tharsis volcanoes stand out; Hellas is the deepest basin. The legend gives the scale.", pre: () => { setPanel(true); setBase("elevation"); } },
+      { sel: "#panel .sec", t: "Base map: radiation", x: "Daily dose on open ground, scaled from what NASA's Curiosity rover measured. High ground has less air above it, so it gets more. Natural shows the planet's own colour again.", pre: () => { setPanel(true); setBase("radiation"); } },
+      { sel: "#panel .checks", t: "What to show", x: "Landing sites of past missions, famous landmarks, places you have already planned, a latitude and longitude grid and relief shading. Turn any of them on or off.", pre: () => { setPanel(true); setBase("natural"); } },
+      { sel: "#globeOpts", t: "The globe itself", x: "Day and night from the real Sun, rotation, the thin atmosphere, and how much to exaggerate the relief so mountains are easier to see.", pre: () => setPanel(true) },
+      { sel: "#card", t: "Pick a place", x: "Click a marker, or anywhere on Mars. The card gives the coordinates, elevation and radiation there. This is Jezero crater, where Perseverance landed: it opens in full 20 m detail. Anywhere else is built for you in about a minute.", pre: () => { setPanel(false); select(jez, true); } },
+      { sel: "#cPlan", last: true, t: "Open the planner", x: "This opens the place as a working map, where you plan the walk. The tutorial carries on there: stops, routes, layers, navigation and 3D.", pre: () => { setPanel(false); if (S.sel !== jez) select(jez, false); } },
+    ];
+    const root = document.createElement("div"); root.className = "tut"; root.hidden = true;
+    root.innerHTML = '<div class="tutblock"></div><div class="tutspot"></div><div class="tutcard" role="dialog" aria-modal="true" aria-labelledby="gtT"><small id="gtN"></small><b id="gtT"></b><p id="gtX"></p><div class="tutdots" id="gtD"></div>'
+      + '<div class="tutbtns"><button type="button" id="gtSkip">Skip</button><span></span><button type="button" id="gtBack">Back</button><button type="button" class="next" id="gtNext">Next</button></div></div>';
+    document.body.appendChild(root);
+    $("gtD").innerHTML = STEPS.map(() => "<i></i>").join("");
+    const spot = root.querySelector(".tutspot"), card = root.querySelector(".tutcard"), T = { i: -1 };
+    const seen = e => !!e && !e.hidden && e.getClientRects().length > 0 && e.getBoundingClientRect().height > 4;
+    function place() {
+      if (T.i < 0) return;
+      const st = STEPS[T.i], el = st.sel ? document.querySelector(st.sel) : null, ok = seen(el);
+      const W = innerWidth, H = innerHeight, phone = W < 700, cw = Math.min(400, W - 24), pad = 8;
+      card.style.width = cw + "px"; root.classList.toggle("dim", !ok); spot.style.display = ok ? "block" : "none";
+      let r = ok ? el.getBoundingClientRect() : null;
+      if (r && phone && r.height > H * 0.45) r = { left: r.left, right: r.right, top: r.top, width: r.width, height: H * 0.45, bottom: r.top + H * 0.45 };
+      if (r) Object.assign(spot.style, { left: Math.max(4, r.left - pad) + "px", top: Math.max(4, r.top - pad) + "px", width: Math.min(W - 8, r.width + 2 * pad) + "px", height: Math.min(H - 8, r.height + 2 * pad) + "px" });
+      const ch = card.offsetHeight; let x, y;
+      if (!r) { x = (W - cw) / 2; y = phone ? H - ch - 24 : (H - ch) / 2; }
+      else if (!phone && r.left - cw - 30 > 0 && r.height > 120) { x = r.left - cw - 24; y = Math.min(H - ch - 16, Math.max(16, r.top - pad)); }
+      else if (!phone && r.right + cw + 30 < W && r.height > 120) { x = r.right + 24; y = Math.min(H - ch - 16, Math.max(16, r.top - pad)); }
+      else { x = Math.min(W - cw - 12, Math.max(12, r.left + r.width / 2 - cw / 2)); y = r.bottom + 18 + ch < H - 8 ? r.bottom + 18 : r.top - ch - 18; if (y < 8) y = 8; }
+      card.style.left = Math.round(x) + "px"; card.style.top = Math.round(y) + "px";
+    }
+    function show(i) {
+      T.i = i; const st = STEPS[i]; if (st.pre) st.pre();
+      $("gtN").textContent = `Step ${i + 1} of ${STEPS.length} · the globe`; $("gtT").textContent = st.t; $("gtX").textContent = st.x;
+      [...$("gtD").children].forEach((d, k) => d.classList.toggle("on", k <= i));
+      $("gtBack").hidden = i === 0; $("gtNext").textContent = st.last ? "Open Jezero in the planner" : "Next"; $("gtNext").classList.toggle("go", !!st.last);
+      root.hidden = false; $("hint").hidden = true;
+      place(); setTimeout(place, 120); setTimeout(place, 450); setTimeout(place, 1200);      // again once panels and the camera have moved
+      $("gtNext").focus({ preventScroll: true });
+    }
+    function end() { root.hidden = true; T.i = -1; }
+    $("gtNext").onclick = () => { if (STEPS[T.i].last) { location.href = "index.html?site=jezero&mode=plan&tutorial=1"; return; } show(T.i + 1); };
+    $("gtBack").onclick = () => T.i > 0 && show(T.i - 1);
+    $("gtSkip").onclick = end;
+    addEventListener("resize", place);
+    addEventListener("keydown", e => { if (T.i < 0) return; if (e.key === "Escape") end(); else if (e.key === "ArrowRight") $("gtNext").click(); else if (e.key === "ArrowLeft") $("gtBack").click(); else return; e.stopPropagation(); }, true);
+    if (new URLSearchParams(location.search).get("tutorial") === "1") setTimeout(() => show(0), 1200);
+    window.GT = { show, end, STEPS };
+  }
+  // the short demo picks a place the way a person would: turn to it, select it, and the card's button lights up
+  window.GLOBE = {
+    async pick(siteId) {
+      setPanel(false); if (S.view !== "globe") setView("globe");
+      let p = null; for (let i = 0; i < 40 && !(p = PLACES.find(q => q.siteId === siteId)); i++) await new Promise(r => setTimeout(r, 150));
+      if (!p) p = PLACES.find(q => /Pavonis/i.test(q.name)) || PLACES[0];
+      select(p, true); setTimeout(() => $("cPlan").classList.add("pulse"), 2600);
+    },
+  };
+  {
+  }
+
 })();
 </script>
 
