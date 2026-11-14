@@ -72,9 +72,6 @@ body.nopanel .sidebar { display: none; }
 .tabs button svg { display: none; width: 22px; height: 22px; }
 .tabs button:hover { color: var(--ink); }
 .tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--blue-hi); }
-.tabs .collapse { margin-left: auto; padding: 0 8px; font-size: 22px; line-height: 1; color: var(--faint); border-bottom: 0; }
-.expand { position: fixed; z-index: 610; left: 0; top: calc(var(--bar) + 14px); width: 30px; height: 56px; border: 1px solid var(--line-2); border-left: 0; border-radius: 0 8px 8px 0; background: var(--panel); color: var(--text); font-size: 20px; }
-.expand:hover { color: var(--ink); }
 
 .panel { display: none; grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; overflow-y: auto; padding: 30px 26px 40px; gap: 44px; align-content: start; scrollbar-width: thin; scrollbar-color: #2b3649 transparent; }
 body[data-sheet="mission"] #mission, body[data-sheet="layers"] #layers, body[data-sheet="relay"] #layers { display: grid; }
@@ -332,7 +329,7 @@ body.driving .maplegend { display: none; }
   .viewbar .seg { background: var(--glass); }
   .sidebar { display: contents; }
   body.nopanel .sidebar { display: contents; }
-  .collapse, .expand, .rtools, .readout { display: none !important; }
+  .rtools, .readout { display: none !important; }
   .phone-only { display: grid; }
   .panel { position: fixed; z-index: 700; left: 0; right: 0; bottom: calc(var(--nav) + env(safe-area-inset-bottom)); display: grid; max-height: min(66dvh, 600px); padding: 0 20px 28px; gap: 34px; border-radius: 20px 20px 0 0; background: var(--panel); border-top: 1px solid var(--line-2); overscroll-behavior: contain;
     transform: translateY(calc(100% + 140px)); visibility: hidden; transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.26s; }
@@ -436,3 +433,45 @@ body.walking .hintpill { display: none; }
 @media (max-width: 980px) { .toasts { max-width: calc(100vw - 24px); width: calc(100vw - 24px); } .toast.guide { font-size: 13.5px; } .toast.guide span { -webkit-line-clamp: 6; } }
 
 @media (max-width: 980px) { .toast.guide span { -webkit-line-clamp: 9; } .toast.guide { grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 0 10px; padding: 11px 10px 12px 10px; } .toast.guide .bot { width: 32px; height: 32px; } .vox { width: 32px; height: 32px; } }
+
+/* ---------- panel toggle, camera modes, first person ---------- */
+.paneltog { width: 38px; height: 38px; flex: none; display: grid; place-items: center; margin-left: -6px; border: 1px solid var(--line-2); border-radius: 10px; background: transparent; color: var(--text); padding: 0; }
+.paneltog:hover { border-color: var(--accent); color: var(--ink); }
+.paneltog[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); }
+.paneltog svg { width: 20px; height: 20px; }
+@media (min-width: 981px) {
+  .sidebar { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s; }
+  body.nopanel .sidebar { display: flex; transform: translateX(-100%); visibility: hidden; transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.22s; }
+}
+body.walking .readout, body.walking .hintpill, body.walking .maplegend { display: none; }
+
+.tools3d { gap: 10px; }
+.camseg { display: flex; gap: 2px; padding: 3px; background: var(--glass); backdrop-filter: blur(10px); border: 1px solid var(--line-2); border-radius: 999px; }
+.camseg button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px 6px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--dim); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.camseg button:hover { color: var(--ink); }
+.camseg button[aria-pressed="true"] { background: var(--blue); color: #fff; }
+.camseg svg { width: 17px; height: 17px; flex: none; }
+
+/* through the visor: the helmet rim darkens the edges a little */
+.visor { position: fixed; z-index: 2; top: var(--bar); left: var(--sidew); right: 0; bottom: 0; display: none; pointer-events: none;
+  background: radial-gradient(ellipse 78% 88% at 50% 46%, transparent 64%, rgba(4, 6, 10, 0.28) 84%, rgba(4, 6, 10, 0.75) 100%); box-shadow: inset 0 0 160px rgba(255, 190, 110, 0.05); }
+body.fp .visor { display: block; }
+body.fp #view3d { cursor: grab; }
+
+.jumpbtn { position: fixed; z-index: 645; right: 20px; bottom: calc(var(--tbh) + 48px); width: 78px; height: 78px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(10, 14, 21, 0.6); color: #fff; font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; padding: 0; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.jumpbtn:active { background: var(--blue); border-color: var(--blue); }
+
+@media (max-width: 980px) {
+  .paneltog { display: none; margin-left: 0; background: var(--glass); }
+  body.walking .paneltog { display: grid; }
+  body.walking .back { display: none; }
+  body.walking:not(.showui) { --nav: 0px; }
+  body.walking:not(.showui) .tabs { display: none; }
+  .visor { top: 0; left: 0; }
+  .camseg button { padding: 9px; }
+  .camseg button span { display: none; }
+  .jumpbtn { right: 16px; bottom: calc(var(--nav) + var(--tbh) + 30px + env(safe-area-inset-bottom)); width: 84px; height: 84px; }
+  body.canjump .tools3d { bottom: calc(var(--nav) + var(--tbh) + 128px + env(safe-area-inset-bottom)); }
+  body[data-sheet]:not([data-sheet=""]) .jumpbtn { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar, body.nopanel .sidebar { transition: none; } }

@@ -550,7 +550,9 @@
     Object.assign(walk, { manual: false, fixKey: null, fxN: "", sig: 1.5, rest: [], hd: 0, still: true, keys: {}, lastRe: 0, ri: 0, lock: "", lockKey: "", loose: false, habOk: undefined, hb: null, src: "suit", habPosSaid: false, habReSaid: false }); HL.t = 0; T3.pathHead = null; syncDrive();
     me.addTo(map); unc.addTo(map); if (S.truth) ghost.addTo(map);
     walk._painted = -1;
-    if (S.view === "3d") { T3.chase = true; $("t3follow").setAttribute("aria-pressed", "true"); }
+    camWalk();
+    if (!mq.matches && !document.body.classList.contains("nopanel")) { UI.autoHid = true; showPanel(false); }      // the walk gets the whole screen; the panel button brings it back
+    document.body.classList.remove("showui"); syncPanelTog();
     $("hud").hidden = false; $("homeBtn").disabled = false; syncWalk(); closeSheet();
     $("depart").disabled = true; drawStops();
     { const np = DB.passes.find(q => q.end > walk.simT);
@@ -569,6 +571,7 @@
   function endWalk(msg) {
     walk.on = false; walk.manual = false; T3.pathHead = null; T3.dirty = true; syncDrive(); [me, unc, ghost].forEach(l => map.removeLayer(l));
     $("hud").hidden = true; $("homeBtn").disabled = true; syncWalk();
+    if (UI.autoHid && !mq.matches) showPanel(true); UI.autoHid = false; document.body.classList.remove("showui"); syncPanelTog();
     $("depart").disabled = false; dopplerTone(null);
     if (msg) guide("Walk complete", msg, "#6EE7A8");
     drawStops(); showRoute();
@@ -695,7 +698,7 @@
     const j = Math.min(r.x.length - 1, q.i + 3); walk.hd = Math.atan2(r.x[j] - q.x, r.y[j] - q.y) || 0;
     walk.manual = true; walk.still = true; walk.blocked = 0; walk.ri = Math.max(0, q.i - 1); syncDrive(); T3.dirty = true;
     if (S.speed > 30) { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
-    if (S.view === "3d") { T3.chase = true; T3.skyLook = false; $("t3follow").setAttribute("aria-pressed", "true"); }
+    camWalk();
     toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#8ab8ff");
   }
   async function releaseControl() {
@@ -1321,15 +1324,26 @@
       $("rLat").textContent = la.toFixed(4) + "° N"; $("rLon").textContent = lo.toFixed(4) + "° E"; $("rEl").textContent = z == null ? "—" : Math.round(z) + " m"; $("rSl").textContent = sl == null ? "—" : sl.toFixed(1) + "°";
     });
 
+    {   // first person: drag to look around (grab the world, like Street View), wheel to zoom
+      let lk = null;
+      cv.addEventListener("pointerdown", e => { if (!T3.fp) return; lk = { id: e.pointerId, x: e.clientX, y: e.clientY }; T3.looking = true; });
+      addEventListener("pointermove", e => { if (!T3.fp || !lk || lk.id !== e.pointerId) return; const L = T3.look; L.yaw += (e.clientX - lk.x) * 0.0045; L.pitch = Math.min(1.0, Math.max(-1.1, L.pitch + (e.clientY - lk.y) * 0.0045)); lk.x = e.clientX; lk.y = e.clientY; });
+      const lend = e => { if (lk && lk.id === e.pointerId) { lk = null; T3.looking = false; } };
+      addEventListener("pointerup", lend); addEventListener("pointercancel", lend);
+      cv.addEventListener("wheel", e => { if (!T3.fp) return; e.preventDefault(); cam.fov = Math.min(80, Math.max(25, cam.fov * (e.deltaY > 0 ? 1.07 : 0.93))); cam.updateProjectionMatrix(); }, { passive: false });
+    }
+    const UP = new THREE.Vector3(0, 1, 0);
     T3.api = {
-      lookSat: () => { if (!T3.satDir) return; T3.chase = false; $("t3follow").setAttribute("aria-pressed", "false"); const h0 = T3.herePos, d = T3.satDir.clone(), flat = d.clone().setY(0); if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1); flat.normalize(); T3.skyLook = true; cam.position.copy(h0).addScaledVector(flat, -600 * K); cam.position.y += 250 * K; ctl.target.copy(cam.position).addScaledVector(d, 2600 * K); },
+      lookSat: () => { if (!T3.satDir) return; setCam("free", true); const h0 = T3.herePos, d = T3.satDir.clone(), flat = d.clone().setY(0); if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1); flat.normalize(); T3.skyLook = true; cam.position.copy(h0).addScaledVector(flat, -600 * K); cam.position.y += 250 * K; ctl.target.copy(cam.position).addScaledVector(d, 2600 * K); },
       setLite: v => {
         lite = v; T3.lite = v; try { localStorage.setItem("mw_lite", v ? "1" : "0"); } catch (e) { /* ignore */ }
         rn.shadowMap.enabled = !v; sun.castShadow = !v; sc.environment = v ? null : envTex;
         sc.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
       },
-      zoom: f => { if (T3.chase) { T3.chaseK = Math.min(14, Math.max(0.35, (T3.chaseK || 1) * f)); return; } const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
-      reset: () => { T3.skyLook = false; homeCam(); }, top: () => { T3.skyLook = false; const t = ctl.target; cam.position.set(t.x, t.y + 14000 * K, t.z + 1); },
+      zoom: f => { if (T3.fp) { cam.fov = Math.min(80, Math.max(25, cam.fov * f)); cam.updateProjectionMatrix(); return; } if (T3.chase) { T3.chaseK = Math.min(14, Math.max(0.35, (T3.chaseK || 1) * f)); return; } const d = cam.position.clone().sub(ctl.target).multiplyScalar(f); cam.position.copy(ctl.target).add(d); },
+      reset: () => { setCam("free", true); homeCam(); },
+      backOff: () => { const d = ctl.target.clone().sub(cam.position).setY(0); if (d.lengthSq() < 1e-6) d.set(0, 0, -1); d.normalize(); ctl.target.copy(cam.position).addScaledVector(d, 2); cam.position.addScaledVector(d, -10); cam.position.y += 4; },
+      fov: v => { cam.fov = v; cam.updateProjectionMatrix(); }, top: () => { T3.skyLook = false; const t = ctl.target; cam.position.set(t.x, t.y + 14000 * K, t.z + 1); },
     };
 
     T3.render = () => {
@@ -1367,6 +1381,21 @@
         for (const n of ["legL", "legR", "kneeL", "kneeR"]) u[n].rotation.x = 0;
         u.armL.rotation.x = u.armR.rotation.x = 0.04; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.32;
       }
+      let jy = 0;                                                                // jump: crouch, push off, float in 0.38 g, soak up the landing
+      if (T3.jmp) {
+        const J = T3.jmp, C = 0.16, V0 = 1.7, G = 3.71, TF = 2 * V0 / G, LD = 0.24; J.t += dtr;
+        let crouch = 0;
+        if (J.t < C) crouch = Math.sin(J.t / C * Math.PI / 2);
+        else if (J.t < C + TF) {
+          const tt = J.t - C; jy = V0 * tt - G * tt * tt / 2;
+          u.legL.rotation.x = 0.3; u.legR.rotation.x = 0.1; u.kneeL.rotation.x = 0.5; u.kneeR.rotation.x = 0.35;
+          u.armL.rotation.x = u.armR.rotation.x = -0.5; u.elbowL.rotation.x = u.elbowR.rotation.x = -0.6;
+        } else if (J.t < C + TF + LD) crouch = Math.sin((1 - (J.t - C - TF) / LD) * Math.PI / 2) * 0.8;
+        else T3.jmp = null;
+        if (crouch) { u.legL.rotation.x = u.legR.rotation.x = 0.55 * crouch; u.kneeL.rotation.x = u.kneeR.rotation.x = 1.05 * crouch; u.armL.rotation.x = u.armR.rotation.x = 0.3 * crouch; jy -= 0.12 * crouch; }
+        astro.position.y += jy;
+      }
+      blob.material.opacity = 0.34 * Math.max(0.35, 1 - Math.max(0, jy) * 1.6);
       // the miss: a red line from where the suit thought you were to where you really are
       const ms = T3.miss && now < T3.miss.until ? T3.miss : null;
       if (ms && ms.id !== missId) {
@@ -1426,7 +1455,23 @@
       } else { satHolder.visible = false; trail.visible = false; T3.satPos = null; }
       const showFind = !!T3.satPos; if ($("t3sat").hidden === showFind) $("t3sat").hidden = !showFind;
 
-      // camera: free, or following from behind at a distance that suits the time rate
+      // camera: first person through the visor, free, or following from behind at a distance that suits the time rate
+      astro.visible = !T3.fp; blob.visible = !T3.fp; if (T3.fp) astroTag.visible = false;
+      if (T3.fp) {
+        ctl.enabled = false;
+        const d = walking ? new THREE.Vector3(k.hdx, 0, -k.hdy) : new THREE.Vector3(Math.sin(astro.rotation.y), 0, Math.cos(astro.rotation.y));
+        if (d.lengthSq() > 1e-9) { d.normalize(); if (!T3.fpDir) T3.fpDir = d.clone(); else T3.fpDir.lerp(d, 1 - Math.exp(-dtr * (walking && k.manual ? 14 : 3.5))).normalize(); }
+        const L = T3.look, moving = walking && !k.still && !walk.busy;
+        if (moving && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8);                // the head drifts back to face the way you walk
+        const f = T3.fpDir.clone().applyAxisAngle(UP, L.yaw), right = new THREE.Vector3(-f.z, 0, f.x);
+        const bob = moving ? Math.abs(Math.cos(T3.phase)) * 0.05 : 0, sway = moving ? Math.sin(T3.phase) * 0.03 : 0;
+        cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob;
+        ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
+        cam.lookAt(ctl.target); cam.rotateZ(-sway * 0.5);
+        rn.render(sc, cam);
+        return;
+      }
+      ctl.enabled = true;
       if (T3.chase && !T3.drag) {
         const dist = chaseBase() * (T3.chaseK || 1);
         if (walking) { const d = new THREE.Vector3(k.hdx, 0, -k.hdy); if (d.lengthSq() > 1e-9) { d.normalize(); T3.dir = d; } }
@@ -1444,13 +1489,35 @@
   function setView(v) {
     S.view = v; $("v-2d").setAttribute("aria-pressed", v === "2d"); $("v-3d").setAttribute("aria-pressed", v === "3d");
     $("view3d").hidden = v !== "3d"; $("map").style.visibility = v === "3d" ? "hidden" : "visible"; $("tools3d").hidden = v !== "3d";
-    if (v === "3d") { if (!T3.ready) T3.init(); T3.dirty = true; $("t3lite").setAttribute("aria-pressed", String(!T3.lite)); if (walk.on) { T3.chase = true; T3.skyLook = false; $("t3follow").setAttribute("aria-pressed", "true"); } }
+    if (v === "3d") { if (!T3.ready) T3.init(); T3.dirty = true; $("t3lite").setAttribute("aria-pressed", String(!T3.lite)); if (walk.on) camWalk(); }
+    document.body.classList.toggle("v3d", v === "3d"); document.body.classList.toggle("fp", v === "3d" && T3.cam3 === "fp"); syncJump();
   }
   T3.render = () => {};
+  /* Camera: "free" (orbit with the mouse or fingers), "follow" (behind the astronaut) or "fp" (through the visor). */
+  T3.cam3 = "free";
+  function setCam(m, quiet) {
+    const was = T3.cam3; T3.cam3 = m; T3.chase = m === "follow"; T3.fp = m === "fp"; T3.skyLook = false;
+    document.querySelectorAll("[data-cam]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.cam === m)));
+    document.body.classList.toggle("fp", m === "fp" && S.view === "3d"); syncJump();
+    if (m === "fp" && was !== "fp") { T3.look = { yaw: 0, pitch: -0.1 }; T3.fpDir = null; T3.api && T3.api.fov(62); }
+    if (m !== "fp" && was === "fp") { T3.api && T3.api.fov(42); if (m === "free" && T3.api) T3.api.backOff(); }
+    if (m === "fp" && was !== "fp" && !quiet) {
+      const slow = walk.on && S.speed > 1; if (slow) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); }
+      toast("First person", (matchMedia("(pointer: coarse)").matches ? "Drag to look around. Use the stick to walk and the Jump button to jump." : "Drag to look around. W A S D to walk, Space to jump, C to change the camera.") + (slow ? " Time now runs at real speed." : ""), "#8ab8ff");
+    }
+  }
+  function camWalk() { if (S.view === "3d" && T3.cam3 !== "fp") setCam("follow", true); }
+  function syncJump() {
+    const on = S.view === "3d" && T3.cam3 !== "free" && matchMedia("(pointer: coarse)").matches;
+    $("jumpBtn").hidden = !on; document.body.classList.toggle("canjump", on);
+  }
+  // a standing jump in Mars gravity (3.71 m/s2): about 40 cm up and nearly a second in the air
+  function jump() { if (S.view !== "3d" || T3.jmp) return; T3.jmp = { t: 0 }; }
 
   /* ---------- controls ---------- */
   $("v-2d").onclick = () => setView("2d"); $("v-3d").onclick = () => setView("3d");
-  $("t3follow").onclick = e => { T3.skyLook = false; T3.chase = !T3.chase; e.currentTarget.setAttribute("aria-pressed", String(!!T3.chase)); };
+  document.querySelectorAll("[data-cam]").forEach(b => b.onclick = () => { setCam(b.dataset.cam); b.blur(); });
+  $("jumpBtn").addEventListener("pointerdown", e => { e.preventDefault(); jump(); });
   { let l0 = innerWidth < 900; try { const v0 = localStorage.getItem("mw_lite"); if (v0 !== null) l0 = v0 === "1"; } catch (e) { /* private mode */ } $("t3lite").setAttribute("aria-pressed", String(!l0)); }
   $("t3lite").onclick = e => {                                  // lives in Layers: it is a setting, not something you press while walking
     const hi = e.currentTarget.getAttribute("aria-pressed") !== "true";
@@ -1665,8 +1732,15 @@
   talk.addEventListener("pointerdown", pttDown);
   ["pointerup", "pointercancel", "pointerleave"].forEach(ev => talk.addEventListener(ev, pttUp));
   talk.addEventListener("contextmenu", e => e.preventDefault());
-  addEventListener("keydown", e => { if (e.code === "Space" && !e.repeat && !/^(input|textarea|select|button)$/i.test(document.activeElement.tagName)) { e.preventDefault(); pttDown(); } });
-  addEventListener("keyup", e => { if (e.code === "Space") pttUp(); });
+  // keys: T talk (hold), Space jump, C camera, M panel
+  addEventListener("keydown", e => {
+    if (e.ctrlKey || e.metaKey || e.altKey || /^(input|textarea|select)$/i.test(document.activeElement.tagName)) return;
+    if (e.code === "KeyT" && !e.repeat) { e.preventDefault(); pttDown(); }
+    else if (e.code === "KeyM" && !e.repeat) togglePanel();
+    else if (e.code === "KeyC" && !e.repeat && S.view === "3d") { const o = ["free", "follow", "fp"]; setCam(o[(o.indexOf(T3.cam3) + 1) % 3]); }
+    else if (e.code === "Space" && S.view === "3d") { e.preventDefault(); if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); if (!e.repeat) jump(); }
+  });
+  addEventListener("keyup", e => { if (e.code === "KeyT") pttUp(); });
 
   const msgLabel = m => m.kind === "voice" ? `Voice message${m.secs ? ` (${Math.round(m.secs)} s)` : ""}` : (m.text || "");
   function renderMsgs(lk = linkNow()) {
@@ -1743,12 +1817,21 @@
   document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => openSheet(mq.matches && sheet.cur === b.dataset.p ? "" : b.dataset.p));
   document.querySelectorAll(".grab").forEach(g => g.onclick = closeSheet);
   $("fab").onclick = () => $("walkBtn").click();
-  function layoutPhone() { if (mq.matches) closeSheet(); else openSheet(sheet.cur || "mission"); map.invalidateSize(); drawTimeline(); drawProfile(); }
+  function layoutPhone() { if (mq.matches) closeSheet(); else openSheet(sheet.cur || "mission"); syncPanelTog(); syncJump(); map.invalidateSize(); drawTimeline(); drawProfile(); }
   mq.addEventListener("change", layoutPhone);
   if ($("tlDetails")) $("tlDetails").addEventListener("toggle", () => requestAnimationFrame(drawTimeline));
   $("tbNow").onclick = () => $("departNow").click(); $("tbBest").onclick = () => $("departBest").click();
-  const showPanel = open => { document.body.classList.toggle("nopanel", !open); $("expand").hidden = open; map.invalidateSize(); T3.dirty = true; requestAnimationFrame(() => { drawTimeline(); drawProfile(); }); };
-  $("collapse").onclick = () => showPanel(false); $("expand").onclick = () => showPanel(true);
+  // Desktop: the panel docks on the left and hides itself while a walk plays. Phone: during a walk the tab bar hides too.
+  const UI = { autoHid: false };
+  function showPanel(open) { document.body.classList.toggle("nopanel", !open); syncPanelTog(); setTimeout(() => { map.invalidateSize(); T3.dirty = true; drawTimeline(); drawProfile(); }, 0); }
+  function syncPanelTog() { const on = mq.matches ? document.body.classList.contains("showui") : !document.body.classList.contains("nopanel"); $("panelTog").setAttribute("aria-pressed", String(on)); $("panelTog").title = (on ? "Hide" : "Show") + " the panel (M)"; }
+  function togglePanel() {
+    UI.autoHid = false;
+    if (!mq.matches) return showPanel(document.body.classList.contains("nopanel"));
+    if (!walk.on) return;
+    const on = !document.body.classList.contains("showui"); document.body.classList.toggle("showui", on); if (!on) closeSheet(); syncPanelTog();
+  }
+  $("panelTog").onclick = togglePanel;
   $("zin").onclick = () => S.view === "3d" ? T3.api && T3.api.zoom(0.75) : map.zoomIn(0.5);
   $("zout").onclick = () => S.view === "3d" ? T3.api && T3.api.zoom(1.33) : map.zoomOut(0.5);
   $("zhome").onclick = () => S.view === "3d" ? T3.api && T3.api.reset() : (SITE === "jezero" ? map.setView(ll(HAB[0] - 1800, HAB[1] + 900), -2.5) : map.fitBounds(bounds, { padding: [-120, -120] }));
