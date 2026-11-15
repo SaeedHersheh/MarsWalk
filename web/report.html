@@ -106,6 +106,10 @@
     [r.longest_gap_s <= 4 * 3600 ? "ok" : "warn", `Longest time with no relay link: ${dur(r.longest_gap_s)}.`],
   ];
   if (r.ground_min_c != null) checks.push([r.ground_min_c >= -80 ? "ok" : "warn", `Ground temperature ${r.ground_min_c.toFixed(0)} to ${r.ground_max_c.toFixed(0)} °C along the route.`]);
+  // a short reason for each check, so the verdict says what failed
+  const SHORT = [`steepest point ${r.max_slope.toFixed(0)}° is over the ${plan.maxSlope}° limit`, `${dur(r.time_s)} is over the 8 h limit`, "part of it is in darkness",
+    "no relay satellite in view", `position uncertainty reaches ±${Math.round(worstErr)} m`, `${dur(r.longest_gap_s)} with no relay link`, "very cold ground"];
+  const why = lv => checks.map((c, i) => c[0] === lv ? SHORT[i] : null).filter(Boolean).join("; ");
   const worstLvl = checks.some(c => c[0] === "bad") ? "nogo" : checks.some(c => c[0] === "warn") ? "watch" : "go";
   const LV = { ok: ["GO", "t-ok"], warn: ["WATCH", "t-warn"], bad: ["NO-GO", "t-bad"] };
 
@@ -116,7 +120,7 @@
   });
 
   // ---------- page 1 ----------
-  const verdictTxt = { go: "All checks pass. This traverse can be flown as planned.", watch: "Flyable, with items to watch below.", nogo: "Does not meet every limit. Re-plan before flying." }[worstLvl];
+  const verdictTxt = { go: "All checks pass. This traverse can be flown as planned.", watch: `Flyable. Watch: ${why("warn")}.`, nogo: `Re-plan before flying: ${why("bad")}.` }[worstLvl];
   const tile = (k, v, u, e) => `<div><small>${k}</small><b>${v}<u>${u}</u></b>${e ? `<em>${e}</em>` : ""}</div>`;
   const page1 = `
   <section class="page">

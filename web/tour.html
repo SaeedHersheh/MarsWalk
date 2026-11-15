@@ -267,13 +267,13 @@
   if (SHORT) {
     ACTS.splice(0, ACTS.length, { name: "Marswalk", c: "#ff9a6b" });
     CH.splice(0, CH.length,
-      { a: 0, page: "globe", globeDo: "layers", t: 4.5, title: "1 · Explore the planet", sub: "Marswalk plans expeditions on Mars. Layers show NASA data for the whole planet." },
-      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 3.5, title: "2 · Choose where to go", sub: "Pick any place. Here: the twin calderas on top of Pavonis Mons." },
-      { a: 0, page: "pav", scene: "layer", arg: "slope", t: 3.5, title: "3 · Read the ground", sub: "Slope: green is an easy walk, red is too steep for a spacesuit.", how: "NASA MOLA elevation." },
-      { a: 0, page: "pav", scene: "layer", arg: "comms", t: 3.5, title: "Where satellites can hear you", sub: "Red: crater walls hide the sky, so relay satellites cannot reach you there.", how: "Real orbits from NASA JPL Horizons." },
-      { a: 0, page: "pav", scene: "drive", t: 5, title: "4 · Drive out", sub: "The crew rover leaves the habitat at about 10 km/h, on a route planned for its wheels." },
-      { a: 0, page: "pav", scene: "plan3d", t: 5, title: "5 · Plan the walk", sub: "Tap the stops. Marswalk finds the safest way down, round the steep red walls." },
-      { a: 0, page: "pav", scene: "vrsat", pip: true, pos: "bc", t: 17, title: "6 · Walk it in VR, and talk to base", sub: "There is no GPS on Mars: a real relay satellite finds the astronaut. On the radio screen they call the habitat, and mission control answers." });
+      { a: 0, page: "globe", globeDo: "layers", t: 4.5, say: [[0.2, "Marswalk plans expeditions on Mars, with real NASA data."]], title: "1 · Explore the planet", sub: "Marswalk plans expeditions on Mars. Layers show NASA data for the whole planet." },
+      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 3.5, say: [[0.1, "Pick anywhere. Here: Pavonis Mons."]], title: "2 · Choose where to go", sub: "Pick any place. Here: the twin calderas on top of Pavonis Mons." },
+      { a: 0, page: "pav", scene: "layer", arg: "slope", t: 3.5, say: [[0.1, "Green is an easy walk. Red is too steep."]], title: "3 · Read the ground", sub: "Slope: green is an easy walk, red is too steep for a spacesuit.", how: "NASA MOLA elevation." },
+      { a: 0, page: "pav", scene: "layer", arg: "comms", t: 3.5, say: [[0.1, "Red here: no satellite can hear you."]], title: "Where satellites can hear you", sub: "Red: crater walls hide the sky, so relay satellites cannot reach you there.", how: "Real orbits from NASA JPL Horizons." },
+      { a: 0, page: "pav", scene: "drive", t: 5, say: [[0.2, "The crew rover drives out to the first stop."]], title: "4 · Drive out", sub: "The crew rover leaves the habitat at about 10 km/h, on a route planned for its wheels." },
+      { a: 0, page: "pav", scene: "plan3d", t: 5, say: [[0.2, "Then Marswalk plans the safest walk, around the cliffs."]], title: "5 · Plan the walk", sub: "Tap the stops. Marswalk finds the safest way down, round the steep red walls." },
+      { a: 0, page: "pav", scene: "vrsat", pip: true, pos: "bc", t: 17, say: [[0.4, "There is no GPS on Mars. A real relay satellite finds the astronaut."], [7.6, "Now they call the habitat."], [11, "And mission control answers."], [14, "Marswalk. Walk Mars, before anyone does."]], title: "6 · Walk it in VR, and talk to base", sub: "There is no GPS on Mars: a real relay satellite finds the astronaut. On the radio screen they call the habitat, and mission control answers." });
   }
   const PIPE = [
     { c: "#8ab8ff", b: "QGIS", p: "Clip, reproject and check the NASA and USGS rasters: CTX 20 m, HiRISE 1 m, MOLA 463 m.", ic: '<path d="M4 6l8-3 8 3-8 3zM4 12l8 3 8-3M4 18l8 3 8-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' },
@@ -310,7 +310,7 @@
   // ---------- playing ----------
   const T = { i: -1, el: 0, playing: false, token: 0, busy: false };
   const PLAY = '<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>', PAUSE = '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/>';
-  function setPlaying(on) { if (T.i >= 0 && frame.contentWindow) frame.contentWindow.postMessage({ marswalkTour: "pause", on: !on }, location.origin); T.playing = on; document.body.classList.toggle("playing", on); $("ppIc").innerHTML = on ? PAUSE : PLAY; $("pp").setAttribute("aria-label", on ? "Pause" : "Play"); $("pp").title = (on ? "Pause" : "Play") + " (Space)"; }
+  function setPlaying(on) { if (!on) hush(); if (T.i >= 0 && frame.contentWindow) frame.contentWindow.postMessage({ marswalkTour: "pause", on: !on }, location.origin); T.playing = on; document.body.classList.toggle("playing", on); $("ppIc").innerHTML = on ? PAUSE : PLAY; $("pp").setAttribute("aria-label", on ? "Pause" : "Play"); $("pp").title = (on ? "Pause" : "Play") + " (Space)"; }
   async function show(i, jumped) {
     const tok = ++T.token, c = CH[i]; T.busy = true; T.i = i; T.el = 0;
     segs.forEach((s, k) => { s.firstChild.style.width = k < i ? "100%" : "0"; });
@@ -326,6 +326,7 @@
     if (c.page === "home" && w && c.home) homeCard(w, c.home, tok);
     else if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.getBoundingClientRect().top + w.scrollY - 76 : 0, behavior: "smooth" }); }
     if (c.scene) send(c.scene, c.arg);
+    if (SHORT) narrate(c, tok);
     if ($("pip")) { $("pip").classList.remove("on"); if (c.pip) pipTalk(tok); }
     if (c.globe && w && w.GLOBE) w.GLOBE.pick(c.globe);
     if (c.globeDo && w && w.GLOBE) w.GLOBE[c.globeDo]();
@@ -335,6 +336,28 @@
     $("capT").textContent = c.title; $("capS").textContent = c.sub; $("capHowT").textContent = c.how || ""; $("capHow").hidden = !c.how;
     await wait(250); if (tok !== T.token) return;
     placeCap(c, true); $("cap").classList.add("on"); T.busy = false;
+  }
+  // ---------- voice-over: the browser's own speech, with the most natural English voice it has ----------
+  const VO = { on: true, voice: null, timers: [] };
+  try { VO.on = localStorage.getItem("mw_vo") !== "0"; } catch (e) { /* fine */ }
+  function pickVoice() {
+    const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+    const en = vs.filter(v => /^en(-|_|$)/i.test(v.lang));
+    const prefer = [/(Aria|Jenny|Guy|Andrew|Emma|Brian|Ava|Ryan|Sonia).*Natural/i, /Natural|Neural/i, /Google UK English Male/i, /Google US English/i, /Samantha|Daniel|Alex/i];
+    for (const re of prefer) { const v = en.find(x => re.test(x.name)); if (v) return v; }
+    return en.find(v => /en-US/i.test(v.lang)) || en[0] || null;
+  }
+  if (window.speechSynthesis) { VO.voice = pickVoice(); speechSynthesis.onvoiceschanged = () => { VO.voice = pickVoice(); }; }
+  function hush() { VO.timers.forEach(clearTimeout); VO.timers = []; try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) { /* fine */ } }
+  function say(text) {
+    if (!VO.on || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(text); if (VO.voice) { u.voice = VO.voice; u.lang = VO.voice.lang; } else u.lang = "en-US";
+    u.rate = /Natural|Neural/i.test(VO.voice ? VO.voice.name : "") ? 1.04 : 0.98; u.pitch = 1; u.volume = 1;
+    speechSynthesis.speak(u);
+  }
+  function narrate(c, tok) {
+    hush(); if (!c.say || !VO.on) return;
+    c.say.forEach(([at, text]) => VO.timers.push(setTimeout(() => { if (tok === T.token && T.playing) say(text); }, at * 1000)));
   }
   // ---------- short demo: mission control opens when the astronaut calls, and answers ----------
   async function pipTalk(tok) {
@@ -406,7 +429,7 @@
   function put(b) { const cap = $("cap"); CAP.key = b.k; CAP.x = b.x; CAP.y = b.y; cap.style.left = Math.round(b.x) + "px"; cap.style.top = Math.round(b.y) + "px"; }
   setInterval(() => { if (T.i >= 0 && !T.busy && $("cap").classList.contains("on")) placeCap(CH[T.i], false); }, 700);
   addEventListener("resize", () => { if (T.i >= 0) placeCap(CH[T.i], true); });
-  function finish() { ++T.token; setPlaying(false); segs.forEach(s => { s.firstChild.style.width = "100%"; }); $("cap").classList.remove("on"); $("pipe").classList.remove("on"); $("end").classList.add("on"); send("end"); }
+  function finish() { hush(); ++T.token; setPlaying(false); segs.forEach(s => { s.firstChild.style.width = "100%"; }); $("cap").classList.remove("on"); $("pipe").classList.remove("on"); $("end").classList.add("on"); send("end"); }
   let last = performance.now();
   function tick() {                                       // a plain timer, so the chapters keep time even when the tab is not in front
     const now = performance.now(), dt = Math.min(0.25, (now - last) / 1000); last = now;
@@ -424,6 +447,10 @@
     $("acts").hidden = true; $("end").querySelector("h2").textContent = "Marswalk";
     const pb = $("play"); pb.disabled = true; pb.lastChild.textContent = "Loading Pavonis Mons…"; pb.style.opacity = 0.6;
     document.querySelector(".startrow span").textContent = "About 45 seconds · pause any time with the button or Space · F11 for full screen";
+    const vb = document.createElement("button"); vb.type = "button"; vb.className = "ghost"; vb.id = "voBtn"; vb.style.cursor = "pointer"; vb.style.background = "transparent"; vb.style.font = "inherit"; vb.style.fontWeight = "600";
+    const vlab = () => { vb.textContent = VO.on ? "Voice-over: on" : "Voice-over: off"; vb.setAttribute("aria-pressed", String(VO.on)); };
+    vb.onclick = () => { VO.on = !VO.on; try { localStorage.setItem("mw_vo", VO.on ? "1" : "0"); } catch (e) { /* fine */ } vlab(); if (VO.on) say("Voice-over on."); else hush(); };
+    vlab(); $("play").after(vb);
     // load both places before Play: the globe in the main frame, the site in a second one behind it
     const f2 = frame.cloneNode(); f2.id = "scene2"; f2.style.visibility = "hidden"; frame.after(f2);
     FR.globe = frame; FR.pav = f2;

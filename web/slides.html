@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Marswalk · 7 slides</title>
+<meta name="description" content="Marswalk by AirAwareNetwork, NASA Space Apps Challenge 2026, in seven slides.">
+<link rel="icon" type="image/png" sizes="192x192" href="img/brand/logo-192.png"><link rel="apple-touch-icon" href="img/brand/logo-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* Seven 1920×1080 slides in the homepage's design. They scale to any screen; arrows, click or swipe move between them; Save as PDF gives one slide per page. */
+  :root {
+    --bg: #04060a; --panel: #0a0e15; --surface: #111723; --line: #1a2230; --line-2: #2b3649;
+    --ink: #ffffff; --text: #d6dce7; --dim: #8f9cb1; --faint: #627087;
+    --blue: #1a66e8; --blue-hi: #3b82f6; --accent: #8ab8ff; --live: #3ddc97; --sat: #F5B85B; --mars: #e07a4f; --red: #ff6b55;
+    --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--text); font-family: var(--f-body); overflow: hidden; }
+  #deck { position: fixed; inset: 0; display: grid; place-items: center; }
+  .slide { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; margin: -540px 0 0 -960px; transform-origin: 50% 50%; overflow: hidden; background: var(--bg); opacity: 0; pointer-events: none; transition: opacity 0.45s; isolation: isolate; }
+  .slide.on { opacity: 1; pointer-events: auto; z-index: 1; }
+  .slide canvas.sky { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; }
+  .pad { position: absolute; inset: 0; padding: 120px 130px 110px; display: flex; flex-direction: column; }
+
+  /* shared pieces, as on the homepage */
+  .brand { position: absolute; left: 130px; top: 54px; display: flex; align-items: center; gap: 16px; }
+  .brand img { width: 52px; height: 52px; border-radius: 50%; box-shadow: 0 0 0 2.5px rgba(255, 255, 255, 0.85), 0 0 26px rgba(80, 150, 255, 0.55); }
+  .brand b { display: block; font-size: 20px; letter-spacing: 0.18em; color: var(--ink); line-height: 1.15; }
+  .brand small { font-size: 14px; letter-spacing: 0.06em; color: var(--dim); }
+  .num { position: absolute; right: 130px; top: 66px; font: 500 18px var(--f-mono); color: var(--faint); letter-spacing: 0.08em; }
+  .foot { position: absolute; left: 130px; right: 130px; bottom: 48px; display: flex; justify-content: space-between; font: 500 16px var(--f-mono); color: var(--faint); letter-spacing: 0.04em; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 14px; font-size: 20px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--accent); }
+  .eyebrow::before { content: ""; width: 40px; height: 3px; background: var(--blue-hi); }
+  h1 { margin: 22px 0 22px; font-size: 128px; line-height: 0.96; letter-spacing: -0.035em; font-weight: 800; color: var(--ink); }
+  h2 { margin: 18px 0 18px; font-size: 76px; line-height: 1.02; letter-spacing: -0.025em; font-weight: 800; color: var(--ink); max-width: 1400px; }
+  em.m { font-style: normal; background: linear-gradient(100deg, #ffb08a, var(--mars) 45%, #c4502a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { margin: 0; font-size: 30px; line-height: 1.5; color: var(--text); max-width: 1000px; }
+  .lede b { color: var(--ink); }
+  .row { display: grid; gap: 28px; }
+  .card { position: relative; padding: 34px 34px 32px; border-radius: 26px; background: var(--panel); border: 1.5px solid var(--line); }
+  .card small { font: 600 16px var(--f-mono); color: var(--faint); letter-spacing: 0.06em; }
+  .card .ic { width: 64px; height: 64px; margin: 18px 0 20px; display: grid; place-items: center; border-radius: 18px; background: var(--c); color: #04060a; box-shadow: 0 0 46px -8px var(--c); }
+  .card .ic svg { width: 34px; height: 34px; }
+  .card b { display: block; font-size: 32px; color: var(--ink); margin-bottom: 10px; letter-spacing: -0.01em; }
+  .card p { margin: 0; font-size: 23px; line-height: 1.5; color: var(--dim); }
+  .card p strong { color: var(--text); font-weight: 600; }
+  .tag { display: inline-block; margin-top: 18px; padding: 7px 16px; border-radius: 999px; border: 1.5px solid var(--line-2); font: 500 17px var(--f-mono); color: var(--text); }
+  .big { font: 700 64px var(--f-mono); color: var(--ink); letter-spacing: -0.02em; }
+  .big u { text-decoration: none; font-size: 28px; color: var(--dim); margin-left: 6px; }
+
+  /* 1: title, Mars turning */
+  .planet { position: absolute; right: -160px; top: 50%; width: 1000px; height: 1000px; margin-top: -500px; border-radius: 50%; background: url(atlas/mars_color.jpg) 0 50% / 200% 100% repeat-x; animation: spin 60s linear infinite; box-shadow: inset -150px -40px 220px rgba(0, 0, 0, 0.95), inset 30px 10px 80px rgba(255, 190, 150, 0.18), 0 0 140px rgba(224, 122, 79, 0.25); }
+  .planet::after { content: ""; position: absolute; inset: -18px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255, 160, 120, 0.14); }
+  @keyframes spin { to { background-position: -200% 50%; } }
+  .s1 .pad::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(4, 6, 10, 0.96) 0%, rgba(4, 6, 10, 0.72) 46%, rgba(4, 6, 10, 0) 72%); }
+  .s1 .pills { display: flex; gap: 14px; margin-top: 48px; }
+  .s1 .pills span { padding: 14px 26px; border-radius: 999px; font-weight: 700; font-size: 24px; }
+
+  /* 2: the problem */
+  .delay { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 28px; margin-top: 54px; padding: 30px 36px; border-radius: 22px; background: var(--panel); border: 1.5px solid var(--line); }
+  .delay .planet-s { width: 70px; height: 70px; border-radius: 50%; }
+  .delay .track { position: relative; height: 4px; background: repeating-linear-gradient(90deg, var(--accent) 0 12px, transparent 12px 22px); opacity: 0.6; }
+  .delay .track i { position: absolute; top: -9px; left: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 22px var(--accent); animation: fly 4s linear infinite; }
+  @keyframes fly { to { left: calc(100% - 22px); } }
+
+  /* 3: solution flow */
+  .flow4 { grid-template-columns: repeat(4, 1fr); margin-top: 48px; }
+  .flow4 .card { padding: 0; overflow: hidden; }
+  .flow4 .card .im { height: 230px; background: var(--surface) center / cover; border-bottom: 1.5px solid var(--line); position: relative; }
+  .flow4 .card .tx { padding: 26px 28px 30px; }
+  .flow4 .card + .card::before { content: ""; position: absolute; left: -24px; top: 115px; width: 20px; height: 20px; border-top: 3px solid var(--line-2); border-right: 3px solid var(--line-2); transform: rotate(45deg); }
+
+  /* 4: routing */
+  .eqn { display: flex; align-items: stretch; gap: 16px; margin: 40px 0 34px; }
+  .eqn .t { flex: 1; padding: 22px 24px; border-radius: 20px; background: var(--surface); border-top: 5px solid var(--k); }
+  .eqn .t small { font: 600 16px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--k); }
+  .eqn .t b { display: block; margin: 6px 0 4px; font-size: 32px; color: var(--ink); }
+  .eqn .t p { margin: 0; font-size: 19px; color: var(--dim); line-height: 1.45; }
+  .eqn .op { display: grid; place-items: center; font: 600 48px var(--f-mono); color: var(--faint); }
+  .eqn .lhs { display: grid; place-items: center; padding: 0 10px; font: 700 30px var(--f-mono); color: var(--ink); text-align: center; line-height: 1.25; }
+  .styles { grid-template-columns: repeat(3, 1fr); }
+  .styles .card { padding: 26px 30px; }
+  .styles .card b { font-size: 28px; }
+
+  /* 5: navigation */
+  .nav2 { display: grid; grid-template-columns: 1.25fr 1fr; gap: 44px; margin-top: 30px; align-items: start; }
+  .scene { position: relative; border-radius: 26px; overflow: hidden; border: 1.5px solid var(--line); background: radial-gradient(ellipse at 70% 0%, #0f1a2e 0%, #05080e 70%); }
+  .scene svg { display: block; width: 100%; height: auto; }
+  .lk { fill: none; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 3 14; animation: flw 1s linear infinite; }
+  @keyframes flw { to { stroke-dashoffset: -17; } }
+  .src { display: flex; gap: 20px; padding: 26px 28px; border-radius: 22px; background: var(--panel); border: 1.5px solid var(--line); margin-bottom: 18px; }
+  .src i { flex: none; width: 18px; height: 18px; margin-top: 9px; border-radius: 50%; background: var(--k); box-shadow: 0 0 16px var(--k); }
+  .src b { display: block; font-size: 29px; color: var(--ink); }
+  .src p { margin: 6px 0 0; font-size: 21px; line-height: 1.45; color: var(--dim); }
+  .src em { display: block; margin-top: 8px; font: 500 17px var(--f-mono); font-style: normal; color: var(--k); }
+
+  /* 6: experience */
+  .exp3 { grid-template-columns: 1.15fr 1fr 1fr; margin-top: 44px; }
+  .vr { position: relative; height: 290px; border-radius: 20px; overflow: hidden; margin-bottom: 26px; background: url(img/sites/n00p91_w112p77.jpg) center 70% / cover; }
+  .vr::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(217, 167, 124, 0.85) 0%, rgba(217, 167, 124, 0.35) 34%, rgba(4, 6, 10, 0.2) 60%); }
+  .vr::after { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; width: 3px; margin-left: -1.5px; background: #000; }
+  .vr .p { position: absolute; top: 70px; width: 120px; height: 150px; border-radius: 12px; background: rgba(5, 8, 13, 0.88); border: 2px solid rgba(138, 184, 255, 0.6); padding: 12px; }
+  .vr .p i { display: block; height: 10px; border-radius: 4px; background: #19212f; margin-bottom: 9px; }
+  .vr .p i.h { background: #3ddc97; width: 60%; } .vr .p i.b { background: #1a66e8; height: 22px; }
+  .vr .dot { position: absolute; top: 118px; width: 20px; height: 20px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.4); }
+  .report { position: relative; height: 290px; margin-bottom: 26px; }
+  .report .pg { position: absolute; width: 205px; height: 280px; border-radius: 8px; background: #fff; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); padding: 16px; }
+  .report .pg i { display: block; height: 7px; border-radius: 3px; background: #dde3ec; margin-bottom: 8px; }
+  .report .pg i.k { background: #0b1220; width: 60%; height: 11px; } .report .pg i.g { background: #1f9d6b; width: 32%; }
+  .report .pg .m { height: 92px; border-radius: 4px; margin: 10px 0; background: url(img/basemap.jpg) center / cover; position: relative; }
+  .report .pg .m::after { content: ""; position: absolute; left: 30%; top: 20%; width: 46%; height: 60%; border-left: 3px solid #1f9d6b; border-bottom: 3px solid #1f9d6b; border-radius: 0 0 0 40px; }
+  .rover { height: 290px; margin-bottom: 26px; border-radius: 20px; background: radial-gradient(ellipse at 50% 120%, rgba(224, 122, 79, 0.35), transparent 70%), #0a0e15; display: grid; place-items: center; }
+
+  /* 7: data and team */
+  .data7 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 48px; margin-top: 36px; }
+  .dl { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5px; background: var(--line); border: 1.5px solid var(--line); border-radius: 22px; overflow: hidden; }
+  .dl div { padding: 22px 26px; background: var(--bg); }
+  .dl b { display: block; font-size: 23px; color: var(--ink); }
+  .dl span { display: block; margin-top: 4px; font: 500 17px var(--f-mono); color: var(--accent); }
+  .team { padding: 34px 36px; border-radius: 26px; background: var(--panel); border: 1.5px solid var(--line); }
+  .team img { width: 120px; height: 120px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 50px rgba(80, 150, 255, 0.5); }
+  .team h3 { margin: 22px 0 10px; font-size: 40px; color: var(--ink); }
+  .team p { margin: 0 0 14px; font-size: 21px; line-height: 1.5; color: var(--dim); }
+  .team .url { display: block; margin-top: 18px; padding: 16px 22px; border-radius: 16px; background: var(--blue); color: #fff; font: 600 21px var(--f-mono); text-decoration: none; word-break: break-all; }
+  .team .url small { display: block; font: 600 14px var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.75; margin-bottom: 4px; }
+
+  /* controls */
+  .ctl { position: fixed; z-index: 10; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 999px; background: rgba(10, 14, 21, 0.86); border: 1px solid var(--line-2); backdrop-filter: blur(10px); transition: opacity 0.4s; }
+  .ctl button { width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: #fff; cursor: pointer; display: grid; place-items: center; }
+  .ctl button:hover { background: rgba(255, 255, 255, 0.08); }
+  .ctl button svg { width: 20px; height: 20px; }
+  .ctl .dots { display: flex; gap: 6px; padding: 0 4px; }
+  .ctl .dots i { width: 8px; height: 8px; border-radius: 50%; background: #2b3649; cursor: pointer; transition: background 0.3s, width 0.3s; }
+  .ctl .dots i.on { width: 24px; border-radius: 4px; background: var(--accent); }
+  .ctl .pdf { width: auto; padding: 0 16px; border-radius: 999px; font: 600 14px var(--f-body); border: 1px solid var(--line-2); }
+  body.idle .ctl { opacity: 0; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  @media print {
+    @page { size: 1920px 1080px; margin: 0; }
+    html, body { height: auto; overflow: visible; background: var(--bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #deck { position: static; display: block; }
+    .slide { position: relative; left: 0; top: 0; margin: 0; transform: none !important; opacity: 1; page-break-after: always; break-after: page; }
+    .ctl { display: none; }
+    .planet, .delay .track i, .lk { animation: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .planet, .delay .track i, .lk { animation: none; } .slide { transition: none; } }
+</style>
+</head>
+<body>
+<main id="deck" aria-roledescription="slide deck">
+
+  <!-- 1 -->
+  <section class="slide s1" aria-roledescription="slide" aria-label="1 of 7: Marswalk">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="planet" aria-hidden="true"></div>
+    <div class="pad" style="justify-content:center">
+      <span class="eyebrow">AirAwareNetwork · NASA Space Apps 2026</span>
+      <h1>Walk <em class="m">Mars</em><br>before anyone<br>does.</h1>
+      <p class="lede">Marswalk plans safe expeditions on real NASA terrain, and keeps astronauts <b>found and in touch</b> where there is no GPS.</p>
+      <div class="pills"><span style="background:#8ab8ff;color:#04060a">Plan a trip</span><span style="background:#ff9a6b;color:#04060a">Experience Mars</span></div>
+    </div>
+    <div class="brand"><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork</small></div></div>
+    <div class="foot"><span>marswalk-266019376344.europe-west1.run.app</span><span>01 / 07</span></div>
+  </section>
+
+  <!-- 2 -->
+  <section class="slide" aria-roledescription="slide" aria-label="2 of 7: The problem">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="pad" style="padding-top:170px">
+      <span class="eyebrow">The problem</span>
+      <h2>There is no GPS on Mars, and Earth is minutes away.</h2>
+      <div class="row" style="grid-template-columns:repeat(3,1fr);margin-top:34px">
+        <div class="card" style="--c:#ff6b55"><small>01</small><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 20h18L14 6l-3 5-2-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></div><b>The ground is unforgiving</b><p>Crater walls, loose slopes, cold and radiation. A suited astronaut cannot just walk in a straight line.</p></div>
+        <div class="card" style="--c:#8ab8ff"><small>02</small><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></div><b>Nobody knows where you are</b><p>With no GPS, a few kilometres from home the crew's position slowly drifts away from the truth.</p></div>
+        <div class="card" style="--c:#F5B85B"><small>03</small><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 0 1 14 0M8.5 12a3.5 3.5 0 0 1 7 0M12 12v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><b>Hills block the radio</b><p>The habitat cannot see behind a ridge, and relay satellites are overhead only a few times a day.</p></div>
+      </div>
+      <div class="delay"><div class="planet-s" style="background:radial-gradient(circle at 35% 35%,#e8a07a,#a8492a 60%,#3a140a)"></div><div class="track"><i></i></div><div class="planet-s" style="background:radial-gradient(circle at 35% 35%,#7cc4ff,#1b4fa8 60%,#08142c)"></div></div>
+      <p class="lede" style="margin-top:22px;font-size:25px;max-width:none">A message from Mars to Earth takes <b>4 to 24 minutes</b> one way. Mission control cannot steer a walk live.</p>
+    </div>
+    <div class="brand"><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork</small></div></div>
+    <div class="num">02 / 07</div>
+  </section>
+
+  <!-- 3 -->
+  <section class="slide" aria-roledescription="slide" aria-label="3 of 7: Our solution">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="pad" style="padding-top:170px">
+      <span class="eyebrow">Our solution</span>
+      <h2>Plan it, check it, then walk it before anyone goes.</h2>
+      <div class="row flow4">
+        <div class="card"><div class="im" style="background-image:url(atlas/mars_color.jpg);background-size:240% 100%;background-position:62% 50%"></div><div class="tx"><small>01 · PICK</small><b>Anywhere on Mars</b><p>Click the globe. A 178 km site is built from NASA terrain in about a minute.</p></div></div>
+        <div class="card"><div class="im" style="background-image:linear-gradient(135deg,rgba(31,157,107,.55),rgba(224,160,32,.45) 55%,rgba(214,64,47,.6)),url(img/basemap.jpg)"></div><div class="tx"><small>02 · READ</small><b>Eight ground layers</b><p>Slope, radiation, satellite cover, habitat radio, sunlight, temperature and more.</p></div></div>
+        <div class="card"><div class="im" style="background-image:url(img/sites/n00p91_w112p77.jpg)"><svg viewBox="0 0 400 230" style="position:absolute;inset:0;width:100%;height:100%"><path d="M70 190 C 120 170, 130 120, 180 110 S 270 120, 300 70 S 330 40, 350 36" fill="none" stroke="#fff" stroke-width="10" opacity=".7" stroke-linecap="round"/><path d="M70 190 C 120 170, 130 120, 180 110 S 270 120, 300 70 S 330 40, 350 36" fill="none" stroke="#3ddc97" stroke-width="5" stroke-linecap="round"/><circle cx="70" cy="190" r="12" fill="#fff" stroke="#1a66e8" stroke-width="4"/><circle cx="350" cy="36" r="11" fill="#1a66e8" stroke="#fff" stroke-width="3"/></svg></div><div class="tx"><small>03 · PLAN</small><b>The safest route</b><p>Around steep walls and blind spots, with a forecast of how well the crew can be tracked.</p></div></div>
+        <div class="card"><div class="im" style="background:linear-gradient(180deg,#d9a77c 0%,#c98a5f 38%,#6b3b25 39%)"><div style="position:absolute;left:50%;top:38%;width:30px;height:30px;margin:-15px;border-radius:50%;border:4px solid #fff;box-shadow:0 0 0 4px rgba(0,0,0,.3)"></div><span class="tag" style="position:absolute;right:16px;top:14px;margin:0;background:rgba(4,6,10,.75);border-color:rgba(255,255,255,.2)">VR</span></div><div class="tx"><small>04 · WALK</small><b>True-scale 3D and VR</b><p>Walk or drive the route on the real ground, on a laptop or a phone in a headset.</p></div></div>
+      </div>
+    </div>
+    <div class="brand"><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork</small></div></div>
+    <div class="num">03 / 07</div>
+  </section>
+
+  <!-- 4 -->
+  <section class="slide" aria-roledescription="slide" aria-label="4 of 7: How the route is chosen">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="pad" style="padding-top:170px">
+      <span class="eyebrow">How the route is chosen</span>
+      <h2>Not the shortest path. The cheapest one.</h2>
+      <p class="lede" style="max-width:1500px">The map is cut into <b>20 m squares</b>. Every square gets a score, and the planner finds the path with the lowest total.</p>
+      <div class="eqn">
+        <div class="lhs">score of<br>a square<br>=</div>
+        <div class="t" style="--k:#8ab8ff"><small>walking time</small><b>Tobler</b><p>How long it takes to cross, from the hiking rule at a suited pace.</p></div>
+        <div class="op">×</div>
+        <div class="t" style="--k:#8f9cb1;flex:.6"><small>base</small><b>1</b><p>Flat and safe.</p></div>
+        <div class="op">+</div>
+        <div class="t" style="--k:#3ddc97"><small>slope</small><b>0 → 24×</b><p>Free under 3°, double at 8°, 24 times at 16°.</p></div>
+        <div class="op">+</div>
+        <div class="t" style="--k:#F5B85B"><small>6 × hazards</small><b>weighted</b><p>Radiation, relay blind spots, shadow, cold ground.</p></div>
+      </div>
+      <div class="row styles">
+        <div class="card"><b style="color:#3ddc97">Safest</b><p>Slope weight 1. Never steeper than <strong>18°</strong>. Long, gentle ways round.</p></div>
+        <div class="card"><b style="color:#8ab8ff">Balanced</b><p>Slope weight 0.4. Up to <strong>22°</strong> when it saves real time.</p></div>
+        <div class="card"><b style="color:#ff9a6b">Fastest</b><p>Slope weight 0.08. Up to <strong>25°</strong>, nearly the straight line.</p></div>
+      </div>
+    </div>
+    <div class="brand"><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork</small></div></div>
+    <div class="num">04 / 07</div>
+  </section>
+
+  <!-- 5 -->
+  <section class="slide" aria-roledescription="slide" aria-label="5 of 7: Navigation without GPS">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="pad" style="padding-top:170px">
+      <span class="eyebrow">Navigation without GPS</span>
+      <h2>The habitat and the satellites take turns finding you.</h2>
+      <div class="nav2">
+        <div class="scene">
+          <svg viewBox="0 0 900 470" aria-hidden="true">
+            <defs><linearGradient id="g5" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a4d2c"/><stop offset="1" stop-color="#3a1a10"/></linearGradient><radialGradient id="e5"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1b4fa8"/></radialGradient></defs>
+            <path d="M-20 170 Q 450 -40 920 170" fill="none" stroke="#2b3649" stroke-dasharray="3 7" stroke-width="2"/>
+            <path class="lk" d="M150 294 L 330 250" stroke="#3ddc97" opacity=".9"/>
+            <path class="lk" d="M560 62 L 640 300" stroke="#F5B85B"/>
+            <path class="lk" d="M580 56 L 806 72" stroke="#4fa3ff"/>
+            <path d="M0 380 L 150 372 C 260 362, 330 260, 400 250 C 470 260, 520 352, 620 360 L 900 368 L 900 470 L 0 470 Z" fill="url(#g5)"/>
+            <path d="M118 372 v-22 a32 22 0 0 1 64 0 v22 Z" fill="#d6dce7"/><path d="M150 328 V 296" stroke="#d6dce7" stroke-width="3"/><circle cx="150" cy="294" r="6" fill="#3ddc97"/>
+            <text x="150" y="410" text-anchor="middle" font-size="20" font-weight="600" fill="#8f9cb1" font-family="Inter">Habitat</text>
+            <g transform="translate(330 250)"><circle cx="0" cy="-30" r="8" fill="#fff"/><rect x="-8" y="-22" width="16" height="20" rx="6" fill="#fff"/></g>
+            <g transform="translate(640 330)"><circle cx="0" cy="-30" r="8" fill="#fff"/><rect x="-8" y="-22" width="16" height="20" rx="6" fill="#fff"/><text x="0" y="40" text-anchor="middle" font-size="20" font-weight="600" fill="#8f9cb1" font-family="Inter">behind the hill</text></g>
+            <g transform="translate(560 56)"><rect x="-30" y="-7" width="22" height="14" rx="2" fill="#1d4ed8" stroke="#93c5fd"/><rect x="8" y="-7" width="22" height="14" rx="2" fill="#1d4ed8" stroke="#93c5fd"/><rect x="-8" y="-10" width="16" height="20" rx="3" fill="#F5B85B"/><text x="0" y="-22" text-anchor="middle" font-size="20" font-weight="600" fill="#8f9cb1" font-family="Inter">Relay satellite</text></g>
+            <circle cx="830" cy="70" r="28" fill="url(#e5)"/><text x="830" y="128" text-anchor="middle" font-size="20" font-weight="600" fill="#8f9cb1" font-family="Inter">Earth</text>
+          </svg>
+        </div>
+        <div>
+          <div class="src" style="--k:#3ddc97"><i></i><div><b>The habitat radio</b><p>While its mast can see the crew, it measures range and bearing, like an airport beacon. Voice is instant.</p><em>±5 m · ±1° (assumed)</em></div></div>
+          <div class="src" style="--k:#F5B85B"><i></i><div><b>Four real relay orbiters</b><p>MRO, Mars Odyssey, TGO and Mars Express, on their real orbits from NASA JPL Horizons. Overhead, they fix the position and carry messages.</p><em>±5 m after a fix</em></div></div>
+          <div class="src" style="--k:#4fa3ff"><i></i><div><b>Mission control on Earth</b><p>Messages cross the real light delay, and replies wait at the orbiter for the next pass.</p><em>10.9 light-minutes today (JPL Horizons)</em></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="brand"><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork</small></div></div>
+    <div class="num">05 / 07</div>
+  </section>
+
+  <!-- 6 -->
+  <section class="slide" aria-roledescription="slide" aria-label="6 of 7: Experience it">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="pad" style="padding-top:170px">
+      <span class="eyebrow">Experience it</span>
+      <h2>Rehearse the walk, then hand over the plan.</h2>
+      <div class="row exp3">
+        <div class="card"><div class="vr" aria-hidden="true"><div class="p" style="left:6%"><i class="h"></i><i></i><i></i><i></i><i class="b"></i></div><div class="p" style="left:calc(50% - 150px)"><i style="background:#F5B85B;width:50%"></i><i></i><i></i><i class="b"></i></div><div class="p" style="left:calc(50% + 30px)"><i class="h"></i><i></i><i></i><i></i><i class="b"></i></div><div class="p" style="right:6%"><i style="background:#F5B85B;width:50%"></i><i></i><i></i><i class="b"></i></div><div class="dot" style="left:25%"></div><div class="dot" style="left:75%"></div></div><b>Phone VR</b><p>Walk where you look. One screen shows <strong>where you are</strong>, the other is <strong>the radio</strong>. Hold the dot on a button to press it.</p></div>
+        <div class="card"><div class="rover" aria-hidden="true"><svg viewBox="0 0 260 150" width="300"><rect x="30" y="92" width="200" height="14" rx="4" fill="#3a4048"/><rect x="40" y="104" width="180" height="8" fill="#c9a65a"/><path d="M60 92 v-30 a40 40 0 0 1 40 -40 h70 a40 40 0 0 1 40 40 v30 z" fill="#f2f1ec"/><path d="M170 22 a40 40 0 0 1 40 40 v30 h-40 z" fill="#3d6a92" opacity=".9"/><rect x="60" y="64" width="110" height="12" fill="#0b1420"/><rect x="60" y="80" width="150" height="4" fill="#fc3d21"/><rect x="80" y="8" width="60" height="6" fill="#2a64c8"/><rect x="146" y="8" width="60" height="6" fill="#2a64c8"/><line x1="90" y1="22" x2="90" y2="2" stroke="#b9bec4" stroke-width="2"/><circle cx="60" cy="118" r="18" fill="#8d9298"/><circle cx="130" cy="118" r="18" fill="#8d9298"/><circle cx="200" cy="118" r="18" fill="#8d9298"/><circle cx="60" cy="118" r="7" fill="#b9bec4"/><circle cx="130" cy="118" r="7" fill="#b9bec4"/><circle cx="200" cy="118" r="7" fill="#b9bec4"/></svg></div><b>Crew rover</b><p>A pressurised rover at about <strong>10 km/h</strong>, on a route planned for its wheels (assumed figures).</p></div>
+        <div class="card"><div class="report" aria-hidden="true"><div class="pg" style="left:6%;top:10px;transform:rotate(-5deg)"><i class="k"></i><i></i><div class="m"></div><i></i><i class="g"></i><i></i><i></i></div><div class="pg" style="left:32%;top:0;transform:rotate(4deg)"><i class="k"></i><i></i><i></i><div class="m" style="background:linear-gradient(180deg,#eef2f7,#fff);border:1px solid #dde3ec"></div><i></i><i class="g"></i><i></i></div></div><b>Mission report</b><p>Every plan exports a <strong>two-page PDF</strong>: map, profile, satellite passes, navigation forecast and a go / no-go check.</p></div>
+      </div>
+    </div>
+    <div class="brand"><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork</small></div></div>
+    <div class="num">06 / 07</div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide" aria-roledescription="slide" aria-label="7 of 7: Built on NASA data">
+    <canvas class="sky" aria-hidden="true"></canvas>
+    <div class="pad" style="padding-top:170px">
+      <span class="eyebrow">Built on real NASA data</span>
+      <h2>Nothing on the ground is invented.</h2>
+      <div class="data7">
+        <div>
+          <div class="dl">
+            <div><b>Global terrain</b><span>MOLA 463 m · Mars Global Surveyor</span></div>
+            <div><b>Jezero in detail</b><span>MRO CTX 20 m · HiRISE 1 m</span></div>
+            <div><b>Orbits, Sun, Earth</b><span>NASA JPL Horizons</span></div>
+            <div><b>Ground temperature</b><span>Mars Odyssey THEMIS · MGS TES</span></div>
+            <div><b>Radiation</b><span>Curiosity RAD, 0.67 mSv/day</span></div>
+            <div><b>Imagery</b><span>NASA Mars Trek · Viking MDIM</span></div>
+          </div>
+          <p class="lede" style="font-size:22px;margin-top:22px;color:#8f9cb1">Started by hand in QGIS, then rebuilt as Python pipelines (rasterio, NumPy, scikit-image), served by FastAPI, drawn with Leaflet and three.js. Where a number is a model or an assumption, the app says so.</p>
+        </div>
+        <div class="team">
+          <img src="img/brand/logo-512.png" alt="AirAwareNetwork logo">
+          <h3>AirAwareNetwork</h3>
+          <p>A Palestinian, community-led air quality network built on IoT. At home we keep sensors connected across a region; for Space Apps we took that question to Mars.</p>
+          <a class="url" href="https://marswalk-266019376344.europe-west1.run.app/"><small>Try it live</small>marswalk-266019376344.europe-west1.run.app</a>
+        </div>
+      </div>
+    </div>
+    <div class="brand"><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork</small></div></div>
+    <div class="num">07 / 07</div>
+  </section>
+</main>
+
+<nav class="ctl" aria-label="Slides">
+  <button type="button" id="prev" aria-label="Previous slide"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <div class="dots" id="dots"></div>
+  <button type="button" id="next" aria-label="Next slide"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <button type="button" class="pdf" id="pdf" title="Save all seven slides as a PDF">Save as PDF</button>
+</nav>
+
+<script>
+(() => {
+  const S = [...document.querySelectorAll(".slide")], dots = document.getElementById("dots");
+  let i = 0;
+  try { const h = +location.hash.slice(1); if (h >= 1 && h <= S.length) i = h - 1; } catch (e) { /* fine */ }
+  dots.innerHTML = S.map((_, k) => `<i data-k="${k}" title="Slide ${k + 1}"></i>`).join("");
+  function fit() { const k = Math.min(innerWidth / 1920, innerHeight / 1080); S.forEach(s => { s.style.transform = `scale(${k})`; }); }
+  function go(n) {
+    i = Math.max(0, Math.min(S.length - 1, n));
+    S.forEach((s, k) => { s.classList.toggle("on", k === i); s.setAttribute("aria-hidden", String(k !== i)); });
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
+    history.replaceState(null, "", "#" + (i + 1));
+  }
+  addEventListener("resize", fit); fit(); go(i);
+  document.getElementById("prev").onclick = () => go(i - 1);
+  document.getElementById("next").onclick = () => go(i + 1);
+  document.getElementById("pdf").onclick = () => print();
+  dots.onclick = e => { const d = e.target.closest("i"); if (d) go(+d.dataset.k); };
+  addEventListener("keydown", e => {
+    if (["ArrowRight", "PageDown", " ", "Enter"].includes(e.key)) { e.preventDefault(); go(i + 1); }
+    else if (["ArrowLeft", "PageUp", "Backspace"].includes(e.key)) { e.preventDefault(); go(i - 1); }
+    else if (e.key === "Home") go(0); else if (e.key === "End") go(S.length - 1);
+  });
+  document.getElementById("deck").addEventListener("click", e => { if (e.target.closest("a")) return; go(e.clientX > innerWidth / 3 ? i + 1 : i - 1); });
+  let tx = null; addEventListener("touchstart", e => { tx = e.touches[0].clientX; }, { passive: true });
+  addEventListener("touchend", e => { if (tx == null) return; const dx = e.changedTouches[0].clientX - tx; if (Math.abs(dx) > 40) go(dx < 0 ? i + 1 : i - 1); tx = null; });
+  // hide the controls while presenting
+  let idle = null; const wake = () => { document.body.classList.remove("idle"); clearTimeout(idle); idle = setTimeout(() => document.body.classList.add("idle"), 2500); };
+  addEventListener("mousemove", wake); addEventListener("keydown", wake); wake();
+  // the same starfield as the homepage, drawn once per slide
+  S.forEach(s => {
+    const cv = s.querySelector("canvas.sky"); if (!cv) return; cv.width = 1920; cv.height = 1080; const x = cv.getContext("2d");
+    let seed = 7 + S.indexOf(s) * 97; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let n = 0; n < 520; n++) { const r = rnd() * 1.4 + 0.3; x.globalAlpha = 0.25 + rnd() * 0.6; x.fillStyle = rnd() > 0.92 ? "#cfe0ff" : "#fff"; x.beginPath(); x.arc(rnd() * 1920, rnd() * 1080, r, 0, 7); x.fill(); }
+    x.globalAlpha = 1; const g = x.createRadialGradient(1500, 160, 0, 1500, 160, 900); g.addColorStop(0, "rgba(59,130,246,0.10)"); g.addColorStop(1, "rgba(59,130,246,0)"); x.fillStyle = g; x.fillRect(0, 0, 1920, 1080);
+  });
+})();
+</script>
+</body>
+</html>
