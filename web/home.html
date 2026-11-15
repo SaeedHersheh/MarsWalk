@@ -349,8 +349,8 @@
       <p class="intro reveal">We first did it by hand in QGIS: clip the terrain, work out the slope, find a path. Then we rebuilt each of those steps in Python, so it runs for any place on Mars in about a minute.</p>
 
       <div class="flow reveal">
-        <div><small>01 · by hand</small><b>QGIS</b><p>Jezero clipped from the elevation model, a slope map, and a first route drawn and checked by eye.</p><div class="tool"><span>Clip raster</span><span>Slope</span><span>Least-cost path</span></div></div>
-        <div><small>02 · automated</small><b>Python pipelines</b><p>The same steps as scripts, reading NASA and USGS data straight from the source.</p><div class="tool"><span>rasterio</span><span>NumPy</span><span>scikit-image</span></div></div>
+        <div><small>01 · by hand</small><b>QGIS</b><p>We started at Jezero: clipped its detailed elevation, made a slope map and drew a first route by eye. Then the same on MOLA, for the whole planet.</p><div class="tool"><span>Clip raster</span><span>Slope</span><span>Least-cost path</span></div></div>
+        <div><small>02 · automated</small><b>Python pipelines</b><p>The same steps as scripts: Jezero in full detail, and any other place on Mars built from MOLA in about a minute.</p><div class="tool"><span>rasterio</span><span>NumPy</span><span>scikit-image</span></div></div>
         <div><small>03 · live</small><b>The planner</b><p>A web app that serves the layers, plans routes in a second, and tracks the satellites.</p><div class="tool"><span>FastAPI</span><span>Leaflet</span><span>three.js</span></div></div>
       </div>
       <div class="map reveal">
