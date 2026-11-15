@@ -297,7 +297,7 @@
   /* Export report: pack the live plan (route, navigation forecast, site) and open it as a printable page (report.html). */
   function exportReport() {
     const r = S.route; if (!r) return;
-    const F = S.nav || navForecast(r), n = r.x.length, k = Math.max(1, Math.ceil(n / 700)), idx = [];
+    const F = navForecast(r), n = r.x.length, k = Math.max(1, Math.ceil(n / 700)), idx = [];
     for (let i = 0; i < n; i += k) idx.push(i); if (idx.at(-1) !== n - 1) idx.push(n - 1);
     const pick = a => idx.map(i => a[i]);
     const R = {
@@ -2423,7 +2423,7 @@
         const sync = () => {
           const n = S.stops.length, r = S.route && S.route.stop_idx.length === n + 1 ? S.route : null;
           $("exPickT").textContent = !n ? `Tap the map to add your stops` : r ? `${n} stop${n > 1 ? "s" : ""} · ${wKm(r.distance_m)} · about ${wDur(r.time_s)} ${rv ? "driving" : "walking"}` : `${n} stop${n > 1 ? "s" : ""} · planning the route…`;
-          go.disabled = !r; $("exUndo").hidden = !n;
+          go.disabled = !r; $("exUndo").hidden = !n; $("exReport").hidden = !r;
         };
         const timer = setInterval(sync, 300); sync();
         bar.hidden = false; document.body.classList.add("ex-picking");
@@ -2432,6 +2432,7 @@
         $("exUndo").onclick = () => { S.stops.pop(); plan(0); sync(); };
         $("exLook").onclick = () => { S.stops.push(lookout()); plan(0); sync(); };
         $("exStart").onclick = () => done(true);
+        $("exReport").onclick = exportReport;
         $("exBack").onclick = () => { S.stops = []; plan(0); done(false); };
       });
     }
