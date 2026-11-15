@@ -311,7 +311,8 @@
   const T = { i: -1, el: 0, playing: false, token: 0, busy: false };
   const PLAY = '<path d="M7 4.5v15l12-7.5z" fill="currentColor"/>', PAUSE = '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/>';
   function setPlaying(on) { if (!on) hush(); if (T.i >= 0 && frame.contentWindow) frame.contentWindow.postMessage({ marswalkTour: "pause", on: !on }, location.origin); T.playing = on; document.body.classList.toggle("playing", on); $("ppIc").innerHTML = on ? PAUSE : PLAY; $("pp").setAttribute("aria-label", on ? "Pause" : "Play"); $("pp").title = (on ? "Pause" : "Play") + " (Space)"; }
-  async function show(i, jumped) {
+  async function show(i, jumped, auto) {
+    if (!auto) hush();                                    // you skipped or jumped: stop the voice; when the demo moves on by itself the line has already finished
     const tok = ++T.token, c = CH[i]; T.busy = true; T.i = i; T.el = 0;
     segs.forEach((s, k) => { s.firstChild.style.width = k < i ? "100%" : "0"; });
     $("cap").classList.remove("on"); $("pipe").classList.remove("on"); $("end").classList.remove("on");
@@ -338,7 +339,7 @@
     placeCap(c, true); $("cap").classList.add("on"); T.busy = false;
   }
   // ---------- voice-over: the browser's own speech, with the most natural English voice it has ----------
-  const VO = { on: true, voice: null, timers: [] };
+  const VO = { on: true, voice: null, timers: [], left: 0, talking: 0, log: [] };
   try { VO.on = localStorage.getItem("mw_vo") !== "0"; } catch (e) { /* fine */ }
   function pickVoice() {
     const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
@@ -348,16 +349,24 @@
     return en.find(v => /en-US/i.test(v.lang)) || en[0] || null;
   }
   if (window.speechSynthesis) { VO.voice = pickVoice(); speechSynthesis.onvoiceschanged = () => { VO.voice = pickVoice(); }; }
-  function hush() { VO.timers.forEach(clearTimeout); VO.timers = []; try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) { /* fine */ } }
+  function hush() { VO.timers.forEach(clearTimeout); VO.timers = []; VO.left = 0; VO.talking = 0; try { if (window.speechSynthesis) speechSynthesis.cancel(); } catch (e) { /* fine */ } }
+  // the chapter waits while a line is still to come or still being spoken, so no line is ever cut off
+  const voBusy = () => VO.on && (VO.left > 0 || VO.talking > 0);
   function say(text) {
     if (!VO.on || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(text); if (VO.voice) { u.voice = VO.voice; u.lang = VO.voice.lang; } else u.lang = "en-US";
     u.rate = /Natural|Neural/i.test(VO.voice ? VO.voice.name : "") ? 1.04 : 0.98; u.pitch = 1; u.volume = 1;
+    VO.talking++; let done = false; const t0 = performance.now();
+    const end = why => { if (done) return; done = true; VO.talking = Math.max(0, VO.talking - 1); VO.log.push([text, why, Math.round(performance.now() - t0)]); };
+    u.onend = () => end("end"); u.onerror = () => end("error");
+    setTimeout(() => end("timeout"), 2500 + text.split(/\s+/).length * 650);      // some browsers never send 'end': do not hold the demo for ever
     speechSynthesis.speak(u);
   }
   function narrate(c, tok) {
-    hush(); if (!c.say || !VO.on) return;
-    c.say.forEach(([at, text]) => VO.timers.push(setTimeout(() => { if (tok === T.token && T.playing) say(text); }, at * 1000)));
+    VO.timers.forEach(clearTimeout); VO.timers = []; VO.left = 0;
+    if (!c.say || !VO.on) return;
+    VO.left = c.say.length;
+    c.say.forEach(([at, text]) => VO.timers.push(setTimeout(() => { VO.left = Math.max(0, VO.left - 1); if (tok === T.token && T.playing) say(text); }, at * 1000)));
   }
   // ---------- short demo: mission control opens when the astronaut calls, and answers ----------
   async function pipTalk(tok) {
@@ -435,18 +444,18 @@
     const now = performance.now(), dt = Math.min(0.25, (now - last) / 1000); last = now;
     if (T.playing && !T.busy && T.i >= 0) {
       T.el += dt; const c = CH[T.i]; segs[T.i].firstChild.style.width = Math.min(100, T.el / c.t * 100) + "%";
-      if (T.el >= c.t) { if (T.i + 1 < CH.length) show(T.i + 1, false); else finish(); }
+      if (T.el >= c.t && !voBusy()) { if (T.i + 1 < CH.length) show(T.i + 1, false, true); else finish(); }
     }
   }
   setInterval(tick, 50);
   function begin(i = 0) { $("start").hidden = true; $("player").hidden = false; setPlaying(true); show(i, i !== 0 && !SHORT); }
   if (SHORT) {
     document.title = "Marswalk · short demo"; document.body.classList.add("short");
-    document.querySelector(".start h1").innerHTML = 'Marswalk <em>in 45 seconds.</em>';
+    document.querySelector(".start h1").innerHTML = 'Marswalk <em>in 50 seconds.</em>';
     document.querySelector(".start .lede").textContent = "The short demo: explore Mars, choose a place, read its ground, plan the route, drive it in the rover, then walk it in VR while a satellite finds you and mission control answers your call.";
     $("acts").hidden = true; $("end").querySelector("h2").textContent = "Marswalk";
     const pb = $("play"); pb.disabled = true; pb.lastChild.textContent = "Loading Pavonis Mons…"; pb.style.opacity = 0.6;
-    document.querySelector(".startrow span").textContent = "About 45 seconds · pause any time with the button or Space · F11 for full screen";
+    document.querySelector(".startrow span").textContent = "About 50 seconds · pause any time with the button or Space · F11 for full screen";
     const vb = document.createElement("button"); vb.type = "button"; vb.className = "ghost"; vb.id = "voBtn"; vb.style.cursor = "pointer"; vb.style.background = "transparent"; vb.style.font = "inherit"; vb.style.fontWeight = "600";
     const vlab = () => { vb.textContent = VO.on ? "Voice-over: on" : "Voice-over: off"; vb.setAttribute("aria-pressed", String(VO.on)); };
     vb.onclick = () => { VO.on = !VO.on; try { localStorage.setItem("mw_vo", VO.on ? "1" : "0"); } catch (e) { /* fine */ } vlab(); if (VO.on) say("Voice-over on."); else hush(); };
@@ -461,7 +470,7 @@
     (async () => {
       frame = FR.pav; await load("pav"); FR.pav.style.visibility = "hidden";
       frame = FR.globe; await load("globe"); try { FR.globe.contentWindow.GLOBE.lit(); } catch (e) { /* fine */ }
-      $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (45 s)";
+      $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (50 s)";
     })();
   }
   $("play").onclick = () => begin(0);
@@ -478,7 +487,7 @@
     else if (e.key === "ArrowLeft") $("prev").click();
   }
   addEventListener("keydown", e => { if (["Space", "ArrowLeft", "ArrowRight"].includes(e.code) && $("start").hidden) { e.preventDefault(); onKey(e); } });
-  window.MW_TOUR = { show, CH, T };                      // handle for testing
+  window.MW_TOUR = { show, CH, T, VO };                      // handle for testing
 })();
 </script>
 </body>
