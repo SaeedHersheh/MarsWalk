@@ -635,3 +635,10 @@ body.mode-explore:not(.veh-rover) .radiodock { bottom: calc(var(--tbh) + 140px);
 
 /* finger-sized speed buttons on touch screens */
 @media (pointer: coarse) { .spd { min-height: 40px; min-width: 44px; } }
+
+/* Export report: one button under the plan's review */
+.reportbtn { display: flex; align-items: center; gap: 12px; width: 100%; margin: 14px 0 6px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--line-2, #2b3649); background: rgba(138, 184, 255, 0.06); color: var(--ink, #fff); text-align: left; cursor: pointer; font: inherit; transition: border-color 0.2s, background 0.2s; }
+.reportbtn:hover { border-color: #8ab8ff; background: rgba(138, 184, 255, 0.12); }
+.reportbtn svg { flex: none; width: 26px; height: 26px; color: #8ab8ff; }
+.reportbtn b { display: block; font-size: 15px; }
+.reportbtn small { display: block; font-size: 12.5px; color: var(--dim, #8f9cb1); }

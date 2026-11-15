@@ -270,7 +270,7 @@
     const r = S.route;
     if (r) paintRoute(r); else { routeCase.setLatLngs([]); routeLine.clearLayers(); }
     syncWalk();
-    if (!r) { drawNav(); if (T3.syncFlow) T3.syncFlow(); $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("moreStats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
+    if (!r) { $("reportBtn").hidden = true; drawNav(); if (T3.syncFlow) T3.syncFlow(); $("verdict").innerHTML = ""; $("mix").innerHTML = ""; $("stats").innerHTML = ""; $("moreStats").innerHTML = ""; $("warns").innerHTML = ""; $("contacts").innerHTML = ""; drawProfile(); drawTimeline(); return; }
     const mx = r.slope_mix || { green: 100, yellow: 0, steep: 0 }, f0 = v => Math.round(v);
     $("verdict").className = "verdict " + (mx.steep > 0.5 ? "bad" : mx.yellow > 3 ? "warn" : "ok");
     $("verdict").textContent = mx.steep > 0.5 ? `${f0(mx.steep)} % of this route is steep (over 15°). Steepest ${r.max_slope.toFixed(0)}°.`
@@ -292,7 +292,30 @@
       `<p class="note">Radiation on this walk: ${(r.dose_msv * 1000).toFixed(0)} µSv (${r.career_pct.toFixed(3)} % of the ${M.rad ? M.rad.career : 600} mSv career limit). Standing still in the open here costs about ${r.rad_day_avg.toFixed(2)} mSv a day.</p>`;
     $("contacts").innerHTML = r.contacts.map(c => `<div><i class="dot" style="background:${ORB[c.orbiter].c}"></i><span>${c.orbiter} ${c.start ? fUTC(c.start) + " UTC" : "blocked"}</span><span>${c.minutes} min · ${c.max_el}°${c.blocked_min ? ` · ${c.blocked_min} blocked` : ""}</span></div>`).join("");
     drawProfile(); drawTimeline(); drawNav(); T3.dirty = true; if (T3.syncFlow) T3.syncFlow();
+    $("reportBtn").hidden = false;
   }
+  /* Export report: pack the live plan (route, navigation forecast, site) and open it as a printable page (report.html). */
+  function exportReport() {
+    const r = S.route; if (!r) return;
+    const F = S.nav || navForecast(r), n = r.x.length, k = Math.max(1, Math.ceil(n / 700)), idx = [];
+    for (let i = 0; i < n; i += k) idx.push(i); if (idx.at(-1) !== n - 1) idx.push(n - 1);
+    const pick = a => idx.map(i => a[i]);
+    const R = {
+      made: Date.now() / 1000, backUrl: location.href,
+      site: { id: SITE, label: M.label, lat: M.site.lat, lon: M.site.lon_e, kind: M.kind, res: M.kind === "region" ? `MOLA ${Math.round(M.DY)} m` : "CTX 20 m (HiRISE 1 m slope)", source: M.source, basemap: new URL(M.basemap, location.href).href, w: M.width_m, h: M.height_m, hab: HAB },
+      plan: { vehicle: S.vehicle, policy: POLICY(), weights: { ...S.weights }, maxSlope: S.maxSlope },
+      route: { distance_m: r.distance_m, time_s: r.time_s, climb_m: r.climb_m, dose_msv: r.dose_msv, max_slope: r.max_slope, slope_mix: r.slope_mix, slope_limit_used: r.slope_limit_used,
+        career_pct: r.career_pct, rad_day_avg: r.rad_day_avg, contacts: r.contacts, contact_min: r.contact_min, longest_gap_s: r.longest_gap_s, sun_el: r.sun_el, depart: r.depart,
+        warnings: r.warnings, dwell: r.dwell, ground_min_c: r.ground_min_c, ground_max_c: r.ground_max_c },
+      series: { x: pick(r.x), y: pick(r.y), z: pick(r.z), d: pick(r.d), slope: pick(r.slope), err: idx.map(i => +F.err[i].toFixed(1)), src: idx.map(i => F.src[i]) },
+      stops: r.stop_idx.map(i => ({ x: r.x[i], y: r.y[i], z: r.z[i], d: r.d[i], t: r.t[i] })),
+      nav: { fixes: F.fixes.map(f => ({ orbiter: f.orbiter, t: f.t, d: r.d[f.i], x: r.x[f.i], y: r.y[f.i], before: f.before })), worst: { d: r.d[F.worst], err: F.err[F.worst] }, habKm: F.habKm },
+      lightMin: COM.cfg ? COM.cfg.effective_min : null, assumptions: M.assumptions,
+    };
+    try { localStorage.setItem("mw_report", JSON.stringify(R)); } catch (e) { toast("Could not export", "This browser blocked local storage.", "#F0616B"); return; }
+    window.open("report.html", "_blank");
+  }
+  $("reportBtn").onclick = exportReport;
 
   /* ---------- navigation forecast ----------
      Mars has no GPS. Along the planned route this works out, point by point, how well the astronaut will know where they are:

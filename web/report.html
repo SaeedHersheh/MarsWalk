@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marswalk · EVA traverse plan</title>
+<link rel="icon" type="image/png" sizes="192x192" href="img/brand/logo-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  /* The EVA plan as a printable report: built in the browser from the planner's own numbers, saved with the browser's Save as PDF. */
+  :root { --ink: #0b1220; --text: #2b3445; --dim: #5d6a80; --faint: #8a95a8; --line: #dde3ec; --soft: #f4f6fa; --blue: #1a66e8; --ok: #1f9d6b; --warn: #c98a00; --bad: #d23a2b; --sat: #d9930e; --hab: #1f9d6b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #e6e9ef; color: var(--text); font: 12.5px/1.5 Inter, system-ui, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; gap: 10px; align-items: center; justify-content: center; padding: 12px 16px; background: #04060a; color: #fff; }
+  .bar span { font-size: 13px; color: #9aa6ba; margin-right: auto; max-width: 1100px; }
+  .bar button, .bar a { padding: 9px 18px; border-radius: 999px; border: 1px solid #2b3649; background: transparent; color: #fff; font: 600 14px Inter, sans-serif; text-decoration: none; cursor: pointer; }
+  .bar button.go { background: #1a66e8; border-color: #1a66e8; }
+  .page { width: 210mm; min-height: 297mm; margin: 22px auto; padding: 13mm 14mm 12mm; background: #fff; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.16); position: relative; }
+  @page { size: A4; margin: 0; }
+  @media print { html, body { background: #fff; } .bar { display: none; } .page { margin: 0; box-shadow: none; page-break-after: always; } .page:last-child { page-break-after: auto; } }
+  @media (max-width: 860px) { .page { width: auto; min-height: 0; margin: 12px; padding: 18px 16px; } .tiles { grid-template-columns: repeat(2, 1fr) !important; } .two { grid-template-columns: 1fr !important; } }
+  header { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 2.5px solid var(--ink); }
+  header img { width: 46px; height: 46px; border-radius: 50%; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--ink); }
+  header b { display: block; font-size: 15px; letter-spacing: 0.16em; color: var(--ink); }
+  header small { display: block; font-size: 11px; color: var(--dim); letter-spacing: 0.04em; }
+  header .doc { margin-left: auto; text-align: right; font: 500 10.5px/1.5 "IBM Plex Mono", monospace; color: var(--dim); }
+  header .doc b { font: 600 12px "IBM Plex Mono", monospace; letter-spacing: 0.04em; }
+  h1 { margin: 14px 0 2px; font-size: 23px; line-height: 1.15; color: var(--ink); letter-spacing: -0.01em; }
+  .meta { margin: 0 0 12px; color: var(--dim); font-size: 12px; }
+  .meta b { color: var(--text); font-weight: 600; }
+  .verdict { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-radius: 8px; margin-bottom: 12px; font-weight: 600; }
+  .verdict i { font-style: normal; padding: 2px 10px; border-radius: 999px; color: #fff; font: 700 11px "IBM Plex Mono", monospace; letter-spacing: 0.06em; }
+  .v-go { background: #e6f6ef; color: #135c40; } .v-go i { background: var(--ok); }
+  .v-watch { background: #fdf3df; color: #6b4a00; } .v-watch i { background: var(--warn); }
+  .v-nogo { background: #fbe6e3; color: #7a1d14; } .v-nogo i { background: var(--bad); }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 12px; }
+  .tiles div { padding: 7px 10px 8px; border: 1px solid var(--line); border-radius: 7px; }
+  .tiles small { display: block; font-size: 9.5px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
+  .tiles b { font: 600 16px "IBM Plex Mono", monospace; color: var(--ink); }
+  .tiles b u { text-decoration: none; font-size: 11px; color: var(--dim); font-weight: 500; margin-left: 2px; }
+  .tiles em { display: block; font-style: normal; font-size: 10px; color: var(--faint); }
+  .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: 12px; }
+  figure { margin: 0 0 10px; }
+  figure canvas, figure svg { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  figcaption { margin-top: 4px; font-size: 10.5px; color: var(--dim); line-height: 1.4; }
+  figcaption b { color: var(--ink); }
+  h2 { margin: 12px 0 5px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  caption { caption-side: top; text-align: left; font-size: 10.5px; color: var(--dim); padding-bottom: 3px; }
+  caption b { color: var(--ink); }
+  th, td { padding: 4px 6px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 9.5px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; border-bottom: 1.5px solid var(--ink); }
+  td.n { font-family: "IBM Plex Mono", monospace; white-space: nowrap; text-align: right; }
+  th.n { text-align: right; }
+  .tag { display: inline-block; justify-self: start; align-self: start; line-height: 1.6; padding: 0 7px; border-radius: 999px; font: 600 10px "IBM Plex Mono", monospace; }
+  .t-ok { background: #e3f5ec; color: var(--ok); } .t-warn { background: #fcf0d6; color: var(--warn); } .t-bad { background: #fbe4e1; color: var(--bad); }
+  .checks { margin: 0; padding: 0; list-style: none; }
+  .checks li { display: grid; grid-template-columns: 66px 1fr; align-items: start; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 11.5px; }
+  .note { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
+  .note b { color: var(--text); }
+  .methods { columns: 2; column-gap: 16px; font-size: 10px; color: var(--dim); line-height: 1.45; }
+  .methods p { margin: 0 0 5px; break-inside: avoid; }
+  .methods b { color: var(--ink); }
+  footer { position: absolute; left: 14mm; right: 14mm; bottom: 7mm; display: flex; justify-content: space-between; font: 500 9.5px "IBM Plex Mono", monospace; color: var(--faint); border-top: 1px solid var(--line); padding-top: 5px; }
+  @media (max-width: 860px) { footer { position: static; margin-top: 14px; } }
+  .empty { max-width: 560px; margin: 80px auto; text-align: center; font-size: 15px; color: var(--dim); }
+  .empty a { color: var(--blue); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="bar"><span id="barTxt">EVA traverse plan</span><a href="javascript:history.back()" id="back">Back to the planner</a><button type="button" class="go" id="print">Save as PDF</button></div>
+<main id="doc"></main>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  let R = null; try { R = JSON.parse(localStorage.getItem("mw_report") || "null"); } catch (e) { R = null; }
+  if (!R) { $("doc").innerHTML = '<p class="empty">No plan to report yet. Open the planner, plan a route, then press <b>Export report</b>.<br><br><a href="globe.html?mode=plan">Open the planner</a></p>'; $("print").hidden = true; return; }
+  $("print").onclick = () => print();
+  if (!history.length || history.length < 2) $("back").href = R.backUrl || "globe.html";
+
+  // ---------- formatting ----------
+  const pad = n => String(n).padStart(2, "0");
+  const utc = s => { const d = new Date(s * 1000); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`; };
+  const hm = s => `${pad(Math.floor(s / 3600))}:${pad(Math.round(s % 3600 / 60) % 60)}`;
+  const hmT = s => { const d = new Date(s * 1000); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`; };
+  const dur = s => s >= 3600 ? `${Math.floor(s / 3600)} h ${pad(Math.round(s % 3600 / 60) % 60)} m` : `${Math.round(s / 60)} min`;
+  const km = m => (m / 1000).toFixed(2);
+  const ll = (la, lo) => `${Math.abs(la).toFixed(3)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(3)}°${lo >= 0 ? "E" : "W"}`;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const SC = s => s < 8 ? "#1f9d6b" : s < 15 ? "#e0a020" : "#d6402f";
+  const ORB = { "MRO": "#2f7de1", "Mars Odyssey": "#d9930e", "TGO": "#8a5cd6", "Mars Express": "#1f9d6b" };
+  const r = R.route, s = R.series, site = R.site, plan = R.plan, n = s.d.length;
+  const total = r.distance_m, rover = plan.vehicle === "rover";
+  const id = `MW-${site.id.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10)}-${String(Math.round(r.depart)).slice(-6)}`;
+
+  // ---------- go / no-go: every line is a rule the planner itself uses ----------
+  const sunMin = Math.min(...r.sun_el), worstErr = R.nav.worst.err;
+  const checks = [
+    [r.max_slope <= plan.maxSlope ? "ok" : "bad", `Steepest point ${r.max_slope.toFixed(1)}° against the ${plan.maxSlope}° limit of the ${plan.policy} policy${r.slope_limit_used > plan.maxSlope ? ` (limit relaxed to ${r.slope_limit_used.toFixed(0)}° to find a way through)` : ""}.`],
+    [r.time_s <= 8 * 3600 ? "ok" : "bad", `${rover ? "Drive" : "EVA"} lasts ${dur(r.time_s)} against the 8 h ${rover ? "shift" : "suit"} limit.`],
+    [sunMin > 0 ? "ok" : "warn", sunMin > 0 ? `In daylight throughout: lowest Sun elevation ${sunMin.toFixed(1)}°.` : `Part of the traverse is in darkness: Sun down to ${sunMin.toFixed(1)}°.`],
+    [r.contact_min > 0 ? "ok" : "bad", r.contact_min > 0 ? `${r.contacts.filter(c => c.start).length} relay passes in view, ${r.contact_min} min of link in total.` : "No relay satellite in view during the traverse: no position fix, no link to Earth."],
+    [worstErr <= 30 ? "ok" : "warn", `Worst predicted position uncertainty ±${Math.round(worstErr)} m (1σ), at km ${km(R.nav.worst.d)}.`],
+    [r.longest_gap_s <= 4 * 3600 ? "ok" : "warn", `Longest time with no relay link: ${dur(r.longest_gap_s)}.`],
+  ];
+  if (r.ground_min_c != null) checks.push([r.ground_min_c >= -80 ? "ok" : "warn", `Ground temperature ${r.ground_min_c.toFixed(0)} to ${r.ground_max_c.toFixed(0)} °C along the route.`]);
+  const worstLvl = checks.some(c => c[0] === "bad") ? "nogo" : checks.some(c => c[0] === "warn") ? "watch" : "go";
+  const LV = { ok: ["GO", "t-ok"], warn: ["WATCH", "t-warn"], bad: ["NO-GO", "t-bad"] };
+
+  // ---------- stops ----------
+  const stops = R.stops.map((p, k) => {
+    const home = Math.hypot(p.x - site.hab[0], p.y - site.hab[1]) < 60, dw = (r.dwell || []).find(w => Math.abs(w.t - p.t) < 1);
+    return { ...p, name: home ? (k === 0 ? "Habitat airlock (start)" : "Habitat airlock (return)") : `Waypoint ${k}`, tag: home ? "H" : String(k), dwell: dw ? dw.min : 0 };
+  });
+
+  // ---------- page 1 ----------
+  const verdictTxt = { go: "All checks pass. This traverse can be flown as planned.", watch: "Flyable, with items to watch below.", nogo: "Does not meet every limit. Re-plan before flying." }[worstLvl];
+  const tile = (k, v, u, e) => `<div><small>${k}</small><b>${v}<u>${u}</u></b>${e ? `<em>${e}</em>` : ""}</div>`;
+  const page1 = `
+  <section class="page">
+    <header><img src="img/brand/logo-192.png" alt="AirAwareNetwork logo"><div><b>MARSWALK</b><small>AirAwareNetwork · EVA traverse plan</small></div>
+      <div class="doc"><b>${id}</b><br>Generated ${utc(R.made)} UTC<br>Page 1 of 2</div></header>
+    <h1>${esc(site.label)}</h1>
+    <p class="meta"><b>${ll(site.lat, site.lon)}</b> · ${rover ? "Pressurised crew rover" : "On foot, 2 crew in suits"} · <b>${plan.policy}</b> route policy · departs <b>${utc(r.depart)} UTC</b> · terrain ${esc(site.res)}</p>
+    <div class="verdict v-${worstLvl}"><i>${LV[worstLvl === "go" ? "ok" : worstLvl === "watch" ? "warn" : "bad"][0]}</i>${verdictTxt}</div>
+    <div class="tiles">
+      ${tile("Distance", km(total), "km", `${stops.length - 1} legs`)}
+      ${tile(rover ? "Driving time" : "Walking time", hm(r.time_s), "h:m", `mean ${(total / r.time_s * 3.6).toFixed(2)} km/h`)}
+      ${tile("Total climb", Math.round(r.climb_m), "m", `elevation ${Math.round(Math.min(...s.z))} to ${Math.round(Math.max(...s.z))} m`)}
+      ${tile("Steepest point", r.max_slope.toFixed(1), "°", `limit ${plan.maxSlope}°`)}
+      ${tile("Radiation dose", (r.dose_msv * 1000).toFixed(1), "µSv", `${r.career_pct.toFixed(4)} % of career limit`)}
+      ${tile("Relay contact", r.contact_min, "min", `${r.contacts.filter(c => c.start).length} passes in view`)}
+      ${tile("Longest silence", hm(r.longest_gap_s), "h:m", "no relay link")}
+      ${tile("Worst position error", "±" + Math.round(worstErr), "m", `1σ, at km ${km(R.nav.worst.d)}`)}
+    </div>
+    <div class="two">
+      <figure><canvas id="map" width="900" height="760"></canvas>
+        <figcaption><b>Fig. 1</b> · Planned route over the ${esc(site.kind === "region" ? "Viking MDIM colour mosaic shaded with MOLA relief" : "CTX orthomosaic")}. Colour gives local slope: <span style="color:#1f9d6b">■</span> under 8°, <span style="color:#e0a020">■</span> 8–15°, <span style="color:#d6402f">■</span> over 15°. ◆ satellite position fixes.</figcaption></figure>
+      <div>
+        <h2>Go / no-go</h2>
+        <ul class="checks">${checks.map(([lv, t]) => `<li><span class="tag ${LV[lv][1]}">${LV[lv][0]}</span><span>${t}</span></li>`).join("")}</ul>
+        ${r.warnings.length ? `<h2>Planner warnings</h2><ul class="checks">${r.warnings.map(w => `<li><span class="tag t-warn">NOTE</span><span>${esc(w)}</span></li>`).join("")}</ul>` : ""}
+        <h2>Slope along the route</h2>
+        <svg viewBox="0 0 300 26" style="border:0">${(() => { const m = r.slope_mix; let x = 0; return [["green", "#1f9d6b"], ["yellow", "#e0a020"], ["steep", "#d6402f"]].map(([k, c]) => { const w = m[k] * 3; const o = `<rect x="${x}" y="0" width="${w}" height="12" fill="${c}"/>${w > 26 ? `<text x="${x + 3}" y="23" font-size="9" font-family="IBM Plex Mono" fill="#5d6a80">${m[k].toFixed(1)}%</text>` : ""}`; x += w; return o; }).join(""); })()}</svg>
+        <p class="note">Share of the distance under 8°, 8–15° and over 15°.</p>
+      </div>
+    </div>
+    <figure><svg id="prof" viewBox="0 0 760 170"></svg>
+      <figcaption><b>Fig. 2</b> · Elevation profile against distance, coloured by slope. Dashed lines mark the stops.</figcaption></figure>
+    <footer><span>Marswalk · AirAwareNetwork · NASA Space Apps Challenge 2026</span><span>${id}</span></footer>
+  </section>`;
+
+  // ---------- page 2 ----------
+  const fixes = R.nav.fixes;
+  const passRows = r.contacts.map(c => {
+    const f = fixes.find(x => x.orbiter === c.orbiter && c.start && x.t >= c.start - 120 && x.t <= c.end + 60);
+    return `<tr><td><span style="color:${ORB[c.orbiter] || "#333"}">●</span> ${esc(c.orbiter)}</td><td class="n">${c.start ? hmT(c.start) : "—"}</td><td class="n">${c.end ? hmT(c.end) : "—"}</td><td class="n">${c.minutes}</td><td class="n">${c.blocked_min || 0}</td><td class="n">${c.max_el ? c.max_el.toFixed(1) + "°" : "—"}</td><td class="n">${f ? `±${Math.round(f.before)} → ±5 m` : c.start ? "tracking" : "<span class='tag t-warn'>blocked</span>"}</td></tr>`;
+  }).join("") || `<tr><td colspan="7">No relay satellite rises above 10° during this traverse.</td></tr>`;
+  const stopRows = stops.map(p => `<tr><td><b>${p.tag}</b></td><td>${p.name}</td><td class="n">${km(p.d)}</td><td class="n">${hm(p.t)}</td><td class="n">${hmT(r.depart + p.t)}</td><td class="n">${Math.round(p.z)}</td><td class="n">${p.dwell ? p.dwell + " min" : "—"}</td></tr>`).join("");
+  const A = R.assumptions || {};
+  const page2 = `
+  <section class="page">
+    <header><img src="img/brand/logo-192.png" alt=""><div><b>MARSWALK</b><small>AirAwareNetwork · EVA traverse plan</small></div>
+      <div class="doc"><b>${id}</b><br>${esc(site.label)}<br>Page 2 of 2</div></header>
+    <figure style="margin-top:12px"><svg id="nav" viewBox="0 0 760 190"></svg>
+      <figcaption><b>Fig. 3</b> · Navigation forecast: predicted 1σ position uncertainty along the route, with no GPS. Background shows what keeps track of the crew:
+        <span style="color:#1f9d6b">■</span> habitat radio (range and bearing), <span style="color:#d9930e">■</span> relay satellite overhead, <span style="color:#9aa4b5">■</span> the ${rover ? "rover's odometry" : "suit's step count"} alone. ◆ satellite fixes. Thresholds at 12, 30 and 60 m.</figcaption></figure>
+    <table><caption><b>Table 1</b> · Stops. Times are elapsed from departure and in UTC; elevation is relative to the MOLA datum.</caption>
+      <tr><th>#</th><th>Stop</th><th class="n">km</th><th class="n">Elapsed</th><th class="n">UTC</th><th class="n">Elev. m</th><th class="n">Stay</th></tr>${stopRows}</table>
+    <table style="margin-top:12px"><caption><b>Table 2</b> · Relay passes during the traverse (orbits from NASA JPL Horizons, above 10° elevation, terrain checked minute by minute).</caption>
+      <tr><th>Orbiter</th><th class="n">In view</th><th class="n">Lost</th><th class="n">Min</th><th class="n">Blocked</th><th class="n">Max el.</th><th class="n">Position fix</th></tr>${passRows}</table>
+    <div class="two" style="margin-top:12px">
+      <div><h2>Communications</h2>
+        <p class="note">Earth is <b><span id="lightMin">${R.lightMin ? R.lightMin.toFixed(1) : "…"}</span> light-minutes</b> away one way (NASA JPL Horizons, at generation). A message to Earth leaves only while a relay satellite is in view; replies wait at the orbiter for the next pass. Total link time on this traverse: <b>${r.contact_min} min</b>; longest silence <b>${dur(r.longest_gap_s)}</b>. The habitat radio covers the first <b>${R.nav.habKm.toFixed(2)} km</b> of the route.</p></div>
+      <div><h2>Environment</h2>
+        <p class="note">Sun elevation from <b>${Math.min(...r.sun_el).toFixed(1)}°</b> to <b>${Math.max(...r.sun_el).toFixed(1)}°</b> during the traverse. Surface dose rate on this ground about <b>${r.rad_day_avg.toFixed(3)} mSv/day</b>; traverse dose <b>${(r.dose_msv * 1000).toFixed(1)} µSv</b>.${r.ground_min_c != null ? ` Ground temperature <b>${r.ground_min_c.toFixed(0)} to ${r.ground_max_c.toFixed(0)} °C</b> at the hour the crew passes.` : ""}</p></div>
+    </div>
+    <h2>Methods, data and assumptions</h2>
+    <div class="methods">
+      <p><b>Terrain.</b> ${esc(site.source || "")}. Slope is the steepest step from each cell; cells next to a steep cell count as steep.</p>
+      <p><b>Route.</b> Least-cost path (scikit-image MCP) over ${esc(site.res)} cells. Cell cost = walking time × (1 + slope penalty + 6 × weighted hazards). Weights: slope ${plan.weights.slope ?? "—"}, radiation ${plan.weights.radiation ?? 0}, relay blind spots ${plan.weights.comms ?? 0}, shadow ${plan.weights.shadow ?? 0}, cold ${plan.weights.cold ?? 0}. No-go above ${plan.maxSlope}°.</p>
+      <p><b>Speed.</b> ${rover ? "Rover about 10 km/h on flat ground, slower on slopes up to 20° (assumed)." : "Tobler's hiking function at half pace for a suited astronaut (assumed)."}</p>
+      <p><b>Satellites and Sun.</b> MRO, Mars Odyssey, TGO and Mars Express, and the Sun, from NASA JPL Horizons, minute by minute for this site; terrain horizons in 16 directions decide whether each pass can be heard.</p>
+      <p><b>Navigation.</b> Dead reckoning drifts ${((A.drift_fraction ?? 0.02) * 100).toFixed(1)} % of distance travelled; the habitat mast measures range ±5 m and bearing ±1° while in line of sight; a relay pass of at least 1 min fixes the position to about ±5 m. All three figures are assumptions.</p>
+      <p><b>Radiation.</b> Curiosity RAD, 0.67 mSv/day at Gale under about 22 g/cm² of air, scaled by this ground's air column (MOLA) and open sky. A model; solar particle events are not included.</p>
+    </div>
+    <footer><span>Generated by Marswalk from a live plan · figures are model outputs, not mission-certified</span><span>${id}</span></footer>
+  </section>`;
+  $("doc").innerHTML = page1 + page2;
+  if (!R.lightMin) fetch("/api/comms/config").then(q => q.json()).then(c => { if (c && c.effective_min) $("lightMin").textContent = c.effective_min.toFixed(1); }).catch(() => { $("lightMin").textContent = "4–24"; });
+  $("barTxt").textContent = `${site.label} · ${km(total)} km · ${utc(r.depart)} UTC`;
+  document.title = `Marswalk · ${id}`;
+
+  // ---------- Fig. 1: the map ----------
+  (() => {
+    const cv = $("map"), x = cv.getContext("2d"), W = cv.width, H = cv.height;
+    let x0 = Math.min(...s.x, site.hab[0]), x1 = Math.max(...s.x, site.hab[0]), y0 = Math.min(...s.y, site.hab[1]), y1 = Math.max(...s.y, site.hab[1]);
+    let w = Math.max(x1 - x0, 800) * 1.3, h = Math.max(y1 - y0, 800) * 1.3; const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    if (w / h > W / H) h = w * H / W; else w = h * W / H;
+    x0 = Math.max(0, cx - w / 2); x1 = Math.min(site.w, x0 + w); y0 = Math.max(0, cy - h / 2); y1 = Math.min(site.h, y0 + h);
+    const px = X => (X - x0) / (x1 - x0) * W, py = Y => (1 - (Y - y0) / (y1 - y0)) * H;
+    const img = new Image(); img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const IW = img.naturalWidth, IH = img.naturalHeight;
+      x.drawImage(img, x0 / site.w * IW, (1 - y1 / site.h) * IH, (x1 - x0) / site.w * IW, (y1 - y0) / site.h * IH, 0, 0, W, H);
+      draw();
+    };
+    img.onerror = () => { x.fillStyle = "#c79a76"; x.fillRect(0, 0, W, H); draw(); };
+    img.src = site.basemap;
+    function draw() {
+      x.lineCap = x.lineJoin = "round";
+      x.strokeStyle = "rgba(255,255,255,0.9)"; x.lineWidth = 14; x.beginPath(); s.x.forEach((X, i) => i ? x.lineTo(px(X), py(s.y[i])) : x.moveTo(px(X), py(s.y[i]))); x.stroke();
+      x.lineWidth = 8; for (let i = 1; i < n; i++) { x.strokeStyle = SC(s.slope[i]); x.beginPath(); x.moveTo(px(s.x[i - 1]), py(s.y[i - 1])); x.lineTo(px(s.x[i]), py(s.y[i])); x.stroke(); }
+      fixes.forEach(f => { const X = px(f.x), Y = py(f.y); x.fillStyle = ORB[f.orbiter] || "#d9930e"; x.strokeStyle = "#fff"; x.lineWidth = 2.5; x.beginPath(); x.moveTo(X, Y - 16); x.lineTo(X + 13, Y); x.lineTo(X, Y + 16); x.lineTo(X - 13, Y); x.closePath(); x.fill(); x.stroke(); });
+      stops.forEach(p => { const X = px(p.x), Y = py(p.y), home = p.tag === "H"; x.fillStyle = home ? "#fff" : "#1a66e8"; x.strokeStyle = home ? "#1a66e8" : "#fff"; x.lineWidth = 4; x.beginPath(); x.arc(X, Y, 24, 0, 7); x.fill(); x.stroke(); x.fillStyle = home ? "#1a66e8" : "#fff"; x.font = "800 26px Inter, sans-serif"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(p.tag, X, Y + 1); });
+      // scale bar and north arrow
+      const mpp = (x1 - x0) / W, nice = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000].find(v => v / mpp > 170) || 50000, L = nice / mpp;
+      x.fillStyle = "rgba(255,255,255,0.9)"; x.fillRect(16, H - 74, L + 32, 58); x.fillStyle = "#0b1220"; x.fillRect(32, H - 34, L, 8); x.fillRect(32, H - 42, 3, 16); x.fillRect(32 + L - 3, H - 42, 3, 16);
+      x.font = "600 24px IBM Plex Mono, monospace"; x.textAlign = "left"; x.textBaseline = "alphabetic"; x.fillText(nice >= 1000 ? `${nice / 1000} km` : `${nice} m`, 32, H - 48);
+      x.fillStyle = "rgba(255,255,255,0.9)"; x.beginPath(); x.arc(W - 52, 56, 38, 0, 7); x.fill(); x.fillStyle = "#0b1220"; x.beginPath(); x.moveTo(W - 52, 26); x.lineTo(W - 40, 62); x.lineTo(W - 52, 53); x.lineTo(W - 64, 62); x.closePath(); x.fill(); x.font = "800 20px Inter"; x.textAlign = "center"; x.fillText("N", W - 52, 84);
+    }
+  })();
+
+  // ---------- Fig. 2 and 3: charts ----------
+  const NS = "http://www.w3.org/2000/svg";
+  function axes(svg, W, H, m, xMax, yMin, yMax, yLabel, yTicks) {
+    const X = v => m.l + v / xMax * (W - m.l - m.r), Y = v => H - m.b - (v - yMin) / (yMax - yMin) * (H - m.t - m.b);
+    let g = "";
+    yTicks.forEach(v => { g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6eaf0"/><text x="${m.l - 6}" y="${Y(v) + 3}" font-size="10" text-anchor="end" fill="#5d6a80" font-family="IBM Plex Mono">${v}</text>`; });
+    const step = [0.5, 1, 2, 5, 10, 20].find(v => xMax / 1000 / v <= 10) || 50;
+    for (let k = 0; k <= xMax / 1000 + 1e-9; k += step) g += `<line x1="${X(k * 1000)}" x2="${X(k * 1000)}" y1="${H - m.b}" y2="${H - m.b + 4}" stroke="#5d6a80"/><text x="${X(k * 1000)}" y="${H - m.b + 15}" font-size="10" text-anchor="middle" fill="#5d6a80" font-family="IBM Plex Mono">${+k.toFixed(1)}</text>`;
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}" stroke="#0b1220"/><line x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${H - m.b}" stroke="#0b1220"/>`;
+    g += `<text x="${(W + m.l - m.r) / 2}" y="${H - 3}" font-size="10.5" text-anchor="middle" fill="#2b3445">Distance along route (km)</text><text transform="translate(12 ${(H - m.b + m.t) / 2}) rotate(-90)" font-size="10.5" text-anchor="middle" fill="#2b3445">${yLabel}</text>`;
+    svg.insertAdjacentHTML("beforeend", g); return { X, Y };
+  }
+  const niceTicks = (lo, hi, k = 5) => { const span = hi - lo || 1, raw = span / k, mag = Math.pow(10, Math.floor(Math.log10(raw))), st = [1, 2, 2.5, 5, 10].map(v => v * mag).find(v => span / v <= k) || raw; const out = []; for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9; v += st) out.push(+v.toFixed(6)); return out; };
+  // Fig. 2: elevation
+  (() => {
+    const svg = $("prof"), W = 760, H = 170, m = { l: 56, r: 10, t: 10, b: 30 };
+    let lo = Math.min(...s.z), hi = Math.max(...s.z); const padz = Math.max(20, (hi - lo) * 0.12); lo -= padz; hi += padz;
+    const { X, Y } = axes(svg, W, H, m, total, lo, hi, "Elevation (m)", niceTicks(lo, hi, 4));
+    let g = `<path d="M${X(0)} ${Y(lo)} ${s.d.map((d, i) => `L${X(d).toFixed(1)} ${Y(s.z[i]).toFixed(1)}`).join(" ")} L${X(total)} ${Y(lo)} Z" fill="#eef2f7"/>`;
+    for (let i = 1; i < n; i++) g += `<line x1="${X(s.d[i - 1]).toFixed(1)}" y1="${Y(s.z[i - 1]).toFixed(1)}" x2="${X(s.d[i]).toFixed(1)}" y2="${Y(s.z[i]).toFixed(1)}" stroke="${SC(s.slope[i])}" stroke-width="2.4" stroke-linecap="round"/>`;
+    stops.forEach(p => { g += `<line x1="${X(p.d)}" x2="${X(p.d)}" y1="${m.t}" y2="${H - m.b}" stroke="#0b1220" stroke-dasharray="3 3" opacity=".5"/><text x="${X(p.d) + 3}" y="${m.t + 10}" font-size="10" font-weight="700" fill="#0b1220">${p.tag}</text>`; });
+    svg.insertAdjacentHTML("beforeend", g);
+  })();
+  // Fig. 3: position uncertainty
+  (() => {
+    const svg = $("nav"), W = 760, H = 190, m = { l: 56, r: 10, t: 10, b: 30 };
+    const hi = Math.max(70, Math.ceil(Math.max(...s.err) / 10) * 10 + 10);
+    const { X, Y } = axes(svg, W, H, m, total, 0, hi, "Position uncertainty, 1σ (m)", niceTicks(0, hi, 5));
+    const BG = { hab: "rgba(31,157,107,0.12)", sat: "rgba(217,147,14,0.16)", suit: "rgba(154,164,181,0.12)" };
+    let g = "", a = 0;
+    for (let i = 1; i <= n; i++) if (i === n || s.src[i] !== s.src[a]) { g += `<rect x="${X(s.d[a])}" y="${m.t}" width="${Math.max(0.5, X(s.d[Math.min(i, n - 1)]) - X(s.d[a]))}" height="${H - m.t - m.b}" fill="${BG[s.src[a]] || BG.suit}"/>`; a = i; }
+    [[12, "#1f9d6b"], [30, "#2f7de1"], [60, "#d6402f"]].forEach(([v, c]) => { if (v < hi) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${c}" stroke-dasharray="5 4" opacity=".7"/><text x="${W - m.r - 4}" y="${Y(v) - 3}" font-size="9.5" text-anchor="end" fill="${c}" font-family="IBM Plex Mono">${v} m</text>`; });
+    g += `<path d="${s.d.map((d, i) => `${i ? "L" : "M"}${X(d).toFixed(1)} ${Y(s.err[i]).toFixed(1)}`).join(" ")}" fill="none" stroke="#0b1220" stroke-width="2"/>`;
+    fixes.forEach(f => { const x0 = X(f.d), y0 = Y(f.before); g += `<path d="M${x0} ${y0 - 7} L${x0 + 6} ${y0} L${x0} ${y0 + 7} L${x0 - 6} ${y0} Z" fill="${ORB[f.orbiter] || "#d9930e"}" stroke="#fff" stroke-width="1.5"/>`; });
+    const wv = R.nav.worst; g += `<circle cx="${X(wv.d)}" cy="${Y(wv.err)}" r="4" fill="#d6402f"/><text x="${X(wv.d) + 7}" y="${Y(wv.err) - 5}" font-size="10" fill="#d6402f" font-family="IBM Plex Mono">worst ±${Math.round(wv.err)} m</text>`;
+    svg.insertAdjacentHTML("beforeend", g);
+  })();
+})();
+</script>
+</body>
+</html>
