@@ -295,7 +295,7 @@
     $("reportBtn").hidden = false;
   }
   /* Export report: pack the live plan (route, navigation forecast, site) and open it as a printable page (report.html). */
-  function exportReport() {
+  function exportReport(open = true) {
     const r = S.route; if (!r) return;
     const F = navForecast(r), n = r.x.length, k = Math.max(1, Math.ceil(n / 700)), idx = [];
     for (let i = 0; i < n; i += k) idx.push(i); if (idx.at(-1) !== n - 1) idx.push(n - 1);
@@ -313,9 +313,9 @@
       lightMin: COM.cfg ? COM.cfg.effective_min : null, assumptions: M.assumptions,
     };
     try { localStorage.setItem("mw_report", JSON.stringify(R)); } catch (e) { toast("Could not export", "This browser blocked local storage.", "#F0616B"); return; }
-    window.open("report.html", "_blank");
+    if (open) window.open("report.html", "_blank");
   }
-  $("reportBtn").onclick = exportReport;
+  $("reportBtn").onclick = () => exportReport();
 
   /* ---------- navigation forecast ----------
      Mars has no GPS. Along the planned route this works out, point by point, how well the astronaut will know where they are:
@@ -2432,7 +2432,7 @@
         $("exUndo").onclick = () => { S.stops.pop(); plan(0); sync(); };
         $("exLook").onclick = () => { S.stops.push(lookout()); plan(0); sync(); };
         $("exStart").onclick = () => done(true);
-        $("exReport").onclick = exportReport;
+        $("exReport").onclick = () => exportReport();
         $("exBack").onclick = () => { S.stops = []; plan(0); done(false); };
       });
     }
@@ -2572,7 +2572,7 @@
           for (let i = 0; i < 80 && !S.route; i++) await wait(100);
           if (!S.route) return; setView("3d"); startWalk(); setCam("fp", true); await wait(400);
         }
-        if (!walk.manual) takeControl();
+        if (!walk.manual) takeControl(); setDest("pod");                     // the radio screen calls the habitat, which answers in seconds
         const vx = PITS[1][0] + 600, vy = PITS[1][1] - 1500;                // well out on the floor, so the wall stands in front of you with sky above it
         walk.mx = vx - walk.drift[0]; walk.my = vy - walk.drift[1]; walk.hd = 0.2; walk.rest = [PITS[1], HAB]; walk.ri = 0;
         reroute([vx, vy], walk.rest, "", "#8ab8ff", { soft: true, quiet: true });
@@ -2585,7 +2585,8 @@
         // then the radio card on the right: hold the dot on a quick reply to Earth
         await new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a2 = T3.vrAim("r:q0"), k = Math.min(1, (performance.now() - t0) / 1200);
           h.yaw += (a2[0] - h.yaw) * (0.04 + 0.2 * k); h.pitch += (a2[1] - h.pitch) * (0.04 + 0.2 * k); performance.now() - t0 < 3600 ? setTimeout(st, 16) : res(); }; st(); });
-        await ease([T3.vr.head.yaw, T3.vr.head.pitch], [0, 0.03], 1200);
+        await new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a2 = T3.vrAimRadio(), k = Math.min(1, (performance.now() - t0) / 1200);
+          h.yaw += (a2[0] - h.yaw) * (0.04 + 0.2 * k); h.pitch += (a2[1] - h.pitch) * (0.04 + 0.2 * k); performance.now() - t0 < 6500 ? setTimeout(st, 16) : res(); }; st(); });   // stay on the radio while mission control answers
       },
       async end() { vrDemo(false); T3.vrHold = false; },
       // ---- the short demo: 2 read the ground, 3 plan in 3D, 4 stand there in VR while a satellite fixes you ----
@@ -2636,6 +2637,10 @@
       },
       async radio() {                                                   // the Radio tab and the time bar: passes forecast for this site
         ui(); S.layers.clear(); syncLayers(); setView("2d"); document.body.classList.add("tour-panel"); showPanel(true); openSheet("relay"); map.invalidateSize();
+      },
+      async report() {                                                   // tour: pack the plan for the report window
+        for (let i = 0; i < 60 && !S.route; i++) await wait(100);
+        ui(); setView("2d"); exportReport(false);
       },
       async navplan() {                                                 // plan a trip: the route, its navigation forecast band and chart
         ui(); S.layers.clear(); syncLayers(); setView("2d"); document.body.classList.add("tour-panel"); showPanel(true); openSheet("mission");

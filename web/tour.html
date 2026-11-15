@@ -152,6 +152,9 @@
   /* the short demo: a small player in the corner, so you can pause and read */
   body.short .player { left: auto; right: max(16px, env(safe-area-inset-right)); transform: none; width: min(460px, calc(100vw - 32px)); }
   body.short .player .right { display: none; }
+  .rep { position: fixed; z-index: 17; left: 50%; top: 24px; bottom: 120px; width: min(860px, 92vw); transform: translate(-50%, 16px); border-radius: 18px; overflow: hidden; border: 1px solid var(--line-2); background: #e6e9ef; box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7); opacity: 0; pointer-events: none; transition: opacity 0.5s, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .rep.on { opacity: 1; transform: translate(-50%, 0); }
+  .rep iframe { width: 100%; height: 100%; border: 0; }
   /* the short demo's last chapter: mission control in a window, answering the astronaut */
   .pip { position: fixed; z-index: 18; right: 24px; top: 24px; width: min(440px, 40vw); aspect-ratio: 16 / 11; border-radius: 18px; overflow: hidden; border: 1px solid var(--line-2); background: #04060a; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04); opacity: 0; transform: translateY(-12px) scale(0.98); transition: opacity 0.5s, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
   .pip.on { opacity: 1; transform: none; }
@@ -236,31 +239,32 @@
   ];
   // page, scene (and its argument), seconds on screen, what to say, how we made it; 'pre' = scenes that rebuild the state a chapter needs when you jump straight to it
   const CH = [
-    { a: 0, page: "home", act: "top", t: 7, title: "Marswalk", sub: "A route planner for walking on Mars, and a Mars you can stand on. Two ways in: Plan a trip, or Experience Mars.", how: "Built by AirAwareNetwork for the NASA Space Apps Challenge 2026." },
-    { a: 0, page: "home", act: "#nogps", t: 6.5, title: "There is no GPS on Mars", sub: "So how do you plan a safe walk, and know where you are? We worked it out by hand in QGIS first, then rebuilt every step in Python. It comes down to three parts." },
-    { a: 0, page: "home", home: "lay", t: 8, title: "1 · The layers", sub: "Eight maps of the ground, each from real NASA data: elevation, slope, radiation, satellite cover, the habitat's radio, sunlight, temperature, and what the planner sees." },
-    { a: 0, page: "home", home: "rou", t: 12, title: "2 · How the route is chosen", sub: "The map is cut into 20 m squares. Each square gets a score: flat and safe is low, steep or risky is high. Watch the score climb as the ground gets steeper. The planner takes the path with the lowest total, so it bends around hills." },
-    { a: 0, page: "home", home: "nav", t: 14, title: "3 · How the astronaut is found", sub: "Two things take turns. The habitat's radio finds the astronaut while it can see them. The moment a hill gets in the way, a satellite overhead takes over, and the habitat takes back over on the way home." },
-    { a: 0, page: "globe", t: 7, title: "Pick anywhere on Mars", sub: "The globe marks landing sites and landmarks. Click any other point and the server builds a 178 km site from NASA terrain in about a minute.", how: "Global MOLA elevation (463 m) and a colour mosaic from NASA Mars Trek; sites built on demand by our Python pipeline." },
-    { a: 1, page: "lab", scene: "layer", arg: null, t: 7, title: "Jezero crater, in detail", sub: "Perseverance's landing site, at walking resolution: 20 m terrain and a 6 m photo mosaic from the CTX camera, slopes from HiRISE 1 m where it exists.", how: "Started in QGIS: clipped, reprojected and checked the USGS rasters, then our Python pipeline turned them into map layers." },
-    { a: 1, page: "lab", scene: "layer", arg: "slope", t: 6.5, title: "Slope", sub: "How steep the ground is at every spot. Green is an easy walk; red is too steep for a suited astronaut.", how: "NumPy gradient of the elevation model · HiRISE 1 m drives the hazard where it covers." },
-    { a: 1, page: "lab", scene: "layer", arg: "radiation", t: 7.5, title: "Radiation dose", sub: "Curiosity's RAD instrument measured 0.67 mSv a day at Gale crater. We scale that by how much air is above each spot and how much sky the terrain leaves open.", how: "MOLA elevation → air column (scale height assumed) · horizon map → open sky. A model, and labelled as one." },
-    { a: 1, page: "lab", scene: "layer", arg: "heat", t: 7, title: "Ground temperature", sub: "Predicted for the hour you walk. Cold ground drains a suit's heaters, so the planner can steer round it.", how: "THEMIS night infrared + TES albedo → thermal inertia → a ground heat model driven by the real Sun." },
-    { a: 1, page: "lab", scene: "layer", arg: "sun", t: 6.5, title: "Sunlight and shadow", sub: "Where the Sun is up and where hills and crater walls throw shadow, at the time on the clock.", how: "Sun position from NASA JPL Horizons · shadow from horizon angles in 16 directions." },
-    { a: 1, page: "lab", scene: "layer", arg: "comms", t: 7, title: "Relay obstruction", sub: "Where the terrain blocks the view to the relay orbiters. A satellite can be overhead and still not hear you from the bottom of a crater.", how: "For every cell, the horizon in 16 directions compared with each orbiter's real elevation." },
-    { a: 1, page: "lab", scene: "layer", arg: "hab", t: 7, title: "Habitat radio", sub: "Where the habitat's own radio reaches: line of sight from an 8 m mast to a 1.8 m suit antenna, over the terrain and the curve of Mars.", how: "8,192 rays cast from the mast across the elevation model (antenna heights assumed)." },
-    { a: 1, page: "lab", scene: "layer", arg: "cost", t: 7.5, title: "Traversal cost", sub: "What the planner actually minimises: walking time, raised by slope, radiation, poor radio cover, darkness and cold, weighted by the route policy you choose.", how: "Tobler's hiking speed at half pace for a suit · SciPy least-cost path search." },
-    { a: 2, page: "lab", pipe: true, t: 11, title: "From raw rasters to a live planner", sub: "Every layer you just saw comes out of one pipeline, and the planner answers in under a second." },
-    { a: 2, page: "lab", scene: "radio", t: 8, title: "Satellites, forecast", sub: "We ask NASA JPL Horizons where MRO, Mars Odyssey, TGO and Mars Express will be, minute by minute, days ahead. Every pass above 10° is kept with its range and Doppler; the Radio tab lists them.", right: true, how: "Horizons API → PostgreSQL (a saved copy keeps it running offline) · terrain checked for every pass minute." },
-    { a: 3, page: "pav", scene: "aerial", t: 6.5, title: "Somewhere new: Pavonis Mons", sub: "The summit of a 14 km high volcano, built from MOLA on the fly." },
-    { a: 3, page: "pav", scene: "pits", t: 6, title: "Two calderas, side by side", sub: "A wide shallow one, and a pit about 3 km deeper. The habitat stands on the rim between them." },
-    { a: 3, page: "pav", scene: "plan", t: 7, title: "Plan the route", sub: "Tap the stops. The Safest policy stays off the 30° wall (red) and finds the long, gentle way down to the floor." },
-    { a: 3, page: "pav", scene: "navplan", pre: ["plan"], right: true, t: 9, title: "The navigation forecast", sub: "Before anyone leaves: how sure the position will be along the route. Green near the habitat and at each satellite fix; amber and red where the suit's own estimate has drifted." },
-    { a: 4, page: "pav", scene: "walk", pre: ["plan"], t: 9, title: "Walk the route in 3D", sub: "The same route, now on the real ground at true size. The astronaut follows the planned path, step by step. Out here, away from the habitat, the suit has to guess where it is, and the guess slowly drifts." },
-    { a: 4, page: "pav", scene: "sat", pre: ["plan", "walk"], t: 11, title: "A satellite finds the astronaut", sub: "A real relay satellite rises overhead. The yellow line is its radio link to the astronaut. From it we measure where they really are, correct the drift, and re-plan the rest of the route." },
-    { a: 4, page: "pav", scene: "rover", t: 9, title: "Or drive the crew rover", sub: "For longer trips: a pressurised rover at about 10 km/h on flat ground. The route is planned for the rover, up to 20° slopes (assumed), and the crew step out through the suitports at each stop." },
-    { a: 4, page: "pav", scene: "explore", t: 8, title: "Experience Mars", sub: "First person at real speed: walk with W A S D or the on-screen stick, look around, and jump in 38 % of Earth's gravity." },
-    { a: 4, page: "pav", scene: "vr", pre: ["explore"], pos: "bc", t: 14, title: "And in VR", sub: "Put a phone in a headset and walk where you look. Two screens float beside you: on the left, where you are and what to do; on the right, the radio. Hold the dot on a button for 2 seconds to press it, here a message to Earth." },
+    { a: 0, page: "home", act: "top", t: 7, say: [[0.3, "This is Marswalk: a route planner for walking on Mars, and a Mars you can stand on."]], title: "Marswalk", sub: "A route planner for walking on Mars, and a Mars you can stand on. Two ways in: Plan a trip, or Experience Mars.", how: "Built by AirAwareNetwork for the NASA Space Apps Challenge 2026." },
+    { a: 0, page: "home", act: "#nogps", t: 6.5, say: [[0.2, "There is no GPS on Mars. So how do you plan a safe walk, and know where you are? It comes down to three parts."]], title: "There is no GPS on Mars", sub: "So how do you plan a safe walk, and know where you are? We worked it out by hand in QGIS first, then rebuilt every step in Python. It comes down to three parts." },
+    { a: 0, page: "home", home: "lay", t: 8, say: [[0.6, "First, the layers: eight maps of the ground, each from real NASA data."]], title: "1 · The layers", sub: "Eight maps of the ground, each from real NASA data: elevation, slope, radiation, satellite cover, the habitat's radio, sunlight, temperature, and what the planner sees." },
+    { a: 0, page: "home", home: "rou", t: 12, say: [[0.6, "Second, the route. The map is cut into twenty metre squares, and each one gets a score."], [6.5, "Watch it climb as the ground gets steeper. The planner takes the path with the lowest total."]], title: "2 · How the route is chosen", sub: "The map is cut into 20 m squares. Each square gets a score: flat and safe is low, steep or risky is high. Watch the score climb as the ground gets steeper. The planner takes the path with the lowest total, so it bends around hills." },
+    { a: 0, page: "home", home: "nav", t: 14, say: [[0.6, "Third, navigation. The habitat’s radio finds the astronaut while it can see them."], [6.5, "When a hill gets in the way, a satellite overhead takes over, and the habitat takes back over on the way home."]], title: "3 · How the astronaut is found", sub: "Two things take turns. The habitat's radio finds the astronaut while it can see them. The moment a hill gets in the way, a satellite overhead takes over, and the habitat takes back over on the way home." },
+    { a: 0, page: "globe", t: 7, say: [[0.2, "Pick anywhere on Mars. The server builds a new site from NASA terrain in about a minute."]], title: "Pick anywhere on Mars", sub: "The globe marks landing sites and landmarks. Click any other point and the server builds a 178 km site from NASA terrain in about a minute.", how: "Global MOLA elevation (463 m) and a colour mosaic from NASA Mars Trek; sites built on demand by our Python pipeline." },
+    { a: 1, page: "lab", scene: "layer", arg: null, t: 7, say: [[0.2, "Jezero crater, where Perseverance landed, mapped at walking resolution."]], title: "Jezero crater, in detail", sub: "Perseverance's landing site, at walking resolution: 20 m terrain and a 6 m photo mosaic from the CTX camera, slopes from HiRISE 1 m where it exists.", how: "Started in QGIS: clipped, reprojected and checked the USGS rasters, then our Python pipeline turned them into map layers." },
+    { a: 1, page: "lab", scene: "layer", arg: "slope", t: 6.5, say: [[0.1, "Slope. Green is an easy walk. Red is too steep for a spacesuit."]], title: "Slope", sub: "How steep the ground is at every spot. Green is an easy walk; red is too steep for a suited astronaut.", how: "NumPy gradient of the elevation model · HiRISE 1 m drives the hazard where it covers." },
+    { a: 1, page: "lab", scene: "layer", arg: "radiation", t: 7.5, say: [[0.1, "Radiation, from Curiosity’s measured dose, scaled by the air above and the open sky."]], title: "Radiation dose", sub: "Curiosity's RAD instrument measured 0.67 mSv a day at Gale crater. We scale that by how much air is above each spot and how much sky the terrain leaves open.", how: "MOLA elevation → air column (scale height assumed) · horizon map → open sky. A model, and labelled as one." },
+    { a: 1, page: "lab", scene: "layer", arg: "heat", t: 7, say: [[0.1, "Ground temperature, for the hour you walk. Cold ground drains a suit’s heaters."]], title: "Ground temperature", sub: "Predicted for the hour you walk. Cold ground drains a suit's heaters, so the planner can steer round it.", how: "THEMIS night infrared + TES albedo → thermal inertia → a ground heat model driven by the real Sun." },
+    { a: 1, page: "lab", scene: "layer", arg: "sun", t: 6.5, say: [[0.1, "Sunlight and shadow, from the real position of the Sun."]], title: "Sunlight and shadow", sub: "Where the Sun is up and where hills and crater walls throw shadow, at the time on the clock.", how: "Sun position from NASA JPL Horizons · shadow from horizon angles in 16 directions." },
+    { a: 1, page: "lab", scene: "layer", arg: "comms", t: 7, say: [[0.1, "Where crater walls hide the sky, a satellite can be overhead and still not hear you."]], title: "Relay obstruction", sub: "Where the terrain blocks the view to the relay orbiters. A satellite can be overhead and still not hear you from the bottom of a crater.", how: "For every cell, the horizon in 16 directions compared with each orbiter's real elevation." },
+    { a: 1, page: "lab", scene: "layer", arg: "hab", t: 7, say: [[0.1, "And where the habitat’s own radio can reach the crew."]], title: "Habitat radio", sub: "Where the habitat's own radio reaches: line of sight from an 8 m mast to a 1.8 m suit antenna, over the terrain and the curve of Mars.", how: "8,192 rays cast from the mast across the elevation model (antenna heights assumed)." },
+    { a: 1, page: "lab", scene: "layer", arg: "cost", t: 7.5, say: [[0.1, "All of it adds up to one cost map: what the planner actually avoids."]], title: "Traversal cost", sub: "What the planner actually minimises: walking time, raised by slope, radiation, poor radio cover, darkness and cold, weighted by the route policy you choose.", how: "Tobler's hiking speed at half pace for a suit · SciPy least-cost path search." },
+    { a: 2, page: "lab", pipe: true, t: 11, say: [[0.3, "Every layer comes from one pipeline: from QGIS and NASA rasters, to Python, to a planner that answers in under a second."]], title: "From raw rasters to a live planner", sub: "Every layer you just saw comes out of one pipeline, and the planner answers in under a second." },
+    { a: 2, page: "lab", scene: "radio", t: 8, say: [[0.2, "We forecast the real relay satellites from NASA JPL Horizons, minute by minute, days ahead."]], title: "Satellites, forecast", sub: "We ask NASA JPL Horizons where MRO, Mars Odyssey, TGO and Mars Express will be, minute by minute, days ahead. Every pass above 10° is kept with its range and Doppler; the Radio tab lists them.", right: true, how: "Horizons API → PostgreSQL (a saved copy keeps it running offline) · terrain checked for every pass minute." },
+    { a: 3, page: "pav", scene: "aerial", t: 6.5, say: [[0.2, "Somewhere new: the summit of Pavonis Mons, a fourteen kilometre high volcano."]], title: "Somewhere new: Pavonis Mons", sub: "The summit of a 14 km high volcano, built from MOLA on the fly." },
+    { a: 3, page: "pav", scene: "pits", t: 6, say: [[0.1, "Two calderas, side by side. One is three kilometres deeper."]], title: "Two calderas, side by side", sub: "A wide shallow one, and a pit about 3 km deeper. The habitat stands on the rim between them." },
+    { a: 3, page: "pav", scene: "plan", t: 7, say: [[0.2, "Tap the stops. The safest route stays off the steep red wall and finds the gentle way down."]], title: "Plan the route", sub: "Tap the stops. The Safest policy stays off the 30° wall (red) and finds the long, gentle way down to the floor." },
+    { a: 3, page: "pav", scene: "navplan", pre: ["plan"], right: true, t: 9, say: [[0.2, "Before anyone leaves, Marswalk forecasts how sure the position will be, all along the route."]], title: "The navigation forecast", sub: "Before anyone leaves: how sure the position will be along the route. Green near the habitat and at each satellite fix; amber and red where the suit's own estimate has drifted." },
+    { a: 3, page: "pav", scene: "report", report: true, pos: "bl", pre: ["plan"], t: 10, say: [[0.4, "Every plan exports a mission report: the map, the profile, the satellite passes, and a go or no-go check, with the numbers behind each one."]], title: "The mission report", sub: "Every plan exports a two-page PDF: map, elevation profile, satellite passes, navigation forecast and a go / no-go check, with the numbers behind each one." },
+    { a: 4, page: "pav", scene: "walk", pre: ["plan"], t: 9, say: [[0.3, "Now walk it, on the real ground at true size. Away from home, the suit’s position estimate slowly drifts."]], title: "Walk the route in 3D", sub: "The same route, now on the real ground at true size. The astronaut follows the planned path, step by step. Out here, away from the habitat, the suit has to guess where it is, and the guess slowly drifts." },
+    { a: 4, page: "pav", scene: "sat", pre: ["plan", "walk"], t: 11, say: [[0.4, "A real relay satellite rises overhead, measures where the astronaut really is, and the route is re-planned."]], title: "A satellite finds the astronaut", sub: "A real relay satellite rises overhead. The yellow line is its radio link to the astronaut. From it we measure where they really are, correct the drift, and re-plan the rest of the route." },
+    { a: 4, page: "pav", scene: "rover", t: 9, say: [[0.3, "For longer trips, take the pressurised crew rover, on a route planned for its wheels."]], title: "Or drive the crew rover", sub: "For longer trips: a pressurised rover at about 10 km/h on flat ground. The route is planned for the rover, up to 20° slopes (assumed), and the crew step out through the suitports at each stop." },
+    { a: 4, page: "pav", scene: "explore", t: 8, say: [[0.2, "Or just step outside: walk, look around, and jump in a third of Earth’s gravity."]], title: "Experience Mars", sub: "First person at real speed: walk with W A S D or the on-screen stick, look around, and jump in 38 % of Earth's gravity." },
+    { a: 4, page: "pav", scene: "vr", pre: ["explore"], pip: true, pos: "bc", t: 18, say: [[0.3, "And in VR. Walk where you look, with two screens beside you."], [7.5, "Hold the dot on the radio to call the habitat."], [11.5, "And mission control answers."], [15, "Marswalk. Walk Mars, before anyone does."]], title: "And in VR", sub: "Put a phone in a headset and walk where you look. Two screens float beside you: on the left, where you are and what to do; on the right, the radio. Hold the dot on a button for 2 seconds to press it, here a message to Earth." },
   ];
   // ?short=1: the 30-second demo for the Space Apps form. One place, one load, one story: map, navigation, 3D, satellite fix, VR.
   const SHORT = new URLSearchParams(location.search).has("short");
@@ -327,8 +331,9 @@
     if (c.page === "home" && w && c.home) homeCard(w, c.home, tok);
     else if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.getBoundingClientRect().top + w.scrollY - 76 : 0, behavior: "smooth" }); }
     if (c.scene) send(c.scene, c.arg);
-    if (SHORT) narrate(c, tok);
+    narrate(c, tok);
     if ($("pip")) { $("pip").classList.remove("on"); if (c.pip) pipTalk(tok); }
+    $("rep").classList.remove("on"); if (c.report) showReport(tok);
     if (c.globe && w && w.GLOBE) w.GLOBE.pick(c.globe);
     if (c.globeDo && w && w.GLOBE) w.GLOBE[c.globeDo]();
     if (c.pipe) { $("pipe").classList.add("on"); document.querySelectorAll(".node").forEach((n, k) => setTimeout(() => { if (tok === T.token) n.classList.add("on"); }, 300 + k * 1500)); }
@@ -368,11 +373,24 @@
     VO.left = c.say.length;
     c.say.forEach(([at, text]) => VO.timers.push(setTimeout(() => { VO.left = Math.max(0, VO.left - 1); if (tok === T.token && T.playing) say(text); }, at * 1000)));
   }
+  // ---------- the mission report, in a window over the tour ----------
+  async function showReport(tok) {
+    const f = $("repf"); await wait(1200); if (tok !== T.token) return;
+    f.src = "report.html?t=" + Date.now();
+    await new Promise(r => { f.onload = r; setTimeout(r, 4000); }); if (tok !== T.token) return;
+    $("rep").classList.add("on");
+    let w = null; try { w = f.contentWindow; w.document.documentElement.style.scrollBehavior = "auto"; } catch (e) { return; }
+    await wait(2600); const t0 = performance.now(), D = 5200, end = Math.min(w.document.body.scrollHeight - w.innerHeight, w.innerHeight * 1.55);
+    const st = () => { if (tok !== T.token) return; const k = Math.min(1, (performance.now() - t0) / D), e = k * k * (3 - 2 * k); w.scrollTo(0, end * e); if (k < 1) requestAnimationFrame(st); };
+    st();
+  }
   // ---------- short demo: mission control opens when the astronaut calls, and answers ----------
   async function pipTalk(tok) {
     const ctl = $("ctl"); let d = null; try { d = ctl.contentDocument; } catch (e) { return; }
     if (!d) return;
-    try { await fetch("/api/comms/clear", { method: "POST" }); } catch (e) { /* fine */ }
+    const clr = d.getElementById("clearBtn");                                        // start from an empty feed, in the station's own view too
+    if (clr) clr.click(); else { try { await fetch("/api/comms/clear", { method: "POST" }); } catch (e) { /* fine */ } }
+    await wait(1200); if (tok !== T.token) return;
     const pod = d.querySelector('[data-r="pod"]'); if (pod && pod.getAttribute("aria-pressed") !== "true") pod.click();
     // wait for the astronaut's message to reach the station, then show the window
     for (let i = 0; i < 200; i++) { await wait(100); if (tok !== T.token) return; if (d.querySelector("#feed .card")) break; }
@@ -448,6 +466,10 @@
     }
   }
   setInterval(tick, 50);
+  // mission control (habitat station) for the VR chapter, and a window for the mission report
+  document.body.insertAdjacentHTML("beforeend", '<div class="pip" id="pip" aria-hidden="true"><header><i></i>Mission control · Habitat station</header><iframe id="ctl" title="Mission control" tabindex="-1"></iframe></div><div class="rep" id="rep" aria-hidden="true"><iframe id="repf" title="Mission report" tabindex="-1"></iframe></div>');
+  try { localStorage.setItem("mw_role", "pod"); } catch (e) { /* fine */ }
+  $("ctl").src = "control.html?t=" + Date.now();
   function begin(i = 0) { $("start").hidden = true; $("player").hidden = false; setPlaying(true); show(i, i !== 0 && !SHORT); }
   if (SHORT) {
     document.title = "Marswalk · short demo"; document.body.classList.add("short");
@@ -456,23 +478,20 @@
     $("acts").hidden = true; $("end").querySelector("h2").textContent = "Marswalk";
     const pb = $("play"); pb.disabled = true; pb.lastChild.textContent = "Loading Pavonis Mons…"; pb.style.opacity = 0.6;
     document.querySelector(".startrow span").textContent = "About 50 seconds · pause any time with the button or Space · F11 for full screen · voice-over is text-to-speech; built with help from AI assistants (Claude and Gemini)";
-    const vb = document.createElement("button"); vb.type = "button"; vb.className = "ghost"; vb.id = "voBtn"; vb.style.cursor = "pointer"; vb.style.background = "transparent"; vb.style.font = "inherit"; vb.style.fontWeight = "600";
-    const vlab = () => { vb.textContent = VO.on ? "Voice-over: on" : "Voice-over: off"; vb.setAttribute("aria-pressed", String(VO.on)); };
-    vb.onclick = () => { VO.on = !VO.on; try { localStorage.setItem("mw_vo", VO.on ? "1" : "0"); } catch (e) { /* fine */ } vlab(); if (VO.on) say("Voice-over on."); else hush(); };
-    vlab(); $("play").after(vb);
+
     // load both places before Play: the globe in the main frame, the site in a second one behind it
     const f2 = frame.cloneNode(); f2.id = "scene2"; f2.style.visibility = "hidden"; frame.after(f2);
     FR.globe = frame; FR.pav = f2;
-    // mission control, in a window for the last chapter: the habitat station, which hears the astronaut in about a second
-    document.body.insertAdjacentHTML("beforeend", '<div class="pip" id="pip" aria-hidden="true"><header><i></i>Mission control · Habitat station</header><iframe id="ctl" title="Mission control" tabindex="-1"></iframe></div>');
-    try { localStorage.setItem("mw_role", "pod"); } catch (e) { /* fine */ }
-    $("ctl").src = "control.html?t=" + Date.now();
     (async () => {
       frame = FR.pav; await load("pav"); FR.pav.style.visibility = "hidden";
       frame = FR.globe; await load("globe"); try { FR.globe.contentWindow.GLOBE.lit(); } catch (e) { /* fine */ }
       $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (50 s)";
     })();
   }
+  { const vb = document.createElement("button"); vb.type = "button"; vb.className = "ghost"; vb.id = "voBtn"; vb.style.cursor = "pointer"; vb.style.background = "transparent"; vb.style.font = "inherit"; vb.style.fontWeight = "600";
+    const vlab = () => { vb.textContent = VO.on ? "Voice-over: on" : "Voice-over: off"; vb.setAttribute("aria-pressed", String(VO.on)); };
+    vb.onclick = () => { VO.on = !VO.on; try { localStorage.setItem("mw_vo", VO.on ? "1" : "0"); } catch (e) { /* fine */ } vlab(); if (VO.on) say("Voice-over on."); else hush(); };
+    vlab(); $("play").after(vb); }
   $("play").onclick = () => begin(0);
   document.querySelectorAll(".act").forEach(b => b.onclick = () => begin(CH.findIndex(c => c.a === +b.dataset.a)));
   $("pp").onclick = () => setPlaying(!T.playing);
