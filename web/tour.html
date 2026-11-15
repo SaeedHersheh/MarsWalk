@@ -455,7 +455,7 @@
     document.querySelector(".start .lede").textContent = "The short demo: explore Mars, choose a place, read its ground, plan the route, drive it in the rover, then walk it in VR while a satellite finds you and mission control answers your call.";
     $("acts").hidden = true; $("end").querySelector("h2").textContent = "Marswalk";
     const pb = $("play"); pb.disabled = true; pb.lastChild.textContent = "Loading Pavonis Mons…"; pb.style.opacity = 0.6;
-    document.querySelector(".startrow span").textContent = "About 50 seconds · pause any time with the button or Space · F11 for full screen";
+    document.querySelector(".startrow span").textContent = "About 50 seconds · pause any time with the button or Space · F11 for full screen · voice-over is text-to-speech; built with help from AI assistants (Claude and Gemini)";
     const vb = document.createElement("button"); vb.type = "button"; vb.className = "ghost"; vb.id = "voBtn"; vb.style.cursor = "pointer"; vb.style.background = "transparent"; vb.style.font = "inherit"; vb.style.fontWeight = "600";
     const vlab = () => { vb.textContent = VO.on ? "Voice-over: on" : "Voice-over: off"; vb.setAttribute("aria-pressed", String(VO.on)); };
     vb.onclick = () => { VO.on = !VO.on; try { localStorage.setItem("mw_vo", VO.on ? "1" : "0"); } catch (e) { /* fine */ } vlab(); if (VO.on) say("Voice-over on."); else hush(); };
