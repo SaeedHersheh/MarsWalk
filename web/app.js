@@ -1609,6 +1609,7 @@
     // tour: the head angles (yaw, pitch) that put the dot on a card button
     T3.vrAimDir = dir => { const d = dir.clone().normalize().applyQuaternion(qY.clone().invert()); return [Math.atan2(-d.x, -d.z), Math.asin(Math.max(-1, Math.min(1, d.y)))]; };
     T3.vrAimCard = () => { vrHud.updateMatrixWorld(); const d = new THREE.Vector3(0, 0.18, 0).applyMatrix4(vrHud.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert()); return [Math.atan2(-d.x, -d.z), Math.asin(d.y)]; };
+    T3.vrAimRadio = () => { vrRad.updateMatrixWorld(); const d = new THREE.Vector3(0, 0.12, 0).applyMatrix4(vrRad.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert()); return [Math.atan2(-d.x, -d.z), Math.asin(d.y)]; };
     T3.vrAim = id => {
       const r = id.startsWith("r:"), b = (r ? RAD_BTNS : VR_BTNS).find(v => v.id === id), card = r ? vrRad : vrHud; card.updateMatrixWorld();
       const d = new THREE.Vector3(((b.x + b.w / 2) / hudC.width - 0.5) * 1.05, (0.5 - (b.y + b.h / 2) / hudC.height) * 0.90125, 0).applyMatrix4(card.matrixWorld).sub(cam.position).normalize().applyQuaternion(qY.clone().invert());
@@ -2571,12 +2572,21 @@
         for (const n of ["slope", "radiation", "comms", "hab"]) { S.layers.clear(); S.layers.add(n); S.opacity = 0.8; syncLayers(); await wait(1950); }
       },
       async plan3d() {
-        ui(); S.layers.clear(); S.layers.add("slope"); S.opacity = 0.55; syncLayers();
+        ui(); if (S.vehicle === "rover") { if (walk.on) endWalk(); setVehicle("foot", false); }   // after the drive: plan the walk
+        S.layers.clear(); S.layers.add("slope"); S.opacity = 0.55; syncLayers();
         setView("3d"); setCam("free", true); T3.api.flyTo(HAB[0] + 2000, HAB[1] - 7000, 34000, 19000, 10, 2.5); T3.tourOrbit = 0.035;
         S.stops = []; plan(0); await wait(700); S.stops = [PITS[0]]; plan(0); await wait(1700); S.stops = [PITS[0], PITS[1]]; plan(0);
       },
+      async drive() {                                                   // the short demo: the crew rover leaves the habitat for the first stop
+        ui(); T3.tourOrbit = 0; S.layers.clear(); syncLayers(); if (walk.on) endWalk();
+        setVehicle("rover", false); S.stops = [PITS[0]]; plan(0);
+        for (let i = 0; i < 60 && !(S.route && S.route.vehicle === "rover"); i++) await wait(100);
+        setView("3d"); tourSpeed(6); startWalk(); setCam("follow", true); T3.chaseK = 0.5;
+      },
       async vrsat() {
         ui(); T3.tourOrbit = 0; S.layers.clear(); syncLayers();
+        if (S.vehicle === "rover") { if (walk.on) endWalk(); setVehicle("foot", false); S.stops = [PITS[0], PITS[1]]; plan(0); for (let i = 0; i < 60 && !(S.route && S.route.vehicle === "foot"); i++) await wait(100); }
+        setDest("pod");                                                  // the radio screen talks to the habitat: it answers in seconds
         for (let i = 0; i < 60 && !(S.route && S.route.stop_idx.length >= 3); i++) await wait(100);
         setView("3d"); if (!walk.on) startWalk(); if (!walk.manual) takeControl();
         const vx = PITS[1][0] + 600, vy = PITS[1][1] - 1500;                    // out on the floor of the deep caldera
@@ -2587,9 +2597,10 @@
         for (let n = 0; n < 8; n++) { const np = DB.passes.find(q => q.start > walk.simT + 20); if (!np || np.orbiter !== "Mars Express") break; walk.simT += np.end + 30 - walk.simT; }
         skipToPass(); vrDemo(true); await wait(500);
         const track = (fn, ms) => new Promise(res => { const t0 = performance.now(), st = () => { const h = T3.vr && T3.vr.head; if (!h) return res(); const a = fn(); if (a) { const k = Math.min(1, (performance.now() - t0) / 700); h.yaw += (a[0] - h.yaw) * (0.05 + 0.25 * k); h.pitch += (a[1] - h.pitch) * (0.05 + 0.25 * k); } performance.now() - t0 < ms ? setTimeout(st, 16) : res(); }; st(); });
-        await track(() => T3.satDir ? T3.vrAimDir(T3.satDir) : [0.2, 0.5], 4600);          // look up: the satellite crossing the sky, the radio link drawn to it
-        await track(() => T3.vrAimCard(), 3000);                                            // then the card: what the satellite found
-        await track(() => T3.vrAim("r:q0"), 2700);                                          // then the radio on the right: hold the dot on a quick reply to Earth
+        await track(() => T3.satDir ? T3.vrAimDir(T3.satDir) : [0.2, 0.5], 3000);          // look up: the satellite crossing the sky, the radio link drawn to it
+        await track(() => T3.vrAimCard(), 2200);                                            // then the card: what the satellite found
+        await track(() => T3.vrAim("r:q0"), 3800);                                          // then the radio on the right: hold the dot on a quick reply to the habitat
+        await track(() => T3.vrAimRadio(), 6000);                                           // and stay on the radio screen while mission control answers
       },
       async walksat() { await SCENES.walk(); await wait(1600); await SCENES.sat(); },      // the 30-second cut: walk, then a relay pass fixes the position
       // ---- chapters for the full tour (tour.html) ----

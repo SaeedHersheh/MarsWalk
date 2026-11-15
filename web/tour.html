@@ -152,6 +152,13 @@
   /* the short demo: a small player in the corner, so you can pause and read */
   body.short .player { left: auto; right: max(16px, env(safe-area-inset-right)); transform: none; width: min(460px, calc(100vw - 32px)); }
   body.short .player .right { display: none; }
+  /* the short demo's last chapter: mission control in a window, answering the astronaut */
+  .pip { position: fixed; z-index: 18; right: 24px; top: 24px; width: min(440px, 40vw); aspect-ratio: 16 / 11; border-radius: 18px; overflow: hidden; border: 1px solid var(--line-2); background: #04060a; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04); opacity: 0; transform: translateY(-12px) scale(0.98); transition: opacity 0.5s, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); pointer-events: none; }
+  .pip.on { opacity: 1; transform: none; }
+  .pip header { position: absolute; z-index: 2; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: rgba(4, 6, 10, 0.92); border-bottom: 1px solid var(--line); font: 600 12px var(--f-mono, monospace); letter-spacing: 0.1em; text-transform: uppercase; color: #8ab8ff; }
+  .pip header i { width: 8px; height: 8px; border-radius: 50%; background: #3ddc97; box-shadow: 0 0 10px #3ddc97; animation: pipb 1.4s ease-in-out infinite; }
+  @keyframes pipb { 50% { opacity: 0.35; } }
+  .pip iframe { position: absolute; left: 0; top: 34px; width: 200%; height: calc(200% - 68px); border: 0; transform: scale(0.5); transform-origin: 0 0; }
   @media (prefers-reduced-motion: reduce) { .cap, .node, .pipe, .end, .loading { transition: none; } .pipe.on .flow .pulse { animation: none; } }
 </style>
 </head>
@@ -260,13 +267,13 @@
   if (SHORT) {
     ACTS.splice(0, ACTS.length, { name: "Marswalk", c: "#ff9a6b" });
     CH.splice(0, CH.length,
-      { a: 0, page: "globe", globeDo: "layers", t: 5, title: "1 · Explore the planet", sub: "Marswalk is an expedition planner for Mars. On the globe, layers show NASA data for the whole planet: elevation, then radiation." },
-      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 4.5, title: "2 · Choose where to go", sub: "Turn to any place and pick it. Here: the twin calderas on top of Pavonis Mons." },
-      { a: 0, page: "pav", scene: "layer", arg: "slope", t: 5, title: "3 · Read the ground: slope", sub: "How steep every spot is. Green is an easy walk, red is too steep for a spacesuit.", how: "From NASA's MOLA elevation: the steepest step in each cell." },
-      { a: 0, page: "pav", scene: "layer", arg: "radiation", t: 5, title: "Radiation", sub: "The daily dose on open ground. High ground has less air above it, so it gets more.", how: "Curiosity's measured 0.67 mSv a day, scaled by the air column and the open sky." },
-      { a: 0, page: "pav", scene: "layer", arg: "comms", t: 5, title: "Relay-satellite cover", sub: "Where cliffs and crater walls hide the sky from the relay satellites, so they cannot hear you.", how: "Terrain horizons in 16 directions against each orbiter's real position (NASA JPL)." },
-      { a: 0, page: "pav", scene: "plan3d", t: 6, title: "4 · Plan it in 3D", sub: "Tap your stops on the true-scale terrain. Marswalk finds the safest route round the steep red walls." },
-      { a: 0, page: "pav", scene: "vrsat", pos: "bc", t: 11, title: "5 · Simulate it, in VR", sub: "Walk the plan before anyone goes. Mars has no GPS: look up as a real relay satellite fixes your position; the left card tells you how far off you were, and the radio on the right sends a quick reply to Earth." });
+      { a: 0, page: "globe", globeDo: "layers", t: 4.5, title: "1 · Explore the planet", sub: "Marswalk plans expeditions on Mars. Layers show NASA data for the whole planet." },
+      { a: 0, page: "globe", globe: "n00p91_w112p77", t: 3.5, title: "2 · Choose where to go", sub: "Pick any place. Here: the twin calderas on top of Pavonis Mons." },
+      { a: 0, page: "pav", scene: "layer", arg: "slope", t: 3.5, title: "3 · Read the ground", sub: "Slope: green is an easy walk, red is too steep for a spacesuit.", how: "NASA MOLA elevation." },
+      { a: 0, page: "pav", scene: "layer", arg: "comms", t: 3.5, title: "Where satellites can hear you", sub: "Red: crater walls hide the sky, so relay satellites cannot reach you there.", how: "Real orbits from NASA JPL Horizons." },
+      { a: 0, page: "pav", scene: "drive", t: 5, title: "4 · Drive out", sub: "The crew rover leaves the habitat at about 10 km/h, on a route planned for its wheels." },
+      { a: 0, page: "pav", scene: "plan3d", t: 5, title: "5 · Plan the walk", sub: "Tap the stops. Marswalk finds the safest way down, round the steep red walls." },
+      { a: 0, page: "pav", scene: "vrsat", pip: true, pos: "bc", t: 17, title: "6 · Walk it in VR, and talk to base", sub: "There is no GPS on Mars: a real relay satellite finds the astronaut. On the radio screen they call the habitat, and mission control answers." });
   }
   const PIPE = [
     { c: "#8ab8ff", b: "QGIS", p: "Clip, reproject and check the NASA and USGS rasters: CTX 20 m, HiRISE 1 m, MOLA 463 m.", ic: '<path d="M4 6l8-3 8 3-8 3zM4 12l8 3 8-3M4 18l8 3 8-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' },
@@ -319,6 +326,7 @@
     if (c.page === "home" && w && c.home) homeCard(w, c.home, tok);
     else if (c.page === "home" && w) { const el = c.act && c.act !== "top" ? w.document.querySelector(c.act) : null; w.scrollTo({ top: el ? el.getBoundingClientRect().top + w.scrollY - 76 : 0, behavior: "smooth" }); }
     if (c.scene) send(c.scene, c.arg);
+    if ($("pip")) { $("pip").classList.remove("on"); if (c.pip) pipTalk(tok); }
     if (c.globe && w && w.GLOBE) w.GLOBE.pick(c.globe);
     if (c.globeDo && w && w.GLOBE) w.GLOBE[c.globeDo]();
     if (c.pipe) { $("pipe").classList.add("on"); document.querySelectorAll(".node").forEach((n, k) => setTimeout(() => { if (tok === T.token) n.classList.add("on"); }, 300 + k * 1500)); }
@@ -327,6 +335,22 @@
     $("capT").textContent = c.title; $("capS").textContent = c.sub; $("capHowT").textContent = c.how || ""; $("capHow").hidden = !c.how;
     await wait(250); if (tok !== T.token) return;
     placeCap(c, true); $("cap").classList.add("on"); T.busy = false;
+  }
+  // ---------- short demo: mission control opens when the astronaut calls, and answers ----------
+  async function pipTalk(tok) {
+    const ctl = $("ctl"); let d = null; try { d = ctl.contentDocument; } catch (e) { return; }
+    if (!d) return;
+    try { await fetch("/api/comms/clear", { method: "POST" }); } catch (e) { /* fine */ }
+    const pod = d.querySelector('[data-r="pod"]'); if (pod && pod.getAttribute("aria-pressed") !== "true") pod.click();
+    // wait for the astronaut's message to reach the station, then show the window
+    for (let i = 0; i < 200; i++) { await wait(100); if (tok !== T.token) return; if (d.querySelector("#feed .card")) break; }
+    const cw = ctl.contentWindow, feed = d.getElementById("feed");                    // show the conversation, not the page's header
+    const toFeed = () => { if (feed) cw.scrollTo(0, feed.getBoundingClientRect().top + cw.scrollY - 12); };
+    d.documentElement.style.scrollBehavior = "auto"; toFeed();
+    $("pip").classList.add("on"); await wait(1600); if (tok !== T.token) return;
+    const reply = [...d.querySelectorAll("#quick button")].find(b => /copy|received|good|roger/i.test(b.textContent)) || d.querySelector("#quick button");
+    if (reply) reply.click();                                                         // mission control answers; the astronaut hears it on the radio screen
+    await wait(300); toFeed();
   }
   // ---------- homepage chapters: open one of the three How-it-works cards and let it run ----------
   async function homeCard(w, key, tok) {
@@ -395,18 +419,22 @@
   function begin(i = 0) { $("start").hidden = true; $("player").hidden = false; setPlaying(true); show(i, i !== 0 && !SHORT); }
   if (SHORT) {
     document.title = "Marswalk · short demo"; document.body.classList.add("short");
-    document.querySelector(".start h1").innerHTML = 'Marswalk <em>in under 40 seconds.</em>';
-    document.querySelector(".start .lede").textContent = "The short demo: explore Mars with the layers, choose a place, read its ground, plan the route in 3D, then stand there in VR while a satellite finds you.";
+    document.querySelector(".start h1").innerHTML = 'Marswalk <em>in 45 seconds.</em>';
+    document.querySelector(".start .lede").textContent = "The short demo: explore Mars, choose a place, read its ground, plan the route, drive it in the rover, then walk it in VR while a satellite finds you and mission control answers your call.";
     $("acts").hidden = true; $("end").querySelector("h2").textContent = "Marswalk";
     const pb = $("play"); pb.disabled = true; pb.lastChild.textContent = "Loading Pavonis Mons…"; pb.style.opacity = 0.6;
-    document.querySelector(".startrow span").textContent = "About 40 seconds · pause any time with the button or Space · F11 for full screen";
+    document.querySelector(".startrow span").textContent = "About 45 seconds · pause any time with the button or Space · F11 for full screen";
     // load both places before Play: the globe in the main frame, the site in a second one behind it
     const f2 = frame.cloneNode(); f2.id = "scene2"; f2.style.visibility = "hidden"; frame.after(f2);
     FR.globe = frame; FR.pav = f2;
+    // mission control, in a window for the last chapter: the habitat station, which hears the astronaut in about a second
+    document.body.insertAdjacentHTML("beforeend", '<div class="pip" id="pip" aria-hidden="true"><header><i></i>Mission control · Habitat station</header><iframe id="ctl" title="Mission control" tabindex="-1"></iframe></div>');
+    try { localStorage.setItem("mw_role", "pod"); } catch (e) { /* fine */ }
+    $("ctl").src = "control.html?t=" + Date.now();
     (async () => {
       frame = FR.pav; await load("pav"); FR.pav.style.visibility = "hidden";
       frame = FR.globe; await load("globe"); try { FR.globe.contentWindow.GLOBE.lit(); } catch (e) { /* fine */ }
-      $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (40 s)";
+      $("loading").classList.add("off"); pb.disabled = false; pb.style.opacity = 1; pb.lastChild.textContent = "Play (45 s)";
     })();
   }
   $("play").onclick = () => begin(0);
