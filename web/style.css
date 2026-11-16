@@ -727,3 +727,27 @@ body.mode-explore .routekey, body.walking .routekey, body.tour .routekey, body.v
 body.nopanel .appbar .brand, body.mode-explore .appbar .brand { padding: 4px 14px 4px 4px; border: 1px solid var(--line-2); border-radius: 999px; background: rgba(8, 11, 17, 0.78); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 body.nopanel .appbar .brand img, body.mode-explore .appbar .brand img { width: 32px; height: 32px; }
 @media (max-width: 760px) { .appbar .brand span { display: none; } }
+
+
+/* ---------- the simulation offer: appears once a route is planned ---------- */
+.simask { position: fixed; z-index: 650; top: calc(var(--bar) + 14px); right: 20px; width: 340px; display: grid; gap: 10px; padding: 18px 18px 16px; border-radius: 18px; background: rgba(8, 11, 17, 0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255, 154, 107, 0.45); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); animation: simin 0.35s ease-out; }
+@keyframes simin { from { opacity: 0; transform: translateY(-8px); } }
+.simask small { font-size: 13px; font-weight: 600; color: var(--mars); }
+.simask b { font-size: 19px; line-height: 1.25; color: var(--ink); padding-right: 26px; }
+.simask p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+.simask .seg { margin-top: 2px; }
+.simgo { display: inline-flex; align-items: center; justify-content: center; gap: 9px; margin-top: 2px; padding: 12px 18px; border: 0; border-radius: 999px; background: var(--mars); color: #04060a; font-size: 15px; font-weight: 700; cursor: pointer; }
+.simgo:hover { background: #ffb08a; }
+.simgo svg { width: 16px; height: 16px; }
+.simx { position: absolute; top: 12px; right: 12px; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--dim); cursor: pointer; }
+.simx:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink); }
+.simx svg { width: 16px; height: 16px; }
+body.v3d .simask { top: calc(var(--bar) + 120px); }
+body.walking .simask, body.tour .simask { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .simask { animation: none; } }
+@media (max-width: 760px) {
+  .simask { top: auto; right: 12px; left: 12px; width: auto; bottom: calc(var(--nav) + var(--tbh) + 24px + env(safe-area-inset-bottom)); padding: 14px 14px 12px; gap: 8px; }
+  .simask b { font-size: 17px; }
+  .simask p { font-size: 13px; }
+  body[data-sheet]:not([data-sheet=""]) .simask { display: none !important; }
+}

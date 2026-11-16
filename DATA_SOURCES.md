@@ -79,6 +79,10 @@ All three are read straight from the USGS Astrogeology PDS mosaics:
 
 **CTX orthomosaic, 6 m**: the ground at Jezero, in the map and in 3D (see Terrain).
 
+**Global CTX mosaic, 5 m** (Murray Lab, Caltech; from MRO's Context Camera): laid over the ground within about 500 m of you in 3D, so close up you see real craters, dunes and boulders.
+- About the mosaic: https://murray-lab.caltech.edu/CTX/
+- Tiles used (listed by NASA Mars Trek): https://astro.arcgis.com/arcgis/rest/services/OnMars/CTX/MapServer/tile/{z}/{row}/{col}
+
 ## 3D models
 
 | Model | Source | Use in Marswalk |

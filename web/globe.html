@@ -834,7 +834,7 @@ details.more[open] > summary::after { content: "–"; }
 
   /* ---------- plan anywhere ---------- */
   // the homepage sends ?mode=plan (Plan a trip) or ?mode=explore (Experience Mars); the site opens in that mode
-  const siteUrl = id => `index.html?site=${encodeURIComponent(id)}${GMODE === "plan" || GMODE === "explore" ? "&mode=" + GMODE : ""}`;
+  const siteUrl = id => `index.html?site=${encodeURIComponent(id)}`;   // one flow for everyone: the planner, then the offer to walk it
   if (GMODE === "plan") { $("gMode").style.color = "#8ab8ff"; $("gMode").textContent = "Plan a trip"; $("gSub").textContent = "Pick a landing site"; $("hint").textContent = "Click anywhere on Mars to plan a trip there"; }
   if (GMODE === "explore") { $("gMode").style.color = "#ff9a6b"; $("cPlan").style.background = "#ff9a6b"; $("cPlan").style.color = "#04060a"; $("gMode").textContent = "Experience Mars"; $("gSub").textContent = "Pick a place to stand"; $("hint").textContent = "Click anywhere on Mars to stand there"; }
   $("cPlan").addEventListener("click", async () => {
