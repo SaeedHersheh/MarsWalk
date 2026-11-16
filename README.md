@@ -1,144 +1,191 @@
+<div align="center">
+
+<img src="web/img/brand/logo-512.png" alt="AirAwareNetwork logo" width="140">
+
 # Marswalk
 
-**Walk Mars before anyone does.** Marswalk plans safe walking and driving routes on real NASA terrain, and keeps an astronaut found and in touch where there is no GPS. Then it lets you rehearse the route in true-scale 3D or phone VR.
+**Walk Mars before anyone does.**
 
-Built for the NASA Space Apps Challenge 2026 by **Saeed Hersheh** (team lead, AirAwareNetwork).
+A route planner and simulator for crewed walks on Mars, built on real NASA data.
 
-- Live app: https://marswalk-266019376344.europe-west1.run.app/
-- Guided tour (about five minutes, with voice-over): https://marswalk-266019376344.europe-west1.run.app/tour.html
-- Short demo: https://marswalk-266019376344.europe-west1.run.app/tour.html?short=1
-- Slides: https://marswalk-266019376344.europe-west1.run.app/slides.html
+`Python 3.13` · `FastAPI` · `NumPy` · `rasterio` · `scikit-image` · `PostgreSQL` · `Leaflet` · `three.js` · `Google Cloud Run`
 
-## What it does
+[Live app](https://marswalk-266019376344.europe-west1.run.app/) · [Guided tour](https://marswalk-266019376344.europe-west1.run.app/tour.html) · [Short demo](https://marswalk-266019376344.europe-west1.run.app/tour.html?short=1) · [Slides](https://marswalk-266019376344.europe-west1.run.app/slides.html)
 
-- **Pick anywhere on Mars.** A 3D globe; click a point and the server builds a 178 km site from NASA MOLA elevation in about a minute. Jezero crater is a detailed site (MRO CTX 20 m, HiRISE 1 m slopes).
-- **Read the ground.** Eight layers: elevation, slope, radiation, relay-satellite blind spots, habitat radio coverage, sunlight and shadow, ground temperature, and the planner's cost.
-- **Plan the safest route.** The map is cut into 20 m cells; each cell's cost is walking time × (1 + slope penalty + 6 × weighted hazards), and a least-cost path search finds the route. Safest, Balanced and Fastest styles; a crew rover option.
-- **Navigate without GPS.** The suit's step counting drifts; the habitat's radio mast fixes the position while it can see the crew; real relay orbiters (MRO, Mars Odyssey, TGO, Mars Express, orbits from NASA JPL Horizons) fix it when they pass overhead. The planner forecasts the position uncertainty along the route.
-- **Talk home.** A radio to the habitat and to Earth mission control, with the real light delay; replies wait at the orbiter for the next pass. Mission control runs in its own page (`control.html`).
-- **Rehearse it.** True-scale 3D, first person, the crew rover, and phone VR with gaze buttons and two side screens.
-- **Report it.** Every plan exports a two-page PDF mission report with figures, tables and a go / no-go check.
+</div>
 
-## Data
+---
 
-All terrain, orbit, Sun and radiation data come from NASA and USGS sources; see [DATA_SOURCES.md](DATA_SOURCES.md) for every source with links. Anything that is a model or an assumption (suit speed, position drift, radio accuracy, rover speed) is labelled as one in the app.
-
-## Built with
-
-QGIS (first prototype) · Python: FastAPI, rasterio, NumPy, SciPy, scikit-image · PostgreSQL · Leaflet · three.js · Google Cloud Run.
-
-Built with help from AI assistants (Claude and Gemini). The voice-over uses the browser's text-to-speech.
-
-## Test
-
-With the server running:
-
-```bash
-.venv/Scripts/python tests/smoke_test.py http://127.0.0.1:8077
+```
+        ╔═══════════════════════════════════════════════════════╗
+        ║                                                       ║
+        ║   There is no GPS on Mars.                            ║
+        ║                                                       ║
+        ║   Marswalk plans the safest walk between your stops,  ║
+        ║   forecasts how well the crew can be located along    ║
+        ║   it, and lets you rehearse it in 3D or phone VR.     ║
+        ║                                                       ║
+        ║   ─────────────────────────────────────────────────   ║
+        ║                                                       ║
+        ║   terrain      NASA MOLA, MRO CTX, MRO HiRISE         ║
+        ║   satellites   MRO, Odyssey, TGO, Mars Express        ║
+        ║   orbits       NASA JPL Horizons, minute by minute    ║
+        ║   anywhere     a new 178 km site in about a minute    ║
+        ║                                                       ║
+        ╚═══════════════════════════════════════════════════════╝
 ```
 
-It loads every page and, for several sites, every layer, the satellite passes, and a walking and a rover route.
+---
 
-## Run
+## Contents
 
-```bash
-.venv/Scripts/python -m uvicorn app.main:app --port 8077
+| # | Section |
+|---|---|
+| 1 | [The Problem](#1--the-problem) |
+| 2 | [What Marswalk Does](#2--what-marswalk-does) |
+| 3 | [How It Works](#3--how-it-works) |
+| 4 | [Data and Resources](#4--data-and-resources) |
+| 5 | [Repository Layout](#5--repository-layout) |
+| 6 | [Running It](#6--running-it) |
+| 7 | [Models and Assumptions](#7--models-and-assumptions) |
+| 8 | [Further Reading](#8--further-reading) |
+| — | [Credits](#-credits) |
+
+---
+
+## 1 · The Problem
+
+An astronaut a few kilometres from the habitat faces three problems at once:
+
+| Problem | Why it matters |
+|---|---|
+| **The ground** | Crater walls, loose slopes, cold, darkness and radiation. A suited walker cannot take the straight line. |
+| **Position** | There is no GPS. A suit's own estimate drifts with every step. |
+| **Contact** | Hills hide the habitat's radio, relay satellites are overhead only a few times a day, and Earth is 4 to 24 light-minutes away. Mission control cannot steer a walk live. |
+
+Marswalk plans around all three before anyone leaves the airlock.
+
+---
+
+## 2 · What Marswalk Does
+
+| Capability | What the user gets |
+|---|---|
+| **Pick anywhere** | A 3D globe of Mars. Any point becomes a 178 km planning site, built on demand from NASA terrain. Jezero crater is a detailed site at 20 m. |
+| **Read the ground** | Eight layers: elevation, slope, radiation dose, relay-satellite blind spots, habitat radio coverage, sunlight and shadow, ground temperature, and the planner's own cost. |
+| **Plan the route** | The safest path between the stops, with three route styles (Safest, Balanced, Fastest) and a crew-rover option. |
+| **Navigate without GPS** | A forecast of the position uncertainty along the route, from the suit's dead reckoning, the habitat's radio mast and real relay-satellite passes. |
+| **Talk home** | A radio to the habitat and to Earth mission control, with the real light delay. A separate mission-control station runs in the browser. |
+| **Rehearse it** | True-scale 3D, a first-person walk, a pressurised rover, and phone VR with gaze controls. |
+| **Report it** | A two-page PDF mission report per plan: map, profile, satellite passes, navigation forecast and a go / no-go check. |
+
+---
+
+## 3 · How It Works
+
+```
+   NASA / USGS rasters ──▶  Python pipelines  ──▶  site layers  ──┐
+   (MOLA, CTX, HiRISE,      (build_site,           (elevation,    │
+    THEMIS, TES)             build_terrain, ...)     slope, ...)   │
+                                                                   ▼
+   NASA JPL Horizons   ──▶  fetch_passes      ──▶  PostgreSQL ──▶  FastAPI  ──▶  browser
+   (orbits, Sun, Earth)     (every 6 hours)        + file cache    (routes,      (map, 3D,
+                                                                    layers,       VR, radio,
+                                                                    passes,       report)
+                                                                    comms)
 ```
 
-Open http://localhost:8077
+**The route.** The site is a grid of 20 m cells (463 m on global sites). Each cell gets a cost:
 
-## Whole Mars
+> walking time × (1 + slope penalty + 6 × weighted hazards)
 
-Open http://localhost:8077/globe.html for the globe and flat map of the whole planet. Click anywhere, then "Plan a walk here". The API builds that area (about 178 km across) from MOLA 463 m elevation and Viking colour tiles, fetches its orbiter passes from Horizons, and opens the planner on it. Takes about a minute the first time; after that the site is saved under `data/sites/`.
+The slope penalty is free under 3°, doubles the cost at 8° and multiplies it by 25 at 16°; anything steeper than the style's limit is blocked. A least-cost path search (scikit-image `MCP_Geometric`) finds the cheapest path, not the shortest one. That is why routes bend around hills.
 
-These region sites are coarse (463 m cells): good for comparing places, not for placing footsteps. They have no heat layer and no HiRISE slopes. Jezero stays the detailed site (20 m).
+**The position.** Between fixes, the suit's estimate drifts with the distance walked. While the habitat's mast has line of sight, it measures range and bearing. When a relay orbiter is in view, ranging and Doppler on its real orbit fix the position, and the route is re-planned from the corrected point.
 
-From the command line:
+**The radio.** Messages to the habitat travel in about a second. Messages to Earth leave only while a relay satellite is in view, then cross the real one-way light time from JPL Horizons; replies wait at the orbiter for the astronaut's next pass.
+
+Full detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/PIPELINE.md](docs/PIPELINE.md).
+
+---
+
+## 4 · Data and Resources
+
+Every number on the ground comes from a real dataset. Full list with direct file links: [DATA_SOURCES.md](DATA_SOURCES.md).
+
+| Dataset | Mission / provider | Used for |
+|---|---|---|
+| [MOLA MEGDR 463 m elevation](https://asc-pds-services.s3.us-west-2.amazonaws.com/wms_basemaps3/Mars/MOLA/mola128_mola64_merge_90Nto90S_SimpleC_clon0_cog.tif) | Mars Global Surveyor · USGS Astrogeology | Every site on the globe, line of sight, air column |
+| [CTX DTM 20 m and orthomosaic 6 m, Jezero](https://planetarymaps.usgs.gov/mosaic/mars2020_trn/CTX/JEZ_ctx_B_soc_008_DTM_MOLAtopography_DeltaGeoid_20m_Eqc_latTs0_lon0.tif) | Mars Reconnaissance Orbiter · USGS | The detailed Jezero site |
+| [HiRISE DTM 1 m, Jezero](https://planetarymaps.usgs.gov/mosaic/mars2020_trn/HiRISE/JEZ_hirise_soc_006_DTM_MOLAtopography_DeltaGeoid_1m_Eqc_latTs0_lon0_blend40.tif) | Mars Reconnaissance Orbiter · USGS | Sharper slopes at Jezero |
+| [THEMIS night and day IR, 100 m](https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars_MO_THEMIS-IR-Night_mosaic_60N60S_100m_v14.tif) | Mars Odyssey · USGS | Ground temperature model |
+| [TES albedo](https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars_MGS_TES_Albedo_mosaic_global_7410m.tif) | Mars Global Surveyor · USGS | Ground temperature model |
+| [NASA JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) | NASA JPL | Orbits of MRO, Odyssey, TGO, Mars Express; the Sun; the Earth light delay |
+| [Curiosity RAD](https://doi.org/10.1126/science.1244797) | Mars Science Laboratory | Measured surface radiation dose |
+| [NASA Mars Trek](https://trek.nasa.gov/mars/) | NASA | Viking MDIM 2.1 colour mosaic |
+
+Partner and open-source resources: [ESA Mars Express](https://www.esa.int/Science_Exploration/Space_Science/Mars_Express) and [ExoMars TGO](https://www.esa.int/Science_Exploration/Human_and_Robotic_Exploration/Exploration/ExoMars) (relay orbiters), [USGS Astrogeology](https://astrogeology.usgs.gov), [QGIS](https://qgis.org), [rasterio](https://rasterio.readthedocs.io), [NumPy](https://numpy.org), [scikit-image](https://scikit-image.org), [FastAPI](https://fastapi.tiangolo.com), [PostgreSQL](https://www.postgresql.org), [Leaflet](https://leafletjs.com), [three.js](https://threejs.org), [Google Cloud Run](https://cloud.google.com/run).
+
+---
+
+## 5 · Repository Layout
+
+| Path | Contents |
+|---|---|
+| `app/main.py` | FastAPI server: sites, layers, route planner, satellite passes, scheduler |
+| `app/comms.py` | Radio messages between the astronaut, the habitat and Earth, with light delay |
+| `pipeline/` | Data pipelines: global sites, Jezero terrain, HiRISE slopes, ground heat, satellite passes |
+| `web/` | The front end: homepage, globe, planner, 3D and VR, tour, mission control, slides, report |
+| `tests/smoke_test.py` | End-to-end check of a running server |
+| `docs/` | Architecture and pipeline reference |
+| `DATA_SOURCES.md` | Every dataset with a direct link |
+
+Built terrain lives in `data/` and is not stored in git; the pipelines rebuild it.
+
+---
+
+## 6 · Running It
 
 ```bash
-.venv/Scripts/python pipeline/build_site.py -4.59 137.44 "Gale crater"
+pip install -r requirements.txt
+python pipeline/build_terrain.py        # Jezero, about 3 minutes
+python -m uvicorn app.main:app --port 8077
 ```
 
-## Rebuild data
+Open `http://localhost:8077`. Any other place on Mars is built the first time it is opened from the globe. Satellite passes come from JPL Horizons and are cached, so PostgreSQL is optional for a local run.
 
-```bash
-.venv/Scripts/python pipeline/build_terrain.py
-```
+To check a running server end to end: `python tests/smoke_test.py http://127.0.0.1:8077`.
 
-Downloads the Jezero CTX DTM (20 m) and orthomosaic (6 m) from USGS, computes horizon angles. About 2.5 minutes.
+---
 
-```bash
-.venv/Scripts/python pipeline/build_hirise.py
-```
+## 7 · Models and Assumptions
 
-Optional. Reads the local HiRISE 1 m DTM and replaces the hazard slope inside its footprint (31 % of the map). The API uses it automatically when `data/slope_hr.npy` exists.
+Marswalk labels every value that is a model or an assumption rather than a measurement.
 
-```bash
-.venv/Scripts/python pipeline/build_heat.py
-```
+| Quantity | Value | Status |
+|---|---|---|
+| Walking speed | Tobler's hiking function at half pace | Assumption |
+| Rover speed | About 10 km/h on flat ground, up to 20° | Assumption |
+| Dead-reckoning drift | 2 % of the distance since the last fix | Assumption |
+| Habitat radio fix | ±5 m in range, ±1° in bearing, line of sight only | Assumption |
+| Satellite fix | About ±5 m after a pass of at least a minute | Assumption |
+| Radiation | 0.67 mSv/day at Gale, scaled by air column and open sky | Model on a measurement |
+| Ground temperature | THEMIS and TES through a one-dimensional heat model | Model on real inputs |
 
-Ground temperature through one Mars day at 40 m: THEMIS night IR + TES albedo + Horizons Sun + CTX shadows through a 1-D ground heat model. About 10 minutes. Rerun every few weeks, since the Sun's path shifts with the season.
+---
 
-```bash
-.venv/Scripts/python pipeline/build_heat.py
-```
+## 8 · Further Reading
 
-Ground temperature through one Mars day on a 40 m grid. Reads THEMIS night IR (100 m) and TES albedo from USGS, the Sun from Horizons, and runs a ground heat model. About 10 minutes. Re-run it every week or so, because it is built for the current season.
+| Document | Covers |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, request flow, storage, scheduling, failure behaviour, deployment |
+| [docs/PIPELINE.md](docs/PIPELINE.md) | Every data pipeline, stage by stage, and the layers they produce |
+| [DATA_SOURCES.md](DATA_SOURCES.md) | Every dataset and resource, with links |
 
-```bash
-.venv/Scripts/python pipeline/fetch_passes.py 72
-```
+---
 
-Pulls 72 h of orbiter passes and Sun position from JPL Horizons into Postgres. This is the cron job. The API also runs it by itself when stored passes run out.
+## ◆ Credits
 
-## Layout
+Built by **Saeed Hersheh**, team lead of [AirAwareNetwork](https://airaware.network/), a Palestinian, community-led air-quality network built on IoT, for the **NASA Space Apps Challenge 2026**.
 
-- `pipeline/` offline data steps
-- `app/main.py` FastAPI: layers, passes, route planning
-- `web/` Leaflet + three.js frontend
-- `.env` Postgres connection (database `marswalk` in WSL, separate from the AirAware databases)
-
-## What is real and what is assumed
-
-Real: elevation, slope, orbital image, orbiter pass times and angles, Sun position, terrain line of sight.
-
-Model on real inputs: ground temperature (THEMIS night IR pattern stretched onto the 180 to 605 thermal inertia range MEDA measured at Jezero, TES albedo, real Sun and shadows; dust opacity 0.5 and emissivity 0.95 assumed). Its afternoon pattern correlates r = 0.54 with the independent THEMIS day IR mosaic.
-
-Radiation: anchored on a measurement (Curiosity RAD, 0.67 mSv/day at Gale under about 22 g/cm2 of air). Other places are scaled by the air above them (MOLA elevation; 11.1 km scale height is an assumption) with a published sensitivity of 10 to 20 % per 10 g/cm2 (e-folding 60 g/cm2), then by how much sky the terrain leaves open (horizon angles, slant-path weighted). Inside one crater the spread is small (a few % from elevation, up to about 20 % in sheltered spots); across Mars it is large (Hellas floor about 0.58, Olympus Mons about 0.93 mSv/day). Solar particle events are not modelled.
-
-Model or assumption: suit speed (half of Tobler), position drift (2 % of distance since last fix), Doppler fix (simulated as a reset at pass start).
-
-Ground temperature is a model on real inputs: thermal inertia range (180 to 605) and dust opacity (0.5) are assumptions; it matches the independent THEMIS day image only moderately (r = 0.54).
-
-Not built: dust storms, orbiter angle variation across the map (it matters more on the 178 km region sites), heat and fine slopes outside Jezero.
-
-## Alerts and Doppler
-
-- The API tops up passes from Horizons every 6 hours while it runs (`_scheduler` in `app/main.py`).
-- `GET /api/next?x=&y=&t=` answers "what's next for this spot": passes with terrain blocking, closest approach and Doppler shift. No x/y means the habitat.
-- The page alerts 10 minutes before each pass and when it rises, with a sound per orbiter ("Pass alerts sound") and optional desktop notifications.
-- Click any pass in the Relay network list for the Doppler demo. Shift = -f0 x range-rate / c at 437.1 MHz, the orbiter-to-surface UHF link. The audio is that curve scaled into hearing range.
-
-## Postgres asleep
-
-Postgres runs in WSL, and WSL stops when idle. The API then serves the last passes it saved in `data/passes_cache.json`. To refresh passes, wake WSL first (open an Ubuntu terminal).
-
-## How the route is chosen
-
-The planner does not take the shortest path. Every cell has a cost: Tobler walking time times a slope penalty that is free under 3 degrees, 2x at 8, 9x at 12, 25x at 16 and 60x at 20 (see `SLOPE_COST` in `app/main.py`). Cells next to a steep cell count as steep, so the route keeps a margin from edges. Anything over the no-go limit is blocked; if there is no way through, the limit is relaxed in steps of 4 degrees and the route says so.
-
-Three styles set the weights: Safest (slope weight 1, limit 18 degrees), Balanced (0.4, 22), Fastest (0.08, 25). The route is drawn green where flat (under 8 degrees), amber on moderate slope (8 to 15), red where steep (over 15).
-
-## Phones
-
-The planner is built phone first below 980 px: the map fills the screen, the plan, layers and relay panels are bottom sheets behind a tab bar, and Start walk is a floating button. Above 980 px it is the desktop layout.
-
-## Radio messages
-
-The Relay sheet has a Radio messages section. Record a voice message or type one and choose Earth or the pod. It waits until a relay orbiter is overhead and the link is open, then leaves. Earth gets it after the real one-way light time (from Horizons, 11.1 min on 12 Nov 2026) divided by the demo speed (x30, x120, x600); the pod gets it in about a second. Replies from Earth cross the light delay, wait at the orbiter, and come down on the walker's next pass.
-
-Open http://localhost:8077/control.html on the laptop (or any device) as Earth mission control or as the pod. Press Start listening once so the browser allows sound. Content stays hidden until the signal has really arrived.
-
-Walkie-talkie: a beep and vibration tell you when a relay orbiter comes overhead, and only then does the mic open. Hold the big talk button (or the space bar) while you speak; it sends when you let go. Outside a pass the button is locked; you can still record a message to send on the next pass.
-
-The microphone needs https or localhost. For a phone, run `serve_https.cmd` (https on port 8443), open `https://<PC Wi-Fi address>:8443` on the phone and the laptop (both must use the same server), and accept the one-time certificate warning. The certificate in `certs/` was made for 192.168.1.156; if the PC gets a new address, make a new one (in Git Bash): `openssl req -x509 -newkey rsa:2048 -nodes -days 365 -keyout certs/key.pem -out certs/cert.pem -subj "/CN=marswalk.local" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:<new address>"`.
+Built with help from AI assistants (Claude and Gemini). The voice-over uses the browser's text-to-speech. Marswalk is not affiliated with NASA.
