@@ -79,6 +79,15 @@ All three are read straight from the USGS Astrogeology PDS mosaics:
 
 **CTX orthomosaic, 6 m**: the ground at Jezero, in the map and in 3D (see Terrain).
 
+## 3D models
+
+| Model | Source | Use in Marswalk |
+|---|---|---|
+| Spirit and Opportunity rover (`web/models/mer.glb`) | [NASA/JPL-Caltech, NASA Science 3D Resources](https://science.nasa.gov/resource/spirit-and-opportunity-rover-3d-model/) | The robotic rover, shown at Curiosity's size; its six wheels are cut out of the mesh so they roll and steer |
+| Habitat Demonstration Unit (`web/models/hdu1.glb`, `hdu2.glb`) | [NASA 3D Resources on GitHub](https://github.com/nasa/NASA-3D-Resources/tree/master/3D%20Models/Habitat%20Demonstration%20Unit) | The surface habitat |
+
+NASA 3D Resources are free to download and use under the [NASA Images and Media Usage Guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/).
+
 ## Software
 - QGIS, for the first manual prototype: clip, slope, least-cost path
 - Python: rasterio, NumPy and scikit-image (MCP_Geometric least-cost path) for the pipelines, FastAPI for the server

@@ -1059,7 +1059,7 @@
       const t = clockT(), s = sunAt(t);
       $("clock").innerHTML = `<span class="dt">${fDay(t)} </span>${fUTC(t)}:${pad(Math.floor(t) % 60)} UTC`;
       { const st = $("simState"), mode = walk.on ? "Simulating" : S.departOff === 0 ? "Live" : "Planned"; st.textContent = mode; st.className = "tstate " + (walk.on ? "sim" : S.departOff === 0 ? "" : "plan"); }
-      $("clockSub").textContent = (walk.on ? `EVA +${fCD(t - S.route.depart)} · ` : "") + (s.el > 0 ? `Sun ${s.el.toFixed(0)}° up` : "Night here");
+      $("clockSub").textContent = (walk.on ? `EVA +${fCD(t - S.route.depart)} · ` : "") + (T3.testSun ? "Shown in daylight" : s.el > 0 ? `Sun ${s.el.toFixed(0)}° up` : s.el > -8 ? "Twilight" : "Night here");
       drawRelay(); drawTimeline(); if (walk.on) drawProfile(); liveAlerts(); commsTick();
       if ((S.layers.has("sun") || S.layers.has("heat")) && Math.floor(t / 600) !== walk.lastSun) { walk.lastSun = Math.floor(t / 600); syncLayers(); }
       T3.sun = s;
@@ -1125,16 +1125,48 @@
     }
     geo.computeVertexNormals();
     // height of the drawn surface at a map point: the same triangles the mesh uses, so feet never sink or float
-    const ground = (x, y) => {
+    const groundBase = (x, y) => {
       const fx = Math.min(nx - 1e-6, Math.max(0, x / M.width_m * nx)), fy = Math.min(ny - 1e-6, Math.max(0, (1 - y / M.height_m) * ny));
       const ix = Math.floor(fx), iy = Math.floor(fy), u = fx - ix, v = fy - iy, i0 = iy * (nx + 1) + ix;
       const ha = pos.getY(i0), hd = pos.getY(i0 + 1), hb = pos.getY(i0 + nx + 1), hc = pos.getY(i0 + nx + 2);
       return u + v <= 1 ? ha + u * (hd - ha) + v * (hb - ha) : hc + (1 - u) * (hb - hc) + (1 - v) * (hd - hc);
     };
+    // Close up, the orbital elevation (20 m at Jezero, 463 m elsewhere) is flat. Near the camera a finer ground patch adds
+    // metre-scale relief: low mounds, ripples and dips, the same at every visit (a hash of the position). It is only added on top
+    // of the real surface, fades out at the patch edge, and leaves a flat pad round the habitat. Everything stands on ground().
+    const RELIEF = { on: !lite, cx: -1e9, cy: -1e9, half: 330, A: Math.min(2.6, Math.max(0.7, DX * 0.0055)) };
+    const vh = (i, j) => { let n = Math.imul(i, 374761393) ^ Math.imul(j, 668265263); n = Math.imul(n ^ (n >>> 13), 1274126177); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
+    const vnoise = (x, y) => { const i = Math.floor(x), j = Math.floor(y), u = x - i, v = y - j, su = u * u * (3 - 2 * u), sv = v * v * (3 - 2 * v);
+      const a = vh(i, j), b = vh(i + 1, j), c = vh(i, j + 1), d = vh(i + 1, j + 1); return a + (b - a) * su + (c - a) * sv + (a - b - c + d) * su * sv; };
+    const relief = (x, y) => {
+      if (!RELIEF.on) return 0;
+      const e = Math.max(Math.abs(x - RELIEF.cx), Math.abs(y - RELIEF.cy)) / RELIEF.half; if (e >= 0.97) return 0;
+      const hd = Math.min(Math.hypot(x - HABM[0], y - HABM[1]), Math.hypot(x - HAB[0], y - HAB[1]) + 6); if (hd < 18) return 0;
+      const fade = (e < 0.7 ? 1 : 1 - (e - 0.7) / 0.27) * (hd > 34 ? 1 : (hd - 18) / 16);
+      const n = 0.55 * vnoise(x / 70, y / 70) + 0.27 * vnoise(x / 23 + 7.1, y / 23 + 3.3) + 0.12 * vnoise(x / 7.5 + 1.7, y / 7.5 + 9.2) + 0.06 * vnoise(x / 2.6 + 4.4, y / 2.6 + 0.6);
+      return fade * (0.04 + RELIEF.A * n * n * 2.3);
+    };
+    const ground = (x, y) => groundBase(x, y) + relief(x, y);
     T3.ground = ground;
     const tc = document.createElement("canvas"); tc.width = 2660; tc.height = 2520;
     const tex = new THREE.CanvasTexture(tc); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = rn.capabilities.getMaxAnisotropy();
     const terrain = new THREE.Mesh(geo, pbr({ map: tex, color: 0xd0d0d0, roughness: 1, metalness: 0, envMapIntensity: 0.12 })); terrain.receiveShadow = true; terrain.castShadow = true; sc.add(terrain);
+    let patch = null;
+    function buildPatch(cx, cy) {
+      RELIEF.cx = cx; RELIEF.cy = cy; const N = 220, S2 = RELIEF.half * 2, x0 = cx - RELIEF.half, y0 = cy - RELIEF.half;
+      const g2 = patch ? patch.geometry : new THREE.PlaneGeometry(1, 1, N, N), pa = g2.attributes.position, ua = g2.attributes.uv;
+      for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+        const k = j * (N + 1) + i, x = Math.min(M.width_m, Math.max(0, x0 + S2 * i / N)), y = Math.min(M.height_m, Math.max(0, y0 + S2 * (1 - j / N)));
+        pa.setXYZ(k, x - M.width_m / 2, ground(x, y), -(y - M.height_m / 2)); ua.setXY(k, x / M.width_m, y / M.height_m);
+      }
+      pa.needsUpdate = true; ua.needsUpdate = true; g2.computeVertexNormals(); g2.computeBoundingSphere();
+      if (!patch) {
+        const pm = terrain.material.clone(); pm.onBeforeCompile = terrain.material.onBeforeCompile; pm.customProgramCacheKey = () => "mw-terrain-patch";
+        pm.polygonOffset = true; pm.polygonOffsetFactor = -1; pm.polygonOffsetUnits = -2; pm.userData.env0 = terrain.material.userData.env0; envMats.push(pm);
+        patch = new THREE.Mesh(g2, pm); patch.receiveShadow = true; patch.castShadow = true; patch.frustumCulled = false; sc.add(patch);
+      }
+      rockAt = null; pathW = 0;
+    }
     const sun = new THREE.DirectionalLight(0xffe4c4, 2.4);
     sun.castShadow = !lite; sun.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048);
     sun.shadow.camera.near = 10 * K; sun.shadow.camera.far = 16000 * K; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 3 * K;
@@ -1193,6 +1225,17 @@
     };
     terrain.material.customProgramCacheKey = () => "mw-terrain-detail";
 
+    // ---- NASA models (glTF, some Draco-compressed); the hand-built ones stay if a file cannot load ----
+    const GLB = (() => { if (!THREE.GLTFLoader) return null; const L = new THREE.GLTFLoader();
+      if (THREE.DRACOLoader) { const D = new THREE.DRACOLoader(); D.setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/gltf/"); L.setDRACOLoader(D); } return L; })();
+    function loadGLB(urls, done) {
+      if (!GLB) return; const out = []; let n = 0;
+      urls.forEach((u, i) => GLB.load(u, g2 => { out[i] = g2.scene; if (++n === urls.length) { try { done(out); } catch (e) { console.warn("model", e); } } }, undefined, e => console.warn("model failed", u, e)));
+    }
+    function tuneModel(o, env) {
+      o.traverse(c => { if (!c.isMesh) return; c.castShadow = c.receiveShadow = true; const ms = Array.isArray(c.material) ? c.material : [c.material];
+        ms.forEach(m => { if (m.userData.env0 != null) return; if (m.metalness != null) { m.metalness = Math.min(m.metalness, 0.3); m.roughness = Math.max(m.roughness, 0.5); } m.envMapIntensity = env; m.userData.env0 = env; if (m.map) m.map.anisotropy = 8; envMats.push(m); }); });
+    }
     // ---- models ----
     const mk = (parent, geom, mat, x, y, z) => { const o = new THREE.Mesh(geom, mat); o.position.set(x || 0, y || 0, z || 0); o.castShadow = true; o.receiveShadow = true; parent.add(o); return o; };
     function makeAstronaut() {
@@ -1337,6 +1380,39 @@
         for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, sp = add(new THREE.BoxGeometry(0.02, R * 0.9, 0.04), dark, side * TW * 0.45, Math.cos(a) * R * 0.45, Math.sin(a) * R * 0.45, -a + 0.35, 0, 0, w); sp.castShadow = false; }
         ud.wheels.push(w); if (steers) ud.steer.push(pivot);
       };
+      loadGLB(["models/mer.glb"], ([m]) => {
+        const SC = 1.9, root = new THREE.Group(); root.scale.setScalar(SC); root.add(m); tuneModel(m, 1);
+        const meshes = []; m.traverse(o => { if (o.isMesh) meshes.push(o); });
+        const susp = meshes.find(o => /suspension/.test(o.material.name)), mast = meshes.filter(o => /mast|foil/.test(o.material.name));
+        const wheels = [], steer = [];
+        if (susp) {
+          const specs = []; for (const sx of [-1, 1]) for (const [x, z, st, sg] of [[0.53, 0.61, true, 1], [0.475, -0.103, false, 1], [0.53, -0.607, true, -1]]) specs.push({ x: sx * x, z, st, sg, tri: [] });
+          const G = susp.geometry, PA = G.attributes.position, ix = G.index ? G.index.array : null, nT = (ix ? ix.length : PA.count) / 3, keep = [];
+          const vi = (t, k) => ix ? ix[t * 3 + k] : t * 3 + k;
+          for (let t = 0; t < nT; t++) {
+            const v = [vi(t, 0), vi(t, 1), vi(t, 2)];
+            const s = specs.find(s2 => v.every(q => Math.abs(PA.getX(q) - s2.x) <= 0.085 && Math.hypot(PA.getY(q) - 0.13, PA.getZ(q) - s2.z) <= 0.137));
+            if (s) s.tri.push(...v); else keep.push(...v);
+          }
+          G.setIndex(keep);
+          for (const s of specs) {
+            if (!s.tri.length) continue;
+            const g2 = new THREE.BufferGeometry();
+            for (const name of ["position", "normal", "uv"]) {
+              const A = G.attributes[name]; if (!A) continue; const out = new Float32Array(s.tri.length * A.itemSize);
+              s.tri.forEach((q, k) => { for (let c = 0; c < A.itemSize; c++) out[k * A.itemSize + c] = c === 0 ? A.getX(q) : c === 1 ? A.getY(q) : c === 2 ? A.getZ(q) : A.getW(q); });
+              if (name === "position") for (let k = 0; k < s.tri.length; k++) { out[k * 3] -= s.x; out[k * 3 + 1] -= 0.13; out[k * 3 + 2] -= s.z; }
+              g2.setAttribute(name, new THREE.BufferAttribute(out, A.itemSize));
+            }
+            const pivot = new THREE.Group(); pivot.position.set(s.x, 0.13, s.z); pivot.userData.sign = s.sg; susp.parent.add(pivot);
+            const wg = new THREE.Group(); pivot.add(wg); const wm = new THREE.Mesh(g2, susp.material); wm.castShadow = wm.receiveShadow = true; wg.add(wm);
+            wheels.push(wg); if (s.st) steer.push(pivot);
+          }
+        }
+        const head = new THREE.Group(); mast.forEach(o => { head.add(o); }); m.add(head);
+        while (g.children.length) g.remove(g.children[0]);
+        g.add(root); Object.assign(ud, { wheels, steer, head, R: 0.13 * SC, camY: 2.75, camF: 0.78, camR: -0.08, nasa: true });
+      });
       for (const sx of [-1, 1]) {
         WZ.forEach((z, i) => wheel(sx * WX, z, i !== 1, i === 2 ? -1 : 1));
         const piv = [sx * 0.86, 0.92, 0.12], bogie = [sx * 0.98, 0.62, -0.5];
@@ -1401,12 +1477,14 @@
       const tun = mk(g, new THREE.CylinderGeometry(0.17, 0.17, 0.6, 20), metal, -1.25, 0.3, 0.2); tun.rotation.z = Math.PI / 2;
       for (const z of [0.0, 0.4]) { const w = mk(g, new THREE.CircleGeometry(0.06, 20), warm, -1.5, 0.48, z); w.rotation.y = -Math.PI / 2; }
       const pad = mk(g, new THREE.CylinderGeometry(0.5, 0.5, 0.02, 40), regolith, -1.95, 0.01, 0.25);
+      g.userData.core = g.children.slice();                                      // the hand-built modules, swapped for NASA's habitat when it loads
       // the radio mast: about 8 m to the dish, with a red beacon on top
-      mk(g, new THREE.CylinderGeometry(0.022, 0.04, 1.85, 10), metal, 0.62, 0.95, -0.55);
-      for (let k = 0; k < 5; k++) mk(g, new THREE.TorusGeometry(0.05, 0.008, 6, 12), metal, 0.62, 0.3 + k * 0.33, -0.55).rotation.x = Math.PI / 2;
-      const dish = mk(g, new THREE.SphereGeometry(0.26, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2), metal, 0.62, 1.82, -0.55); dish.rotation.x = -0.7; dish.material.side = THREE.DoubleSide;
-      mk(g, new THREE.SphereGeometry(0.03, 10, 8), beacon, 0.62, 1.92, -0.55);
-      for (const a of [0, 2.1, 4.2]) { const gx = 0.62 + Math.sin(a) * 0.45, gz = -0.55 + Math.cos(a) * 0.45; const L = Math.hypot(0.45, 1.5); const gy = mk(g, new THREE.CylinderGeometry(0.004, 0.004, L, 4), dark, (gx + 0.62) / 2, 0.75, (gz - 0.55) / 2); gy.lookAt(0.62, 1.5, -0.55); gy.rotateX(Math.PI / 2); }
+      const MX = 1.6, MZ = -1.0;
+      mk(g, new THREE.CylinderGeometry(0.022, 0.04, 1.85, 10), metal, MX, 0.95, MZ);
+      for (let k = 0; k < 5; k++) mk(g, new THREE.TorusGeometry(0.05, 0.008, 6, 12), metal, MX, 0.3 + k * 0.33, MZ).rotation.x = Math.PI / 2;
+      const dish = mk(g, new THREE.SphereGeometry(0.26, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2), metal, MX, 1.82, MZ); dish.rotation.x = -0.7; dish.material.side = THREE.DoubleSide;
+      mk(g, new THREE.SphereGeometry(0.03, 10, 8), beacon, MX, 1.92, MZ);
+      for (const a of [0, 2.1, 4.2]) { const gx = MX + Math.sin(a) * 0.45, gz = MZ + Math.cos(a) * 0.45; const L = Math.hypot(0.45, 1.5); const gy = mk(g, new THREE.CylinderGeometry(0.004, 0.004, L, 4), dark, (gx + MX) / 2, 0.75, (gz + MZ) / 2); gy.lookAt(MX, 1.5, MZ); gy.rotateX(Math.PI / 2); }
       // solar arrays: two rows, tilted to the sky
       for (let row = 0; row < 2; row++) for (let i = 0; i < 4; i++) {
         const x = -1.2 + i * 0.85, z = -2.15 - row * 0.75;
@@ -1415,6 +1493,11 @@
         mk(g, new THREE.BoxGeometry(0.78, 0.035, 0.02), metal, x, 0.36 + 0.13, z - 0.22).rotation.x = -0.55;
       }
       mk(g, new THREE.BoxGeometry(0.06, 0.03, 1.2), dark, 0.0, 0.02, -1.45);                // power line to the habitat
+      // NASA's Habitat Demonstration Unit (NASA 3D Resources, built in inches): it replaces the hand-built modules once loaded
+      loadGLB(["models/hdu1.glb", "models/hdu2.glb"], parts => {
+        const w = new THREE.Group(); w.scale.setScalar(0.0254 / 4.2); parts.forEach(p => { tuneModel(p, 0.8); w.add(p); });
+        g.userData.core.forEach(o => { o.visible = false; }); g.add(w); g.userData.nasa = true; T3.dirty = true;
+      });
       return g;
     }
     function makeSat(hex) {
@@ -1467,7 +1550,7 @@
     // Real sizes. The suited astronaut is 1.9 m, the habitat dome 8.4 m across with a 2.3 m airlock.
     // From far away they are smaller than a pixel, so labels and the beacon mark where they are (the way NASA Eyes marks spacecraft).
     // The orbiter is the one exception: it is hundreds of km away, so it is drawn as a sky marker and its label gives the real range.
-    const AS = 1, HS = 4.2, SSC = 430 * K, IDLE = HAB, HABM = [HAB[0], Math.min(M.height_m - 1, HAB[1] + 9.6)];   // the walk starts and ends at the habitat point, which is the ground in front of the airlock; the dome stands just north of it
+    const AS = 1, HS = 4.2, SSC = 430 * K, IDLE = HAB, HABM = [HAB[0], Math.min(M.height_m - 1, HAB[1] + 16)];   // the walk starts and ends at the habitat point, which is the ground in front of the airlock; the dome stands just north of it
     const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro); T3.astro = astro;
     const astroTag = labelSprite("Astronaut", "#8ab8ff"); sc.add(astroTag);
     const rover = makeRover(); rover.visible = false; sc.add(rover); T3.rover = rover;
@@ -1476,7 +1559,7 @@
     blob.rotation.x = -Math.PI / 2; blob.renderOrder = 2; sc.add(blob);
     let missLine = null, missTag = null, missId = 0;
     const hab = makeHab(); hab.scale.setScalar(HS); hab.position.copy(P(HABM[0], HABM[1], 0)); hab.position.y = ground(HABM[0], HABM[1]); sc.add(hab);
-    // The dome stands 9.6 m from the start point with its airlock facing it, on the side the planned route does not use, so nobody walks through a wall.
+    // The habitat stands 16 m from the start point with its airlock facing it, on the side the planned route does not use, so nobody walks through a wall.
     function placeHab() {
       const r = S.route; let hx = 0, hy = 1;
       if (r && r.x.length > 2) {
@@ -1488,7 +1571,7 @@
         const sx = a[0] + b[0], sy = a[1] + b[1];
         [hx, hy] = Math.hypot(sx, sy) > 0.35 ? un(-sx, -sy) : [-a[1], a[0]];
       }
-      HABM[0] = Math.min(M.width_m - 1, Math.max(1, HAB[0] + hx * 9.6)); HABM[1] = Math.min(M.height_m - 1, Math.max(1, HAB[1] + hy * 9.6));
+      HABM[0] = Math.min(M.width_m - 1, Math.max(1, HAB[0] + hx * 16)); HABM[1] = Math.min(M.height_m - 1, Math.max(1, HAB[1] + hy * 16));
       hab.position.copy(P(HABM[0], HABM[1], 0)); hab.position.y = ground(HABM[0], HABM[1]); hab.rotation.y = Math.atan2(-hx, hy);
       habTag.position.copy(hab.position); habTag.position.y += 8.5; rockAt = null;
     }
@@ -1498,8 +1581,9 @@
     // rocks at their real size (about 10 cm to 1.4 m) wherever you look closely. Each one is placed by a hash of its ground cell, so it is always in the same spot.
     const RN = lite ? 280 : 720, RCELL = 6, v3 = new THREE.Vector3();
     const rocks = (() => {
-      const rg = new THREE.IcosahedronGeometry(1, 1), rp = rg.attributes.position;
-      for (let i = 0; i < rp.count; i++) { const f = 0.78 + Math.random() * 0.4; rp.setXYZ(i, rp.getX(i) * f, rp.getY(i) * f * 0.62, rp.getZ(i) * f); }
+      const rg = new THREE.SphereGeometry(1, 14, 9), rp = rg.attributes.position;
+      const rn3 = (x, y, z) => { const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return s - Math.floor(s); };
+      for (let i = 0; i < rp.count; i++) { const x = rp.getX(i), y = rp.getY(i), z = rp.getZ(i), f = 0.9 + 0.14 * rn3(Math.round(x * 3), Math.round(y * 3), Math.round(z * 3)) + 0.1 * Math.sin(x * 2.6 + z * 1.7); rp.setXYZ(i, x * f, y * f * (y < 0 ? 0.35 : 0.7), z * f); }
       rg.computeVertexNormals();
       const m = new THREE.InstancedMesh(rg, pbr({ color: 0xffffff, roughness: 0.96, envMapIntensity: 0.2 }), RN), cl = new THREE.Color(0x8a6f5a);
       for (let i = 0; i < RN; i++) m.setColorAt(i, cl);
@@ -1507,16 +1591,21 @@
     })();
     rocksRef = rocks;
     const hsh = (i, j, k) => { let n = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(k + 1, 1274126177); n = Math.imul(n ^ (n >>> 13), 1103515245); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
-    let rockAt = null;
+    let rockAt = null, rkRoute = null, rkSet = null;
+    const nearRoute = (x, y) => {                                                // keep the route itself clear of rocks
+      const r = walk.on ? walk.route : S.route; if (!r) return false;
+      if (rkRoute !== r) { rkRoute = r; rkSet = new Set(); for (let i = 1; i < r.x.length; i++) { const dx = r.x[i] - r.x[i - 1], dy = r.y[i] - r.y[i - 1], n = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 2)); for (let k = 0; k <= n; k++) rkSet.add(Math.round((r.x[i - 1] + dx * k / n) / 3) + ":" + Math.round((r.y[i - 1] + dy * k / n) / 3)); } }
+      const cx = Math.round(x / 3), cy = Math.round(y / 3); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (rkSet.has((cx + a) + ":" + (cy + b))) return true; return false;
+    };
     function scatter(mx, my, cd) {                                               // wider field and only the bigger rocks as the camera pulls back
       const R = Math.min(lite ? 120 : 260, Math.max(lite ? 46 : 70, cd * 2.2)), minS = cd * 0.0035, c0 = Math.round(mx / RCELL), c1 = Math.round(my / RCELL), nc = Math.ceil(R / RCELL), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), cl = new THREE.Color(); let n = 0;
       for (let i = c0 - nc; i <= c0 + nc && n < RN; i++) for (let j = c1 - nc; j <= c1 + nc && n < RN; j++) {
         if (hsh(i, j, 0) > 0.3) continue;
         const x = (i + hsh(i, j, 1)) * RCELL, y = (j + hsh(i, j, 2)) * RCELL;
-        if (x < 1 || y < 1 || x > M.width_m - 1 || y > M.height_m - 1 || Math.hypot(x - mx, y - my) > R || Math.hypot(x - HABM[0], y - HABM[1]) < 15 || Math.hypot(x - HAB[0], y - HAB[1]) < 3) continue;
+        if (x < 1 || y < 1 || x > M.width_m - 1 || y > M.height_m - 1 || Math.hypot(x - mx, y - my) > R || Math.hypot(x - HABM[0], y - HABM[1]) < 21 || Math.hypot(x - HAB[0], y - HAB[1]) < 3 || nearRoute(x, y)) continue;
         const sz = 0.05 + Math.pow(hsh(i, j, 3), 5) * 0.95; if (sz < minS) continue; e.set(hsh(i, j, 4) * 0.5, hsh(i, j, 5) * 6.28, hsh(i, j, 6) * 0.5); q.setFromEuler(e);
-        m4.compose(v3.set(x - M.width_m / 2, ground(x, y) + sz * 0.02, -(y - M.height_m / 2)), q, new THREE.Vector3(sz, sz * (0.7 + hsh(i, j, 8) * 0.5), sz)); rocks.setMatrixAt(n, m4);
-        const t = 0.09 + hsh(i, j, 7) * 0.13; cl.setRGB(t * 1.0, t * 0.78, t * 0.62); rocks.setColorAt(n, cl); n++;
+        m4.compose(v3.set(x - M.width_m / 2, ground(x, y) + sz * 0.05, -(y - M.height_m / 2)), q, new THREE.Vector3(sz, sz * (0.75 + hsh(i, j, 8) * 0.45), sz * (0.8 + hsh(i, j, 9) * 0.4))); rocks.setMatrixAt(n, m4);
+        const t = 0.12 + hsh(i, j, 7) * 0.12; cl.setRGB(t * 1.0, t * 0.68, t * 0.5); rocks.setColorAt(n, cl); n++;
       }
       rocks.count = n; rocks.instanceMatrix.needsUpdate = true; rocks.instanceColor.needsUpdate = true; rockAt = [mx, my, cd];
     }
@@ -1524,7 +1613,7 @@
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 72), new THREE.MeshBasicMaterial({ color: 0x93B7E6, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.06; wk.add(ring);
     const beacon = new THREE.Mesh(new THREE.CylinderGeometry(5 * K, 5 * K, 700 * K, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0x8ab8ff, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide })); beacon.position.y = 350 * K; wk.add(beacon);
     const beamG = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]);
-    const beam = new THREE.Line(beamG, new THREE.LineBasicMaterial({ color: 0x6EE7A8 })); sc.add(beam); beam.visible = false;
+    const beam = new THREE.Line(beamG, new THREE.LineBasicMaterial({ color: 0x6EE7A8, transparent: true, opacity: 0.32 })); sc.add(beam); beam.visible = false;
     const satHolder = new THREE.Group(); sc.add(satHolder); satHolder.visible = false;
     const sats = {}; let satLabel = null, trailKey = "";
     const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })); sc.add(trail); trail.visible = false;
@@ -1544,7 +1633,10 @@
       for (let i = 0; i < X.length - 1; i++) {                                   // a point wherever the route crosses an edge of the terrain mesh, so the ribbon never dips under it
         const ax = X[i] / cw, ay = (M.height_m - Y[i]) / ch, bx = X[i + 1] / cw, by = (M.height_m - Y[i + 1]) / ch, ts = [0];
         const cuts = (a, b) => { if (a === b) return; for (let k2 = Math.ceil(Math.min(a, b)); k2 <= Math.max(a, b); k2++) { const t = (k2 - a) / (b - a); if (t > 1e-4 && t < 1 - 1e-4) ts.push(t); } };
-        cuts(ax, bx); cuts(ay, by); cuts(ax + ay, bx + by); ts.sort((u1, u2) => u1 - u2);
+        cuts(ax, bx); cuts(ay, by); cuts(ax + ay, bx + by);
+        if (RELIEF.on && patch) { const sl = Math.hypot(X[i + 1] - X[i], Y[i + 1] - Y[i]), mxp = (X[i] + X[i + 1]) / 2, myp = (Y[i] + Y[i + 1]) / 2;
+          if (Math.max(Math.abs(mxp - RELIEF.cx), Math.abs(myp - RELIEF.cy)) < RELIEF.half + sl / 2) for (let s2 = 2.5; s2 < sl; s2 += 2.5) ts.push(s2 / sl); }
+        ts.sort((u1, u2) => u1 - u2);
         for (const t of ts) { px.push(X[i] + (X[i + 1] - X[i]) * t); py.push(Y[i] + (Y[i + 1] - Y[i]) * t); pn.push(Nn[i + 1]); }
       }
       px.push(X.at(-1)); py.push(Y.at(-1)); pn.push(Nn.at(-1));
@@ -1810,6 +1902,7 @@
       envMats.forEach(m => { m.envMapIntensity = m.userData.env0 * (0.12 + 0.88 * day); });
       sun.target.position.copy(ctl.target); sun.position.copy(ctl.target).addScaledVector(sd, 7000 * K); sun.target.updateMatrixWorld();
       rn.toneMappingExposure = 0.78 + 0.4 * (1 - day);
+      if (tube) tube.material.opacity = 0.32 + 0.53 * day;
 
       // the astronaut: walks along the route; waits outside the airlock otherwise
       const k = T3.walker, walking = walk.on && !!k, u = astro.userData;
@@ -1882,7 +1975,7 @@
         rover.position.copy(P(mx0, my0, 0)); rover.position.y = S2.y;
         rover.rotation.set(S2.p, Math.atan2(fx, -fy), S2.r);
         const lp = T3.rvLast || [mx0, my0], dd = Math.hypot(mx0 - lp[0], my0 - lp[1]); T3.rvLast = [mx0, my0];
-        if (dd < 50) { T3.rvRoll = (T3.rvRoll || 0) + dd / 0.5; rover.userData.wheels.forEach(w => { w.rotation.x = T3.rvRoll; }); }
+        if (dd < 50) { T3.rvRoll = (T3.rvRoll || 0) + dd / (rover.userData.R || 0.3); rover.userData.wheels.forEach(w => { w.rotation.x = T3.rvRoll; }); }
         { const st = drv && k.manual ? walk.steer || 0 : Math.max(-1, Math.min(1, (T3.rvTurn || 0) * 1.5)); rover.userData.steer.forEach(p => { p.rotation.y = st * 0.42 * (p.userData.sign || 1); }); }   // the front wheels follow the steering
         if (drv) { astro.visible = false; blob.visible = false; astroTag.visible = false; }
         const camR = cam.position.distanceTo(rover.position); roverTag.visible = RV && camR > 60 && !T3.fp; roverTag.position.copy(rover.position); roverTag.position.y += 3.6;
@@ -1902,7 +1995,7 @@
       astroTag.position.copy(here); astroTag.position.y += 2.1; astroTag.visible = camD > 70 && !(nearHab && !walking);
       habTag.visible = camH > 110 && !(nearHab && walking);
       habLine.visible = walking && habNow().ok && here.distanceTo(hab.position) > 25 && camD > 160;      // the habitat radio link, drawn from the top of the mast
-      if (habLine.visible) habLine.geometry.setFromPoints([hab.localToWorld(new THREE.Vector3(0.45, 1.9, -0.25)), here.clone().setY(here.y + 1.75)]);
+      if (habLine.visible) habLine.geometry.setFromPoints([hab.localToWorld(new THREE.Vector3(1.6, 1.85, -1.0)), here.clone().setY(here.y + 1.75)]);
       wk.visible = walking;
       if (walking) {
         wk.position.copy(k.bx != null ? P(k.bx, k.by, 0).setY(ground(k.bx, k.by)) : here);
@@ -1917,6 +2010,9 @@
       const nr = Math.min(10 * K, Math.max(0.12, cd * 0.03)); if (Math.abs(nr - cam.near) > cam.near * 0.15) { cam.near = nr; cam.updateProjectionMatrix(); }
       const shW = Math.min(1700 * K, Math.max(16, cd * 1.5));
       if (Math.abs(shW - shNow) > shNow * 0.2) { shNow = shW; Object.assign(sun.shadow.camera, { left: -shW, right: shW, top: shW, bottom: -shW }); sun.shadow.camera.updateProjectionMatrix(); sun.shadow.normalBias = Math.max(0.02, 3 * shW / 1700); }
+      if (RELIEF.on) { const mx = ctl.target.x + M.width_m / 2, my = M.height_m / 2 - ctl.target.z;
+        if (cd < 900 && (!patch || Math.max(Math.abs(mx - RELIEF.cx), Math.abs(my - RELIEF.cy)) > RELIEF.half * 0.3)) buildPatch(mx, my);
+        if (patch) patch.visible = cd < 1400; }
       if (cd < 700) { const mx = ctl.target.x + M.width_m / 2, my = M.height_m / 2 - ctl.target.z; if (!rockAt || Math.hypot(mx - rockAt[0], my - rockAt[1]) > Math.max(RCELL * 2, cd * 0.25) || cd > rockAt[2] * 1.3 || cd < rockAt[2] / 1.3) scatter(mx, my, cd); rocks.visible = true; } else rocks.visible = false;
       const pw = Math.min(26 * K, Math.max(0.14, cd * 0.0065)), hq = Math.max(0.3, (pathW || 1) * 0.6), ph = walk.on && T3.pathHead ? T3.pathHead.i + ":" + Math.round(T3.pathHead.x / hq) + ":" + Math.round(T3.pathHead.y / hq) : "";
       if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35 || ph !== pathKey) { if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35) pathW = pw; pathKey = ph; buildPath(); }
@@ -1934,7 +2030,7 @@
         Object.values(sats).forEach(m2 => { m2.visible = m2 === mdl; });
         mdl.scale.setScalar(SSC); mdl.position.copy(spos); mdl.lookAt(here); mdl.rotateX(-Math.PI / 2);   // steady, with its underside to the planet
         const txt = sm[3] ? `${orb} · ${Math.round(sm[3]).toLocaleString("en-US")} km away` : `${orb} · ${Math.round(sm[2])}°`;
-        if (!satLabel || satLabel.userData.text !== txt) { if (satLabel) { satHolder.remove(satLabel); satLabel.material.map.dispose(); } satLabel = labelSprite(txt, ORB[orb].c); satLabel.material.fog = false; satHolder.add(satLabel); }
+        if (!satLabel || satLabel.userData.text !== txt) { if (satLabel) { satHolder.remove(satLabel); satLabel.material.map.dispose(); } satLabel = labelSprite(txt, ORB[orb].c); satLabel.material.fog = false; satLabel.scale.multiplyScalar(1.35); satHolder.add(satLabel); }
         satLabel.position.copy(spos); satLabel.position.y += 1100 * K;
         satHolder.visible = true;
         if (ap) {
@@ -1958,7 +2054,7 @@
         if (moving && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8);                // the head drifts back to face the way you walk
         const f = T3.fpDir.clone().applyAxisAngle(UP, L.yaw), right = new THREE.Vector3(-f.z, 0, f.x);
         const bob = moving ? Math.abs(Math.cos(T3.phase)) * 0.05 : 0, sway = moving ? Math.sin(T3.phase) * 0.03 : 0;
-        if (inRover) { cam.position.copy(here).addScaledVector(T3.fpDir, 0.62).addScaledVector(right, 0.35); cam.position.y = rover.position.y + 2.5; if (moving === false && walking && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8); }   // the view from the rover’s mast camera
+        if (inRover) { const rud = rover.userData; cam.position.copy(here).addScaledVector(T3.fpDir, rud.camF || 0.62).addScaledVector(right, rud.camR == null ? 0.35 : rud.camR); cam.position.y = rover.position.y + (rud.camY || 2.5); if (moving === false && walking && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8); }   // the view from the rover’s mast camera
         else { cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob; }
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
         if (T3.vr && T3.vr.q) { T3.vrDt = dtr; vrDraw(here, jy); return; }
@@ -1974,7 +2070,7 @@
         const back = walking ? (T3.dir || new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(-Math.sin(hab.rotation.y + 0.35), 0, -Math.cos(hab.rotation.y + 0.35));   // idle: stand in front of the astronaut, habitat behind
         const want = here.clone().addScaledVector(back, -dist); want.y = here.y + 1.3 + dist * 0.36;
         const gy = ground(Math.min(M.width_m, Math.max(0, want.x + M.width_m / 2)), Math.min(M.height_m, Math.max(0, M.height_m / 2 - want.z))) + 0.7; if (want.y < gy) want.y = gy;
-        { const hx = want.x - hab.position.x, hz = want.z - hab.position.z, hd = Math.hypot(hx, hz), keep = 6.2 * HS / 4.2;          // never inside the habitat: push the camera out round its walls
+        { const hx = want.x - hab.position.x, hz = want.z - hab.position.z, hd = Math.hypot(hx, hz), keep = (hab.userData.nasa ? 7.6 : 6.2) * HS / 4.2;          // never inside the habitat: push the camera out round its walls
           if (hd < keep && want.y < hab.position.y + 4.6) { const s = keep / Math.max(hd, 0.01); want.x = hab.position.x + hx * s; want.z = hab.position.z + hz * s; } }
         cam.position.lerp(want, 1 - Math.exp(-dtr * (walking && k.manual ? 5 : 3.2)));
         ctl.target.lerp(here.clone().setY(here.y + 1.45), 1 - Math.exp(-dtr * 9));

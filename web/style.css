@@ -537,7 +537,7 @@ body.mode-explore .timebar { left: auto; right: 20px; width: auto; grid-template
 .exbtns .go.rov { background: #ff9a6b; color: #04060a; }
 .exbtns .go.rov:hover { background: #ffb08a; }
 /* from the driver's seat: windscreen pillars and the dashboard edge instead of the helmet rim */
-body.veh-rover.walking.fp .visor { background:
+body.veh-rover.walking.fp .visor { display: none !important; background:
   linear-gradient(180deg, rgba(10, 14, 21, 0.92) 0, rgba(10, 14, 21, 0.92) 7%, transparent 9%, transparent 80%, rgba(10, 14, 21, 0.95) 83%),
   linear-gradient(100deg, rgba(10, 14, 21, 0.95) 0, rgba(10, 14, 21, 0.95) 6%, transparent 8%, transparent 92%, rgba(10, 14, 21, 0.95) 94%); box-shadow: none; }
 body.veh-rover.walking .jumpbtn { display: none !important; }
@@ -699,7 +699,7 @@ body.mode-explore .routekey, body.walking .routekey, body.tour .routekey, body.v
   body.walking .toasts { top: auto; bottom: calc(var(--tbh) + 40px); left: var(--side); transform: none; width: auto; max-width: 400px; }
   body.walking .toast.guide { font-size: 13px; padding: 10px 10px 11px 10px; grid-template-columns: 30px minmax(0, 1fr) 30px; }
   body.walking .toast.guide .bot, body.walking .toast.guide .vox { width: 30px; height: 30px; }
-  body.walking .toast.guide span { -webkit-line-clamp: 3; }
+  body.walking .toast.guide span { -webkit-line-clamp: 5; }
   /* the radio stays a single button until you open it, left of the zoom buttons */
   .radiodock { right: 80px; }
   .rdfab { position: relative; justify-self: end; display: grid; place-items: center; width: 52px; height: 52px; padding: 0; border-radius: 50%; border: 1px solid var(--line-2); background: rgba(10, 14, 21, 0.82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #fff; }
