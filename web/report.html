@@ -76,7 +76,7 @@
 (() => {
   const $ = id => document.getElementById(id);
   let R = null; try { R = JSON.parse(localStorage.getItem("mw_report") || "null"); } catch (e) { R = null; }
-  if (!R) { $("doc").innerHTML = '<p class="empty">No plan to report yet. Open the planner, plan a route, then press <b>Export report</b>.<br><br><a href="globe.html?mode=plan">Open the planner</a></p>'; $("print").hidden = true; return; }
+  if (!R) { $("doc").innerHTML = '<p class="empty">No plan to report yet. Open the planner, plan a route, then press <b>Export report</b>.<br><br><a href="globe.html">Open the planner</a></p>'; $("print").hidden = true; return; }
   $("print").onclick = () => print();
   if (!history.length || history.length < 2) $("back").href = R.backUrl || "globe.html";
 

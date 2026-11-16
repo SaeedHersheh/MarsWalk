@@ -196,14 +196,14 @@
   <div class="badge" aria-hidden="true"><img src="img/brand/logo-full.jpg" alt="" width="900" height="900"></div>
   <span class="eyebrow">AirAwareNetwork · NASA Space Apps 2026</span>
   <h2>Your turn.</h2>
-  <p>Plan a real expedition on NASA terrain, or step outside and stand on Mars.</p>
-  <div class="btns"><a class="pill plan" href="globe.html?mode=plan">Plan a trip <svg class="arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a><a class="pill exp" href="globe.html?mode=explore">Experience Mars <svg class="arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a></div>
+  <p>Pick a place, plan the route, then walk it yourself in 3D or VR.</p>
+  <div class="btns"><a class="pill plan" href="globe.html">Start exploring <svg class="arr" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></a></div>
   <div class="links"><a class="ghost" href="/">Home</a><a class="ghost" href="#" id="again">Watch again</a></div>
 </div></div>
 
 <div class="start" id="start"><canvas class="sky" data-sky aria-hidden="true"></canvas>
   <header class="bar"><a class="brand" href="/" aria-label="Marswalk home"><img src="img/brand/logo-192.png?v=1794691885" alt="" width="42" height="42"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
-    <nav aria-label="Pages"><a class="keep" href="/">Home</a><a href="globe.html?mode=plan">Plan a trip</a><a href="globe.html?mode=explore">Experience Mars</a></nav></header>
+    <nav aria-label="Pages"><a class="keep" href="/">Home</a><a href="globe.html">Open the app</a></nav></header>
   <div class="in">
     <div>
       <span class="eyebrow">The tour</span>
@@ -233,7 +233,7 @@
   const PAGES = {
     home: { src: "home.html", label: "the homepage", ready: "load" },
     how: { src: "how.html", label: "How it works", ready: "load" },
-    globe: { src: "globe.html?mode=plan", label: "the globe", ready: "load" },
+    globe: { src: "globe.html", label: "the globe", ready: "load" },
     lab: { src: "index.html?site=jezero&tour=lab", label: "Jezero crater", ready: "msg" },
     pav: { src: "index.html?site=n00p91_w112p77&tour=pavonis", label: "Pavonis Mons", ready: "msg" },
   };
@@ -270,7 +270,7 @@
     { a: 4, page: "pav", scene: "walk", pre: ["plan"], t: 9, say: [[0.3, "Now walk it, on the real ground at true size. Away from home, the suit’s position estimate slowly drifts."]], title: "Walk the route in 3D", sub: "The same route, now on the real ground at true size. The astronaut follows the planned path, step by step. Out here, away from the habitat, the suit has to guess where it is, and the guess slowly drifts." },
     { a: 4, page: "pav", scene: "sat", pre: ["plan", "walk"], t: 11, say: [[0.4, "A real relay satellite rises overhead, measures where the astronaut is, and the route is re-planned."]], title: "A satellite finds the astronaut", sub: "A real relay satellite rises overhead. The yellow line is its radio link to the astronaut. From it we measure where they are, correct the drift, and re-plan the rest of the route." },
     { a: 4, page: "pav", scene: "rover", t: 9, say: [[0.3, "For scouting, send the rover: it drives its own route, planned for its wheels."]], title: "Or send the rover", sub: "A robotic rover scouts ahead at about 10 km/h on flat ground, on a route planned for slopes up to 20° (assumed). Its front and rear wheels steer." },
-    { a: 4, page: "pav", scene: "explore", t: 8, say: [[0.2, "Or step outside: walk, look around, and jump in a third of Earth’s gravity."]], title: "Experience Mars", sub: "First person at real speed: walk with W A S D or the on-screen stick, look around, and jump in 38 % of Earth's gravity." },
+    { a: 4, page: "pav", scene: "explore", t: 8, say: [[0.2, "Or step outside: walk, look around, and jump in a third of Earth’s gravity."]], title: "Walk it yourself", sub: "First person at real speed: walk with W A S D or the on-screen stick, look around, and jump in 38 % of Earth's gravity." },
     { a: 4, page: "pav", scene: "vr", pre: ["explore"], pip: true, pos: "bc", t: 18, say: [[0.3, "And in VR. Walk where you look, with two screens beside you."], [7.5, "Hold the dot on the radio to call the habitat."], [11.5, "And mission control answers."], [15, "Marswalk. Walk Mars, before anyone does."]], title: "And in VR", sub: "Put a phone in a headset and walk where you look. Two screens float beside you: on the left, where you are and what to do; on the right, the radio. Hold the dot on a button for 2 seconds to press it, here a message to Earth." },
   ];
   // ?short=1: the 30-second demo for the Space Apps form. One place, one load, one story: map, navigation, 3D, satellite fix, VR.

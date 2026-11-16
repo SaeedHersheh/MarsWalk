@@ -278,7 +278,7 @@ details.more[open] > summary::after { content: "–"; }
 (() => {
   const D2R = Math.PI / 180;
   const $ = id => document.getElementById(id);
-  const GMODE = new URLSearchParams(location.search).get("mode");
+  const GMODE = "";   // one flow now: every place opens the planner, which then offers the walk in 3D or VR
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const KM_PER_DEG = 2 * Math.PI * 3389.5 / 360;          // 59.16 km per degree of latitude
 
@@ -833,7 +833,6 @@ details.more[open] > summary::after { content: "–"; }
   $("zhome").addEventListener("click", () => { if (S.view === "map") { map.fit = true; map.cx = 0; map.cy = 0; map.draw(); } else camera.position.setLength(camera.aspect < 1 ? Math.min(7, 3.3 * Math.min(2.1, 0.9 / camera.aspect)) : 3.3); });
 
   /* ---------- plan anywhere ---------- */
-  // the homepage sends ?mode=plan (Plan a trip) or ?mode=explore (Experience Mars); the site opens in that mode
   const siteUrl = id => `index.html?site=${encodeURIComponent(id)}`;   // one flow for everyone: the planner, then the offer to walk it
   if (GMODE === "plan") { $("gMode").style.color = "#8ab8ff"; $("gMode").textContent = "Plan a trip"; $("gSub").textContent = "Pick a landing site"; $("hint").textContent = "Click anywhere on Mars to plan a trip there"; }
   if (GMODE === "explore") { $("gMode").style.color = "#ff9a6b"; $("cPlan").style.background = "#ff9a6b"; $("cPlan").style.color = "#04060a"; $("gMode").textContent = "Experience Mars"; $("gSub").textContent = "Pick a place to stand"; $("hint").textContent = "Click anywhere on Mars to stand there"; }

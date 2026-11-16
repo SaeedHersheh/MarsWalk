@@ -2,7 +2,7 @@
 (async () => {
   const $ = id => document.getElementById(id);
   const SITE = new URLSearchParams(location.search).get("site") || "jezero";
-  const MODE = ["plan", "explore"].includes(new URLSearchParams(location.search).get("mode")) ? new URLSearchParams(location.search).get("mode") : "full";
+  const MODE = "full";   // one flow: plan the route, then the planner offers the walk in first person (old ?mode= links land here too)
   document.body.classList.add("mode-" + MODE);
   const Q = u => u.startsWith("/api/") ? u + (u.includes("?") ? "&" : "?") + "site=" + SITE : u;   // every API call names its site
   const J = (u, o) => fetch(Q(u), o).then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText); return r.json(); });
@@ -2752,79 +2752,6 @@
       try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
     };
   }
-  if (MODE === "explore") {
-    /* Experience Mars: the panels go, the astronaut steps out of the airlock, and you are behind the visor.
-       A lookout is chosen for you: the highest ground within 2.5 km of the habitat, so the first walk has a view. */
-    document.body.classList.add("nopanel"); setView("3d"); setCam("fp", true); syncPanelTog();
-    const ex = $("explore"), sunNow = sunAt(Date.now() / 1000), dark = sunNow.el < 6;
-    if (dark) T3.testSun = { az: 200, el: 34 };
-    const [lo, la] = lonLat(...HAB), z0 = elevAt(...HAB) ?? 0;
-    $("exSite").textContent = M.label;
-    $("exFacts").innerHTML = `<span>${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"}</span><span>${z0 >= 0 ? "+" : "−"}${Math.abs(z0 / 1000).toFixed(1)} km elevation</span><span>${dark ? "Night there now · shown in daylight" : `Sun ${Math.round(sunNow.el)}° up there now`}</span>`;
-    const coarse = matchMedia("(pointer: coarse)").matches;
-    $("exHow").innerHTML = coarse
-      ? "<li><b>Stick</b> walk and turn</li><li><b>Drag</b> look around</li><li><b>Jump</b> in 0.38 g</li><li><b>VR</b> phone in a headset</li>"
-      : "<li><b>W A S D</b> walk and turn</li><li><b>Drag</b> look around</li><li><b>Space</b> jump in 0.38 g</li><li><b>C</b> change camera</li>";
-    function lookout() {
-      let best = null, bz = -1e9; const R0 = 2500, st = Math.max(DX, 40);
-      for (let dy = -R0; dy <= R0; dy += st) for (let dx = -R0; dx <= R0; dx += st) {
-        const d = Math.hypot(dx, dy); if (d < 700 || d > R0) continue;
-        const x = HAB[0] + dx, y = HAB[1] + dy, z = elevAt(x, y), sl = slopeAt(x, y); if (z == null || sl == null || sl > 22) continue;
-        if (z > bz) { bz = z; best = [x, y]; }
-      }
-      return best || [HAB[0] + 1200, HAB[1] + 900];
-    }
-    // second step: choose where to go. The map opens round the habitat; tap a spot (or take the lookout).
-    // second step: plan where to go. Tap the map to add stops (as many as you like); the route is drawn as you go.
-    // Nothing starts until you press Start: then you are in first person at the airlock.
-    function chooseDest() {
-      return new Promise(res => {
-        const R0 = S.vehicle === "rover" ? 8000 : 3500, bar = $("exPick"), go = $("exStart"), rv = S.vehicle === "rover";
-        S.stops = T3.carried && T3.carried.length ? T3.carried : []; T3.carried = null; S.roundTrip = false; plan(0);
-        setView("2d"); map.fitBounds(L.latLngBounds([ll(HAB[0] - R0, HAB[1] - R0), ll(HAB[0] + R0, HAB[1] + R0)]), { animate: false });
-        const sync = () => {
-          const n = S.stops.length, r = S.route && S.route.stop_idx.length === n + 1 ? S.route : null;
-          $("exPickT").textContent = !n ? `Tap the map to add your stops` : r ? `${n} stop${n > 1 ? "s" : ""} · ${wKm(r.distance_m)} · about ${wDur(r.time_s)} ${rv ? "driving" : "walking"}` : `${n} stop${n > 1 ? "s" : ""} · planning the route…`;
-          go.disabled = !r; $("exUndo").hidden = !n; $("exReport").hidden = !r;
-        };
-        const timer = setInterval(sync, 300); sync();
-        bar.hidden = false; document.body.classList.add("ex-picking");
-        const done = ok => { clearInterval(timer); T3.exPick = null; bar.hidden = true; document.body.classList.remove("ex-picking"); res(ok); };
-        T3.exPick = p => { S.stops.push(p); plan(0); sync(); };
-        $("exUndo").onclick = () => { S.stops.pop(); plan(0); sync(); };
-        $("exLook").onclick = () => { S.stops.push(lookout()); plan(0); sync(); };
-        $("exStart").onclick = () => done(true);
-        $("exReport").onclick = () => exportReport();
-        $("exBack").onclick = () => { S.stops = []; plan(0); done(false); };
-      });
-    }
-    async function stepOut(veh) {
-      ex.hidden = true; audio().resume();
-      if (!walk.on) {
-        setVehicle(veh === "rover" ? "rover" : "foot", false);
-        if (!(await chooseDest())) { setView("3d"); setCam("fp", true); ex.hidden = false; return; }
-        if (!S.route) return toast("No route yet", "Add a stop that can be reached.", "#F0616B");
-        const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click();
-        setView("3d"); startWalk(); takeControl(); setCam("fp", true);
-        const far = S.route.distance_m, rv = S.vehicle === "rover", n = S.stops.length;
-        guide(rv ? "You are at the wheel" : "You are outside", `Your plan: ${n} stop${n > 1 ? "s" : ""}, ${wKm(far)} by the planned route, about ${wDur(S.route.time_s)}. ${rv ? "Drive" : "Walk"} it yourself; the green line shows the way. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.${far > (rv ? 30000 : 8000) ? " It is a long way: the Speed buttons make time run faster." : ""}`, "#8ab8ff");
-      }
-      try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
-    }
-    $("exGo").onclick = () => stepOut("foot"); $("exRover").onclick = () => stepOut("rover");
-    {   // came from Plan a trip with a route: say so on the card, and keep the stops for the next step
-      const q = new URLSearchParams(location.search).get("stops");
-      const st = q ? q.split(";").map(v => v.split(",").map(Number)).filter(p => p.length === 2 && p.every(Number.isFinite) && p[0] > 0 && p[1] > 0 && p[0] < M.width_m && p[1] < M.height_m) : [];
-      if (st.length) {
-        T3.carried = st;
-        const rv = new URLSearchParams(location.search).get("vehicle") === "rover";
-        ex.querySelector("p:not(.exfacts)").textContent = `Your planned route is ready: ${st.length} stop${st.length > 1 ? "s" : ""}. Choose how to travel; you can still add or remove stops before you press Start simulation.`;
-        if (rv) { const a = $("exGo"), b = $("exRover"); b.after(a); }        // the way you planned comes first
-      }
-    }
-    ex.hidden = false;
-  }
-
   /* ---------- tutorial: a short guided look at each part of the page (the Tutorial button in the top bar) ---------- */
   {
     const T = { i: -1 }, phone = () => mq.matches;
