@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794853359">
+<link rel="stylesheet" href="style.css?v=1794858500">
 </head>
 <body>
 <div id="map"></div>
@@ -46,7 +46,7 @@
     <div class="grab" data-close aria-hidden="true"><i></i></div>
 
     <section class="sec">
-      <h2><b>1</b>Waypoints <em id="planState"></em></h2>
+      <h2>Your stops <em id="planState"></em></h2>
       <div class="stops" id="stops"></div>
       <p class="hint" id="stopHint">Select a point on the map to add a waypoint. Drag a marker to move it.</p>
       <div class="actions">
@@ -56,13 +56,13 @@
     </section>
 
     <section class="sec">
-      <h2><b>2</b>How you travel</h2>
+      <h2>How you travel</h2>
       <div class="seg wide" role="group" aria-label="How you travel">
         <button type="button" class="veh" data-v="foot" aria-pressed="true">On foot</button>
         <button type="button" class="veh" data-v="rover" aria-pressed="false">Rover</button>
       </div>
       <p class="hint" id="vehHint"></p>
-      <h2 class="sub">Route policy</h2>
+      <h2 class="sub">Kind of route</h2>
       <div class="styles" id="styles" role="group" aria-label="Route policy">
         <button type="button" class="style" data-s="safe" aria-pressed="true"><i class="sw safe"></i><b>Safest</b><span>Flattest ground, even if it is longer</span></button>
         <button type="button" class="style" data-s="balanced" aria-pressed="false"><i class="sw bal"></i><b>Balanced</b><span>Some slope where it saves a lot of walking</span></button>
@@ -70,7 +70,7 @@
       </div>
       <p class="hint" id="styleHint"></p>
       <details class="more">
-        <summary>Cost weights and constraints</summary>
+        <summary>Fine-tune the route</summary>
         <label class="slider">Slope penalty <output id="o-slope"></output><input type="range" id="w-slope" min="0" max="1" step="0.05" value="1"></label>
         <label class="slider">Radiation penalty <output id="o-radiation"></output><input type="range" id="w-radiation" min="0" max="1" step="0.05" value="0.3"></label>
         <label class="slider">Radio coverage <output id="o-comms"></output><input type="range" id="w-comms" min="0" max="1" step="0.05" value="0.3"></label>
@@ -81,7 +81,7 @@
     </section>
 
     <section class="sec phone-only">
-      <h2><b>3</b>Departure</h2>
+      <h2>Departure</h2>
       <label class="slider"><span id="departTxt">Departure: now</span> <output id="o-depart"></output><input type="range" id="depart" min="0" max="1440" step="5" value="0"></label>
       <div class="actions">
         <button type="button" class="chip" id="departNow">Now</button>
@@ -90,17 +90,19 @@
     </section>
 
     <section class="sec">
-      <h2><b class="n3">3</b>Review the traverse</h2>
+      <h2>Your route</h2>
       <div class="verdict" id="verdict"></div>
       <div class="stats" id="stats"></div>
       <div class="mix" id="mix"></div>
       <div class="warns" id="warns"></div>
       <div class="box" id="boxProfile"><h3>Elevation profile <em id="profSub"></em></h3><canvas id="profile"></canvas></div>
       <details class="more">
-        <summary>Additional parameters</summary>
+        <summary>More numbers</summary>
         <div class="stats" id="moreStats"></div>
         <div class="contacts" id="contacts"></div>
       </details>
+      <details class="more" id="navMore">
+      <summary>Position accuracy along the route</summary>
       <div class="box navbox" id="navBox" hidden>
         <h3>Position accuracy <em>how sure you will be of where you are</em></h3>
         <canvas id="navChart"></canvas>
@@ -108,6 +110,7 @@
         <div class="navkey"><span><i style="background:#3ddc97"></i>within 12 m</span><span><i style="background:#8ab8ff"></i>12–30 m</span><span><i style="background:#f2b84b"></i>30–60 m</span><span><i style="background:#ff6b55"></i>over 60 m</span></div>
         <p class="hint">No GPS on Mars: the suit counts steps (about 2 m off per 100 m), the habitat mast measures range and bearing while it can see you, and each relay pass fixes the position to about 5 m (assumed accuracies).</p>
       </div>
+      </details>
       <button type="button" class="reportbtn" id="reportBtn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span><b>Export report</b><small>A two-page PDF of this plan</small></span></button>
       <p class="hint nextstep">Then press <b>play</b> in the time bar to simulate the walk.</p>
     </section>
@@ -225,9 +228,10 @@
   <div class="arrow" id="arrow">➤</div>
   <div class="hudmain"><b id="hudNext">—</b><span id="hudSub">—</span></div>
   <div class="hudcols">
+    <div class="hudcol"><span>Elevation</span><b id="hudElev">—</b></div>
     <div class="hudcol"><span id="hudPosL">Position</span><b id="hudPos">±3 m</b></div>
-    <div class="hudcol"><span>Habitat radio</span><b id="hudHab">linked</b></div>
     <div class="hudcol"><span>Satellite</span><b id="hudLink">none</b></div>
+    <div class="hudcol"><span>Habitat radio</span><b id="hudHab">linked</b></div>
     <div class="hudcol"><span>Dose</span><b id="hudDose">0</b></div>
     <div class="hudcol"><span>Ground</span><b id="hudGround">—</b></div>
   </div>
@@ -258,7 +262,8 @@
   </div>
 </div>
 <div class="maplegend" id="mapLegend" hidden></div>
-<div class="readout"><div><span>Lat</span><b id="rLat">—</b></div><div><span>Lon</span><b id="rLon">—</b></div><div><span>Elev</span><b id="rEl">—</b></div><div><span>Slope</span><b id="rSl">—</b></div></div>
+<div class="routekey" id="routeKey" hidden><div><b>Line</b><span><i style="background:#6EE7A8"></i>flat</span><span><i style="background:#F5B85B"></i>moderate</span><span><i style="background:#F0616B"></i>steep</span></div><div><b>Glow</b><span><i style="background:#3ddc97"></i>position sure</span><span><i style="background:#f2b84b"></i>less sure</span><span><i class="dot"></i>satellite fix</span></div></div>
+<div class="readout"><div><span>Lat</span><b id="rLat">—</b></div><div><span>Lon</span><b id="rLon">—</b></div><div><span>Elevation</span><b id="rEl">—</b></div><div><span>Slope</span><b id="rSl">—</b></div></div>
 
 <!-- Doppler: one pass as the surface radio sees it -->
 <div class="dop" id="dopPanel" hidden>
@@ -303,6 +308,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="relayfix.js?v=1794663000"></script>
-<script src="app.js?v=1794853359"></script>
+<script src="app.js?v=1794858500"></script>
 </body>
 </html>

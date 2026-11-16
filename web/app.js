@@ -223,10 +223,11 @@
       const m = L.marker(ll(...s), { icon: icon("mk", i + 1), draggable: !walk.on }).addTo(g);
       m.on("dragend", () => { const p = m.getLatLng(); S.stops[i] = [p.lng, p.lat]; plan(); });
     });
-    $("stops").innerHTML = `<div class="stop hab"><i>H</i><span>Habitat</span><small>${fmtLL(...HAB)}</small><span></span></div>` +
-      S.stops.map((s, i) => `<div class="stop"><i>${i + 1}</i><span>Waypoint ${i + 1}</span><small>${Math.round(elevAt(...s) ?? 0)} m</small><button data-i="${i}" title="Remove">×</button></div>`).join("");
+    $("stops").innerHTML = `<div class="stop hab"><i>H</i><span>Habitat</span><small>${fEl(elevAt(...HAB))}</small><span></span></div>` +
+      S.stops.map((s, i) => `<div class="stop"><i>${i + 1}</i><span>Waypoint ${i + 1}</span><small>${fEl(elevAt(...s))}</small><button data-i="${i}" title="Remove">×</button></div>`).join("");
     $("stops").querySelectorAll("button").forEach(b => b.onclick = () => { if (walk.on) return; S.stops.splice(+b.dataset.i, 1); plan(); });
   }
+  const fEl = z => z == null ? "—" : (Math.round(z) < 0 ? "−" : "") + Math.abs(Math.round(z)).toLocaleString("en-US") + " m";
   const fmtLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${la.toFixed(3)}°N ${lo.toFixed(3)}°E`; };
   map.on("click", e => {
     if (walk.on) return;
@@ -344,19 +345,22 @@
   }
   function drawNav() {
     navLine.clearLayers(); const r = S.route, box = $("navBox");
+    $("routeKey").hidden = !r || walk.on || S.view !== "2d";
     if (!r || walk.on) { if (box) box.hidden = !r; return; }
     const F = navForecast(r); S.nav = F;
     let start = 0, col = NAVC(F.err[0]);
     for (let i = 1; i < r.x.length; i++) {
       const c = NAVC(F.err[i]);
-      if (c !== col || i === r.x.length - 1) { navLine.addLayer(L.polyline(r.x.slice(start, i + 1).map((x, k) => ll(x, r.y[start + k])), { color: col, weight: 20, opacity: 0.6, lineCap: "round", interactive: false, pane: "nav" })); start = i; col = c; }
+      if (c !== col || i === r.x.length - 1) { navLine.addLayer(L.polyline(r.x.slice(start, i + 1).map((x, k) => ll(x, r.y[start + k])), { color: col, weight: 13, opacity: 0.32, lineCap: "round", interactive: false, pane: "nav" })); start = i; col = c; }
     }
     F.fixes.forEach(f => {
       const o = ORB[f.orbiter] || { c: "#8ab8ff" };
-      L.marker(ll(r.x[f.i], r.y[f.i]), { icon: L.divIcon({ className: "", html: `<div class="navfix" style="--c:${o.c}"><i></i><span>${shortOrb(f.orbiter)} fix · ${fUTC(f.t)}</span></div>`, iconSize: [0, 0], iconAnchor: [0, 0] }), interactive: false, pane: "route" }).addTo(navLine);
+      L.marker(ll(r.x[f.i], r.y[f.i]), { icon: L.divIcon({ className: "", html: `<div class="navfix" style="--c:${o.c}"><i></i></div>`, iconSize: [14, 14], iconAnchor: [7, 7] }), interactive: true, keyboard: false, pane: "route" })
+        .bindTooltip(`${shortOrb(f.orbiter)} fixes your position here, ${fUTC(f.t)}`, { direction: "top", offset: [0, -8] }).addTo(navLine);
     });
     if (box) { box.hidden = false; drawNavChart(r, F); }
   }
+  $("navMore").addEventListener("toggle", () => { if ($("navMore").open) drawNav(); });
   function drawNavChart(r, F) {
     const cv = $("navChart"); if (!cv || !cv.clientWidth) return;
     const W2 = cv.clientWidth, H2 = cv.clientHeight, dpr = devicePixelRatio || 1; cv.width = W2 * dpr; cv.height = H2 * dpr;
@@ -950,8 +954,9 @@
     const tgt = walk.rest[0], dist = tgt ? Math.hypot(tgt[0] - bx, tgt[1] - by) : 0, brg = tgt ? Math.atan2(tgt[0] - bx, tgt[1] - by) : 0;
     $("arrow").style.transform = `rotate(${(brg - walk.hd) * 180 / Math.PI - 90}deg)`;
     $("hudNext").textContent = `${tgt === HAB ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - walk.rest.filter(w2 => w2 !== HAB).length + 1)} of ${S.stops.length}`} · ${fKm(dist)}`;
-    $("hudSub").textContent = off > Math.max(25, 1.5 * DX) ? `${Math.round(off)} m off the route${tracked || walk.src === "hab" ? "" : " · waiting for a fix to replan"}` : `${fLL(bx, by)} · slope ${sl0.toFixed(0)}°`;
+    $("hudSub").textContent = off > Math.max(25, 1.5 * DX) ? `${Math.round(off)} m off the route${tracked || walk.src === "hab" ? "" : " · waiting for a fix to replan"}` : `Slope here ${sl0.toFixed(0)}°`;
     $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
+    $("hudElev").textContent = fEl(elevAt(walk.mx, walk.my));
     hudRelay(con, bx, by);
     $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
     if (S.view === "2d" && !map.getBounds().pad(-0.25).contains(ll(walk.mx, walk.my))) map.panTo(ll(walk.mx, walk.my), { animate: true, duration: 0.4 });
@@ -1034,8 +1039,9 @@
       const home = last && r.stopsReq.at(-1) === HAB;
       const left = total - k - (r.stopsReq.at(-1) === HAB ? 1 : 0);                          // science waypoints still to visit, this one included
       $("hudNext").textContent = dw ? "Collecting a sample" : `${home ? "Habitat" : `Waypoint ${Math.max(1, S.stops.length - left + 1)} of ${S.stops.length}`} · ${fKm(r.d[nxt] - p.d)}`;
-      $("hudSub").textContent = dw ? `${Math.ceil((dw.t + dw.min * 60 - el) / 60)} min of sampling left` : `${fLL(p.x, p.y)} · ${fDur(r.t[nxt] - el)} to go`;
+      $("hudSub").textContent = dw ? `${Math.ceil((dw.t + dw.min * 60 - el) / 60)} min of sampling left` : `${fDur(r.t[nxt] - el)} to go`;
       $("hudPos").textContent = `±${Math.round(rad)} m`; $("hudPos").style.color = rad > 60 ? "var(--bad)" : rad > 25 ? "var(--warn)" : "var(--ok)";
+      $("hudElev").textContent = fEl(elevAt(p.x, p.y));
       hudRelay(con || (tracked ? { orbiter: pq.orbiter } : null), p.x, p.y);
       $("hudDose").textContent = `${(walk.dose * 1000).toFixed(0)} µSv`;
       if (r.ground_c) $("hudGround").textContent = `${Math.round(r.ground_c[Math.min(p.i, r.ground_c.length - 1)])} °C`;
@@ -1052,7 +1058,7 @@
       tick.n = now;
       const t = clockT(), s = sunAt(t);
       $("clock").innerHTML = `<span class="dt">${fDay(t)} </span>${fUTC(t)}:${pad(Math.floor(t) % 60)} UTC`;
-      { const st = $("simState"), mode = walk.on ? "SIMULATION" : S.departOff === 0 ? "LIVE" : "PLANNED"; st.textContent = mode; st.className = "tstate " + (walk.on ? "sim" : S.departOff === 0 ? "" : "plan"); }
+      { const st = $("simState"), mode = walk.on ? "Simulating" : S.departOff === 0 ? "Live" : "Planned"; st.textContent = mode; st.className = "tstate " + (walk.on ? "sim" : S.departOff === 0 ? "" : "plan"); }
       $("clockSub").textContent = (walk.on ? `EVA +${fCD(t - S.route.depart)} · ` : "") + (s.el > 0 ? `Sun ${s.el.toFixed(0)}° up` : "Night here");
       drawRelay(); drawTimeline(); if (walk.on) drawProfile(); liveAlerts(); commsTick();
       if ((S.layers.has("sun") || S.layers.has("heat")) && Math.floor(t / 600) !== walk.lastSun) { walk.lastSun = Math.floor(t / 600); syncLayers(); }
@@ -1076,7 +1082,7 @@
     const ctl = new THREE.OrbitControls(cam, cv); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.49; ctl.minDistance = 2.5; ctl.maxDistance = 45000 * K;
     ctl.addEventListener("start", () => { T3.drag = true; }); ctl.addEventListener("end", () => { T3.drag = false; if (T3.chase) T3.chaseK = Math.min(14, Math.max(0.35, cam.position.distanceTo(ctl.target) / chaseBase())); });
     // following distance: close in real time, further back the faster time runs, so the ground never streaks past
-    function chaseBase() { return (S.vehicle === "rover" ? 1.05 : 1) * 6.5 * Math.pow(walk.on ? Math.max(1, S.speed) : 1, 0.55) * (cam.aspect < 1 ? 1.25 : 1); }
+    function chaseBase() { return (S.vehicle === "rover" ? 1.05 : 1) * 5.5 * Math.pow(walk.on ? Math.max(1, S.speed) : 1, 0.36) * (cam.aspect < 1 ? 1.25 : 1); }
     const P = (x, y, z) => new THREE.Vector3(x - M.width_m / 2, (z - M.zmin) * EX, -(y - M.height_m / 2));
     const hz = elevAt(...HAB);
     const homeCam = () => { ctl.target.copy(P(HAB[0] - 500 * K, HAB[1] + 700 * K, hz)); cam.position.copy(P(HAB[0] + 2200 * K, HAB[1] - 3600 * K, hz + 1300 * K)); };
@@ -1505,12 +1511,12 @@
     function scatter(mx, my, cd) {                                               // wider field and only the bigger rocks as the camera pulls back
       const R = Math.min(lite ? 120 : 260, Math.max(lite ? 46 : 70, cd * 2.2)), minS = cd * 0.0035, c0 = Math.round(mx / RCELL), c1 = Math.round(my / RCELL), nc = Math.ceil(R / RCELL), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), cl = new THREE.Color(); let n = 0;
       for (let i = c0 - nc; i <= c0 + nc && n < RN; i++) for (let j = c1 - nc; j <= c1 + nc && n < RN; j++) {
-        if (hsh(i, j, 0) > 0.5) continue;
+        if (hsh(i, j, 0) > 0.3) continue;
         const x = (i + hsh(i, j, 1)) * RCELL, y = (j + hsh(i, j, 2)) * RCELL;
         if (x < 1 || y < 1 || x > M.width_m - 1 || y > M.height_m - 1 || Math.hypot(x - mx, y - my) > R || Math.hypot(x - HABM[0], y - HABM[1]) < 15 || Math.hypot(x - HAB[0], y - HAB[1]) < 3) continue;
         const sz = 0.05 + Math.pow(hsh(i, j, 3), 5) * 0.95; if (sz < minS) continue; e.set(hsh(i, j, 4) * 0.5, hsh(i, j, 5) * 6.28, hsh(i, j, 6) * 0.5); q.setFromEuler(e);
-        m4.compose(v3.set(x - M.width_m / 2, ground(x, y) + sz * 0.16, -(y - M.height_m / 2)), q, new THREE.Vector3(sz, sz, sz)); rocks.setMatrixAt(n, m4);
-        const t = 0.2 + hsh(i, j, 7) * 0.2; cl.setRGB(t * 0.98, t * 0.72, t * 0.54); rocks.setColorAt(n, cl); n++;
+        m4.compose(v3.set(x - M.width_m / 2, ground(x, y) + sz * 0.02, -(y - M.height_m / 2)), q, new THREE.Vector3(sz, sz * (0.7 + hsh(i, j, 8) * 0.5), sz)); rocks.setMatrixAt(n, m4);
+        const t = 0.09 + hsh(i, j, 7) * 0.13; cl.setRGB(t * 1.0, t * 0.78, t * 0.62); rocks.setColorAt(n, cl); n++;
       }
       rocks.count = n; rocks.instanceMatrix.needsUpdate = true; rocks.instanceColor.needsUpdate = true; rockAt = [mx, my, cd];
     }
@@ -1525,7 +1531,7 @@
     const stopsG = new THREE.Group(); sc.add(stopsG);
     let tube = null;
 
-    let pathW = 0, pathKey = "";
+    let pathW = 0, pathKey = ""; const DUST = new THREE.Color(0x9a7458);
     function buildPath() {
       if (tube) { sc.remove(tube); tube.geometry.dispose(); tube = null; }
       const r = walk.on ? walk.route : S.route; if (!r || r.x.length < 2) return;
@@ -1545,7 +1551,7 @@
       const n = px.length, pa = new Float32Array(n * 6), ca = new Float32Array(n * 6), idx = [], cc = new THREE.Color();
       for (let i = 0; i < n; i++) {
         const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1); let dx = px[b] - px[a], dy = py[b] - py[a]; const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
-        cc.set(SLCOL(r.slope[Math.min(pn[i], r.slope.length - 1)]));
+        cc.set(SLCOL(r.slope[Math.min(pn[i], r.slope.length - 1)])).lerp(DUST, 0.38);
         for (let sd2 = 0; sd2 < 2; sd2++) {
           const sg = sd2 ? 1 : -1, x = Math.min(M.width_m, Math.max(0, px[i] - dy * sg * w / 2)), y = Math.min(M.height_m, Math.max(0, py[i] + dx * sg * w / 2)), o = (i * 2 + sd2) * 3;
           pa[o] = x - M.width_m / 2; pa[o + 1] = ground(x, y) + lift; pa[o + 2] = -(y - M.height_m / 2); ca[o] = cc.r; ca[o + 1] = cc.g; ca[o + 2] = cc.b;
@@ -1553,7 +1559,7 @@
         if (i < n - 1) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
       }
       const g3 = new THREE.BufferGeometry(); g3.setAttribute("position", new THREE.BufferAttribute(pa, 3)); g3.setAttribute("color", new THREE.BufferAttribute(ca, 3)); g3.setIndex(idx);
-      tube = new THREE.Mesh(g3, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 })); tube.renderOrder = 1; tube.frustumCulled = false; sc.add(tube);
+      tube = new THREE.Mesh(g3, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6 })); tube.renderOrder = 1; tube.frustumCulled = false; sc.add(tube);
     }
 
     function paint() {
@@ -1657,7 +1663,7 @@
       x.fillStyle = "#8ab8ff"; x.font = "500 76px 'IBM Plex Mono', monospace"; x.fillText(nx[1] || "", L, 256);
       // three readings
       const pos = tx("hudPos"), pn = +pos.replace(/[^0-9]/g, "") || 0, hab = tx("hudHab"), sat = tx("hudLink");
-      const tiles = [["Position", pos || "—", pn > 60 ? "#ff6b55" : pn > 25 ? "#f2b84b" : "#4fd1a1"], ["Habitat", hab.startsWith("linked") ? "linked" : hab ? "blocked" : "—", hab.startsWith("linked") ? "#4fd1a1" : "#f2b84b"], ["Satellite", (sat || "—").replace("none in view", "none"), sat && !/none|in /.test(sat) ? "#4fd1a1" : "#ffffff"]];
+      const tiles = [["Elevation", tx("hudElev") || "—", "#ffffff"], ["Position", pos || "—", pn > 60 ? "#ff6b55" : pn > 25 ? "#f2b84b" : "#4fd1a1"], ["Satellite", (sat || "—").replace("none in view", "none"), sat && !/none|in /.test(sat) ? "#4fd1a1" : "#ffffff"]];
       const tw = (W - 2 * L - 2 * 24) / 3;
       tiles.forEach(([k, v, c], i) => {
         const X = L + i * (tw + 24); rr(X, 300, tw, 132, 22); x.fillStyle = "#111723"; x.fill();
@@ -1893,9 +1899,9 @@
       if (missLine) missLine.visible = !!ms; if (missTag) missTag.visible = !!ms;
       const camD = cam.position.distanceTo(here);
       const camH = cam.position.distanceTo(hab.position), nearHab = here.distanceTo(hab.position) < camH * 0.07;
-      astroTag.position.copy(here); astroTag.position.y += 2.1; astroTag.visible = camD > 40 && !(nearHab && !walking);
+      astroTag.position.copy(here); astroTag.position.y += 2.1; astroTag.visible = camD > 70 && !(nearHab && !walking);
       habTag.visible = camH > 110 && !(nearHab && walking);
-      habLine.visible = walking && habNow().ok && here.distanceTo(hab.position) > 25;      // the habitat radio link, drawn from the top of the mast
+      habLine.visible = walking && habNow().ok && here.distanceTo(hab.position) > 25 && camD > 160;      // the habitat radio link, drawn from the top of the mast
       if (habLine.visible) habLine.geometry.setFromPoints([hab.localToWorld(new THREE.Vector3(0.45, 1.9, -0.25)), here.clone().setY(here.y + 1.75)]);
       wk.visible = walking;
       if (walking) {
@@ -1912,7 +1918,7 @@
       const shW = Math.min(1700 * K, Math.max(16, cd * 1.5));
       if (Math.abs(shW - shNow) > shNow * 0.2) { shNow = shW; Object.assign(sun.shadow.camera, { left: -shW, right: shW, top: shW, bottom: -shW }); sun.shadow.camera.updateProjectionMatrix(); sun.shadow.normalBias = Math.max(0.02, 3 * shW / 1700); }
       if (cd < 700) { const mx = ctl.target.x + M.width_m / 2, my = M.height_m / 2 - ctl.target.z; if (!rockAt || Math.hypot(mx - rockAt[0], my - rockAt[1]) > Math.max(RCELL * 2, cd * 0.25) || cd > rockAt[2] * 1.3 || cd < rockAt[2] / 1.3) scatter(mx, my, cd); rocks.visible = true; } else rocks.visible = false;
-      const pw = Math.min(40 * K, Math.max(0.22, cd * 0.012)), hq = Math.max(0.3, (pathW || 1) * 0.6), ph = walk.on && T3.pathHead ? T3.pathHead.i + ":" + Math.round(T3.pathHead.x / hq) + ":" + Math.round(T3.pathHead.y / hq) : "";
+      const pw = Math.min(26 * K, Math.max(0.14, cd * 0.0065)), hq = Math.max(0.3, (pathW || 1) * 0.6), ph = walk.on && T3.pathHead ? T3.pathHead.i + ":" + Math.round(T3.pathHead.x / hq) + ":" + Math.round(T3.pathHead.y / hq) : "";
       if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35 || ph !== pathKey) { if (!pathW || pw > pathW * 1.35 || pw < pathW / 1.35) pathW = pw; pathKey = ph; buildPath(); }
 
       // a satellite appears in the sky while one is above the horizon from here
@@ -2612,7 +2618,7 @@
       { sel: "#styles", pre: () => panel("mission"), t: "Plan: how careful to be", x: "Safest keeps to flat ground even if it is longer. Fastest takes the short way over steeper ground. Balanced sits between the two." },
       { sel: ".veh", pre: () => panel("mission"), t: "Plan: on foot or by rover", x: "Two astronauts walking, or a robotic rover at about 10 km/h. The route, its time and the slopes it will take change with the choice." },
       { sel: "#stats", alt: "#verdict", pre: () => panel("mission"), t: "Plan: check the walk", x: "Distance, time, climb, radiation dose and how steep it gets, with a plain-words verdict above." },
-      { sel: "#navBox", pre: () => { panel("mission"); setTimeout(() => { const nb = $("navBox"); if (nb) nb.scrollIntoView({ block: "center" }); }, 60); }, t: "Plan: navigation without GPS", x: "How sure the astronaut's position will be along the route. The band under the route turns green near the habitat and at each satellite pass, and amber to red where the suit's own estimate has drifted. Pins mark each satellite fix." },
+      { sel: "#navBox", pre: () => { panel("mission"); setTimeout(() => { $("navMore").open = true; drawNav(); const nb = $("navBox"); if (nb) nb.scrollIntoView({ block: "center" }); }, 60); }, t: "Plan: navigation without GPS", x: "How sure the astronaut's position will be along the route. The band under the route turns green near the habitat and at each satellite pass, and amber to red where the suit's own estimate has drifted. Pins mark each satellite fix." },
       { sel: "#layerChips", pre: () => { flat(); panel("layers"); lay(null); }, t: "Layers: read the ground", x: "Each layer colours the map with one thing that matters on a walk. One tap turns a layer on or off; the opacity slider lets the ground show through." },
       { sel: "#map", soft: true, pre: () => { flat(); panel("layers"); lay("slope"); }, t: "Slope, switched on", x: "This is the Slope layer, live: green is an easy walk, amber is tiring, red is too steep for a suit. The planner keeps the route off the red. The legend shows the scale." },
       { sel: "#map", soft: true, pre: () => { flat(); panel("layers"); lay("radiation"); }, t: "Radiation, switched on", x: "Daily dose on open ground, from Curiosity's measurement scaled by the air above and how much sky the terrain leaves open. Ground temperature, sunlight, relay obstruction, habitat radio and traversal cost work the same way." },
@@ -2781,7 +2787,7 @@
       async navplan() {                                                 // plan a trip: the route, its navigation forecast band and chart
         ui(); S.layers.clear(); syncLayers(); setView("2d"); document.body.classList.add("tour-panel"); showPanel(true); openSheet("mission");
         map.fitBounds(L.latLngBounds([ll(HAB[0] - 9000, HAB[1] + 6000), ll(HAB[0] + 9000, HAB[1] - 14000)]), { animate: false });
-        await wait(400); const nb = $("navBox"); if (nb) nb.scrollIntoView({ block: "center" });
+        await wait(400); $("navMore").open = true; drawNav(); const nb = $("navBox"); if (nb) nb.scrollIntoView({ block: "center" });
       },
       async rover() {                                                   // the crew rover leaves the habitat
         ui(); if (walk.on) endWalk(); setVehicle("rover", false); plan(0);

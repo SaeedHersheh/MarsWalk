@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#04060a">
-<meta name="description" content="Marswalk by AirAwareNetwork: plan a walk on Mars on real NASA terrain, or step outside and experience it in first person and VR.">
+<meta name="description" content="Marswalk by Saeed Hersheh: plan a walk on Mars on real NASA terrain, or step outside and experience it in first person and VR.">
 <link rel="icon" type="image/png" sizes="192x192" href="img/brand/logo-192.png?v=1794691885"><link rel="apple-touch-icon" href="img/brand/logo-192.png?v=1794691885">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Marswalk: walk Mars before anyone does">
@@ -376,6 +376,14 @@
     .top nav { display: flex !important; }
     .top nav a:not(.navcta) { display: none; }
   }
+  .who3 { max-width: 760px; }
+  .who3 p { font-size: 19px; }
+  .gh { display: inline-flex; align-items: center; gap: 10px; margin-top: 8px; padding: 12px 20px; border-radius: 999px; background: #1a130d; color: #fff !important; font-weight: 700; text-decoration: none !important; }
+  .gh:hover { background: #3a2a1c; }
+  .gh svg { width: 20px; height: 20px; }
+  .top { transition: transform 0.35s ease, background 0.3s, border-color 0.3s !important; }
+  .top.hide { transform: translateY(-110%); }
+  @media (prefers-reduced-motion: reduce) { .top { transition: none !important; } }
 </style>
 </head>
 <body>
@@ -389,7 +397,7 @@
     <canvas id="stars" aria-hidden="true"></canvas>
     <canvas id="mars" aria-hidden="true"></canvas>
     <div class="heroin">
-      <span class="eyebrow">Built by AirAwareNetwork for NASA Space Apps 2026</span>
+      <span class="eyebrow">Built for the NASA Space Apps Challenge 2026</span>
       <h1>Walk <em>Mars</em> before anyone does.</h1>
       <p class="lede">Marswalk plans safe walks on real Mars terrain, shows who can find you when there is no GPS, and lets you rehearse the route in 3D or VR.</p>
       <div class="cta">
@@ -448,14 +456,10 @@
   </section>
 
   <section id="who" class="sand">
-    <div class="wrap who2">
-      <img src="img/brand/logo-512.png" alt="AirAwareNetwork logo" width="160" height="160">
-      <div>
-        <h2>Built by AirAwareNetwork.</h2>
-        <p>AirAwareNetwork is a Palestinian, community-led air quality network built on the Internet of Things. At home we keep sensors connected and located across a region. For the NASA Space Apps Challenge 2026 we asked the same question on Mars.</p>
-        <p class="by"><b>Saeed Hersheh</b>, team lead: the idea, the NASA data pipelines, the route planner, the satellite navigation, and the 3D and VR experience.</p>
-        <a href="https://airaware.network/" target="_blank" rel="noopener">Visit airaware.network</a>
-      </div>
+    <div class="wrap who3">
+      <h2>Built by Saeed Hersheh.</h2>
+      <p>I made Marswalk for the NASA Space Apps Challenge 2026: the idea, the NASA data pipelines, the route planner, the satellite navigation, and the 3D and VR experience.</p>
+      <a class="gh" href="https://github.com/SaeedHersheh" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>github.com/SaeedHersheh</a>
     </div>
   </section>
 
@@ -467,14 +471,12 @@
   </section>
 </main>
 
-<footer><span>Marswalk · AirAwareNetwork · NASA Space Apps Challenge 2026</span><span>Terrain: NASA / USGS / MSSS · Orbits: NASA JPL Horizons · Not affiliated with NASA</span><span style="flex-basis:100%">Built with help from AI assistants (Claude and Gemini). Voice-over uses text-to-speech.</span></footer>
+<footer><span>Marswalk · Saeed Hersheh · NASA Space Apps Challenge 2026</span><span>Terrain: NASA / USGS / MSSS · Orbits: NASA JPL Horizons · Not affiliated with NASA</span><span style="flex-basis:100%">Built with help from AI assistants (Claude and Gemini). Voice-over uses text-to-speech.</span></footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (() => {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  // the bar turns solid once you scroll
-  const top = document.getElementById("top"); const onScroll = () => top.classList.toggle("solid", scrollY > 30); addEventListener("scroll", onScroll, { passive: true }); onScroll();
   // sections slide in as they arrive
   const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: 0.15 });
   document.querySelectorAll(".reveal").forEach((el, i) => { el.style.transitionDelay = (i % 4) * 80 + "ms"; io.observe(el); });
@@ -547,6 +549,14 @@
   }
   requestAnimationFrame(frame);
 })();
+</script>
+<script>
+  // the bar stays out of the way: invisible over the hero, gone while you scroll down, back when you scroll up
+  (() => { const top = document.getElementById("top"); let last = scrollY;
+    const on = () => { const y = scrollY, up = y < last - 4, down = y > last + 4;
+      if (y < 40) top.classList.remove("solid", "hide"); else if (down) top.classList.add("hide"); else if (up) { top.classList.add("solid"); top.classList.remove("hide"); }
+      if (up || down || y < 40) last = y; };
+    addEventListener("scroll", on, { passive: true }); on(); })();
 </script>
 </body>
 </html>

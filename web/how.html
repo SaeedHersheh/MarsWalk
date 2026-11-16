@@ -322,10 +322,13 @@
   .navcta:hover { background: var(--blue-hi) !important; }
   .top nav a[aria-current="page"] { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
   @media (max-width: 860px) { .top nav { display: flex !important; } .top nav a:not(.navcta) { display: none; } }
+  .top { transition: transform 0.35s ease, background 0.3s, border-color 0.3s !important; }
+  .top.hide { transform: translateY(-110%); }
+  @media (prefers-reduced-motion: reduce) { .top { transition: none !important; } }
 </style>
 </head>
 <body>
-<header class="top solid" id="top">
+<header class="top" id="top">
   <a class="brand" href="/" aria-label="Marswalk home"><img src="img/brand/logo-192.png" alt="" width="42" height="42"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
   <nav aria-label="Pages"><a href="/">Home</a><a href="how.html" aria-current="page">How it works</a><a href="tour.html">Tour</a><a class="navcta" href="globe.html">Open the app</a></nav>
 </header>
@@ -553,6 +556,14 @@
   };
   draw(); bars();
 })();
+</script>
+<script>
+  // the bar stays out of the way: invisible over the hero, gone while you scroll down, back when you scroll up
+  (() => { const top = document.getElementById("top"); let last = scrollY;
+    const on = () => { const y = scrollY, up = y < last - 4, down = y > last + 4;
+      if (y < 40) top.classList.remove("solid", "hide"); else if (down) top.classList.add("hide"); else if (up) { top.classList.add("solid"); top.classList.remove("hide"); }
+      if (up || down || y < 40) last = y; };
+    addEventListener("scroll", on, { passive: true }); on(); })();
 </script>
 </body>
 </html>
