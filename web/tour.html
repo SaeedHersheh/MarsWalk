@@ -163,6 +163,12 @@
   @keyframes pipb { 50% { opacity: 0.35; } }
   .pip iframe { position: absolute; left: 0; top: 34px; width: 200%; height: calc(200% - 68px); border: 0; transform: scale(0.5); transform-origin: 0 0; }
   @media (prefers-reduced-motion: reduce) { .cap, .node, .pipe, .end, .loading { transition: none; } .pipe.on .flow .pulse { animation: none; } }
+
+  /* restraint: quieter labels, fewer glows, one accent moment per page */
+  .eyebrow { text-transform: none !important; letter-spacing: 0.01em !important; font-size: 15px !important; font-weight: 600 !important; }
+  .brand img { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.7) !important; }
+  .start h1 em, .end h2 em { background: none !important; -webkit-text-fill-color: currentColor !important; color: var(--accent) !important; }
+  .pill.blue, .go { box-shadow: none !important; }
 </style>
 </head>
 <body>

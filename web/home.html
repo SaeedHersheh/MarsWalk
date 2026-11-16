@@ -38,7 +38,7 @@
   .top nav a:hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
 
   /* ---------- hero: Mars turning in the dark ---------- */
-  .hero { position: relative; min-height: 100vh; min-height: 100svh; display: grid; align-items: center; padding: 110px clamp(16px, 5vw, 64px) 70px; overflow: hidden; isolation: isolate; }
+  .hero { touch-action: pan-y; position: relative; min-height: 100vh; min-height: 100svh; display: grid; align-items: center; padding: 110px clamp(16px, 5vw, 64px) 70px; overflow: hidden; isolation: isolate; }
   #stars, #mars { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
   #mars { z-index: -1; }
   .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg, rgba(4, 6, 10, 0.92) 0%, rgba(4, 6, 10, 0.55) 42%, rgba(4, 6, 10, 0) 70%), linear-gradient(0deg, var(--bg) 0%, rgba(4, 6, 10, 0) 26%); }
@@ -303,6 +303,15 @@
     .route, .halo { animation: none; stroke-dashoffset: 0; }
     .exp .art img, .sat, .scroll i { animation: none; }
   }
+
+  /* restraint: quieter labels, fewer glows, one accent moment per page */
+  .eyebrow { text-transform: none !important; letter-spacing: 0.01em !important; font-size: 15px !important; font-weight: 600 !important; }
+  .brand img { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.7) !important; }
+  .mode:hover, .mode:focus-visible { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--c) !important; }
+  .step .ic, #nogps .simple b, .card .ic { box-shadow: none !important; }
+  .visit { box-shadow: none !important; }
+  .card[aria-expanded="true"] { box-shadow: 0 0 0 1px var(--c) !important; }
+  .facts i { box-shadow: none !important; }
 </style>
 </head>
 <body>
@@ -316,7 +325,7 @@
     <canvas id="stars" aria-hidden="true"></canvas>
     <canvas id="mars" aria-hidden="true"></canvas>
     <div class="heroin">
-      <span class="eyebrow">AirAwareNetwork · NASA Space Apps 2026</span>
+      <span class="eyebrow">Built by AirAwareNetwork for NASA Space Apps 2026</span>
       <h1>Walk <em>Mars</em> before anyone does.</h1>
       <p class="lede">Plan a real expedition on NASA terrain, with satellites keeping track of you where there is no GPS. Or step outside the airlock and stand on it.</p>
       <div class="modes">
@@ -568,6 +577,7 @@
   const cv = document.getElementById("mars"); let rn = null;
   try { rn = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: true }); } catch (e) { rn = null; }
   let scene, cam, planet, glow, mouse = { x: 0, y: 0 }, tx = 0, ty = 0;
+  const spin = { v: 0.045, tilt: 0, drag: null };
   if (rn) {
     rn.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); rn.outputEncoding = THREE.sRGBEncoding;
     scene = new THREE.Scene(); cam = new THREE.PerspectiveCamera(32, 1, 0.1, 100); cam.position.set(0, 0, 9);
@@ -583,6 +593,22 @@
     const sun = new THREE.DirectionalLight(0xfff1e0, 2.6); sun.position.set(-4, 2, 3); scene.add(sun);
     scene.add(new THREE.AmbientLight(0x3a4a66, 0.35));
     addEventListener("pointermove", e => { mouse.x = e.clientX / innerWidth - 0.5; mouse.y = e.clientY / innerHeight - 0.5; }, { passive: true });
+    // grab the planet: drag to spin it (with momentum) and tilt it; let go and it settles back to its slow turn
+    const hero = document.querySelector(".hero"), ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+    const onPlanet = e => { const r = cv.getBoundingClientRect(); ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1); ray.setFromCamera(ndc, cam); return ray.intersectObject(planet).length > 0; };
+    const blocked = e => !!e.target.closest("a, button, .modes, .heroin h1, .heroin p, .eyebrow");
+    hero.addEventListener("pointermove", e => { if (!spin.drag) hero.style.cursor = !blocked(e) && onPlanet(e) ? "grab" : ""; });
+    hero.addEventListener("pointerdown", e => {
+      if (blocked(e) || !onPlanet(e)) return;
+      spin.drag = { x: e.clientX, y: e.clientY, t: performance.now() }; hero.style.cursor = "grabbing"; hero.setPointerCapture && hero.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    addEventListener("pointermove", e => {
+      if (!spin.drag) return; const d = spin.drag, now = performance.now(), dx = e.clientX - d.x, dy = e.clientY - d.y, dt = Math.max(1, now - d.t) / 1000;
+      planet.rotation.y += dx * 0.006; spin.tilt = Math.max(-0.5, Math.min(0.5, spin.tilt + dy * 0.004));
+      spin.v = spin.v * 0.6 + (dx * 0.006 / dt) * 0.4; d.x = e.clientX; d.y = e.clientY; d.t = now;
+    });
+    const drop = () => { if (!spin.drag) return; spin.drag = null; hero.style.cursor = ""; };
+    addEventListener("pointerup", drop); addEventListener("pointercancel", drop);
   } else cv.hidden = true;
   function layout() {
     if (!rn) return; const w = cv.clientWidth, h = cv.clientHeight; rn.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix();
@@ -596,7 +622,8 @@
     const dt = Math.min(0.05, (t - last) / 1000); last = t;
     drawStars(t);
     if (rn) {
-      if (!reduce) planet.rotation.y += dt * 0.045;
+      if (!spin.drag) { planet.rotation.y += dt * spin.v; spin.v += ((reduce ? 0 : 0.045) - spin.v) * Math.min(1, dt * 1.2); spin.tilt *= Math.exp(-dt * 1.5); }   // momentum fades back to the slow turn
+      planet.rotation.x = 0.42 + spin.tilt;
       tx += (mouse.x * 0.25 - tx) * 0.04; ty += (mouse.y * 0.18 - ty) * 0.04;
       cam.position.x = tx; cam.position.y = -ty + scrollY * -0.0016; cam.lookAt(0, scrollY * -0.0016, 0);
       if (scrollY < innerHeight * 1.2) rn.render(scene, cam);

@@ -1357,13 +1357,30 @@
       const beacon = pbr({ color: 0xff5a4a, emissive: 0xff3020, emissiveIntensity: 2 });
       const accent = pbr({ color: 0xe8622c, roughness: 0.45 });
       // main module: a short cylinder with a domed roof, ribs, a band, and a berm of regolith bags round its base
-      mk(g, new THREE.CylinderGeometry(1, 1.02, 0.62, 64, 1, true), shell, 0, 0.31, 0).material.side = THREE.DoubleSide;
+      shell.side = THREE.DoubleSide;
+      // the wall comes in three bands so a wide window can open the middle one (the arc from 0.45 to 1.25 rad, front right of the airlock)
+      mk(g, new THREE.CylinderGeometry(1.008, 1.02, 0.3, 64, 1, true), shell, 0, 0.15, 0);
+      mk(g, new THREE.CylinderGeometry(1.004, 1.008, 0.18, 64, 1, true, 1.25, Math.PI * 2 - 0.8), shell, 0, 0.39, 0);
+      mk(g, new THREE.CylinderGeometry(1.0, 1.004, 0.14, 64, 1, true), shell, 0, 0.55, 0);
+      const glassW = pbr({ color: 0x9fc4e8, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.22, envMapIntensity: 1.8, side: THREE.DoubleSide });
+      const pane = mk(g, new THREE.CylinderGeometry(1.006, 1.006, 0.18, 24, 1, true, 0.45, 0.8), glassW, 0, 0.39, 0); pane.castShadow = false;
+      for (const a of [0.45, 0.85, 1.25]) { const m = mk(g, new THREE.BoxGeometry(0.025, 0.2, 0.025), metal, Math.sin(a) * 1.006, 0.39, Math.cos(a) * 1.006); m.rotation.y = a; }   // mullions
+      // inside, seen through the window: a floor, warm light, a table, a console with screens, bunks and a plant rack
+      const fl = mk(g, new THREE.CylinderGeometry(0.98, 0.98, 0.02, 48), pbr({ color: 0x55504a, roughness: 0.8 }), 0, 0.24, 0); fl.castShadow = false;
+      const at = (r, a, y) => [Math.sin(a) * r, y, Math.cos(a) * r];
+      const wood = pbr({ color: 0xb9b2a6, roughness: 0.6 }), screen = pbr({ color: 0x0c1a2e, emissive: 0x2f7de1, emissiveIntensity: 1.4 }), green = pbr({ color: 0x3f8f4a, roughness: 0.9 });
+      { const [x, y, z] = at(0.5, 0.85, 0.3); mk(g, new THREE.CylinderGeometry(0.16, 0.16, 0.02, 24), wood, x, y, z); mk(g, new THREE.CylinderGeometry(0.02, 0.02, 0.06, 8), metal, x, 0.27, z); }
+      { const [x, , z] = at(0.86, 0.62, 0); const c = mk(g, new THREE.BoxGeometry(0.28, 0.14, 0.06), metal, x, 0.32, z); c.rotation.y = 0.62 + Math.PI; const s = mk(g, new THREE.PlaneGeometry(0.24, 0.1), screen, x - Math.sin(0.62) * 0.032, 0.33, z - Math.cos(0.62) * 0.032); s.rotation.y = 0.62 + Math.PI; }
+      { const [x, , z] = at(0.82, 1.15, 0); const bk = mk(g, new THREE.BoxGeometry(0.4, 0.06, 0.16), pbr({ color: 0x3a4a66, roughness: 0.8 }), x, 0.3, z); bk.rotation.y = 1.15 + Math.PI / 2; const bk2 = mk(g, new THREE.BoxGeometry(0.4, 0.06, 0.16), pbr({ color: 0x3a4a66, roughness: 0.8 }), x, 0.42, z); bk2.rotation.y = 1.15 + Math.PI / 2; }
+      { const [x, , z] = at(0.6, 1.05, 0); for (let i = 0; i < 3; i++) mk(g, new THREE.SphereGeometry(0.04, 10, 8), green, x + (i - 1) * 0.06, 0.31 + (i % 2) * 0.03, z); mk(g, new THREE.BoxGeometry(0.2, 0.02, 0.06), metal, x, 0.28, z); }
+      const lamp = new THREE.PointLight(0xffd29a, 1.1, 22, 2); lamp.position.set(...at(0.45, 0.85, 0.5)); g.add(lamp);
+      mk(g, new THREE.SphereGeometry(0.03, 10, 8), warm, ...at(0.45, 0.85, 0.58));
       const roof = mk(g, new THREE.SphereGeometry(1, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 0.62, 0); roof.scale.y = 0.62;
       for (const [y, r] of [[0.16, 1.02], [0.46, 1.005], [0.62, 1.0]]) { const o = mk(g, new THREE.TorusGeometry(r, 0.018, 8, 72), rib, 0, y, 0); o.rotation.x = Math.PI / 2; }
       const band = mk(g, new THREE.CylinderGeometry(1.006, 1.006, 0.05, 64, 1, true), accent, 0, 0.52, 0); band.material.side = THREE.DoubleSide;
       const berm = mk(g, new THREE.TorusGeometry(1.08, 0.2, 14, 64), regolith, 0, 0.06, 0); berm.rotation.x = Math.PI / 2; berm.scale.set(1, 1, 0.75);
       // windows: warm light from inside
-      for (const a of [0.9, 1.9, 2.6, -0.9, -1.9]) { const w = mk(g, new THREE.CircleGeometry(0.07, 24), warm, Math.sin(a) * 1.022, 0.36, Math.cos(a) * 1.022); w.rotation.y = a; const fr = mk(g, new THREE.TorusGeometry(0.075, 0.012, 8, 24), metal, Math.sin(a) * 1.025, 0.36, Math.cos(a) * 1.025); fr.rotation.y = a; }
+      for (const a of [1.9, 2.6, -0.9, -1.9]) { const w = mk(g, new THREE.CircleGeometry(0.07, 24), warm, Math.sin(a) * 1.022, 0.36, Math.cos(a) * 1.022); w.rotation.y = a; const fr = mk(g, new THREE.TorusGeometry(0.075, 0.012, 8, 24), metal, Math.sin(a) * 1.025, 0.36, Math.cos(a) * 1.025); fr.rotation.y = a; }
       // airlock facing the walk (the walk starts in front of its hatch)
       const lock = mk(g, new THREE.CylinderGeometry(0.3, 0.3, 0.62, 32), shell, 0, 0.32, 1.22); lock.rotation.x = Math.PI / 2;
       mk(g, new THREE.TorusGeometry(0.3, 0.03, 10, 32), metal, 0, 0.32, 1.53);
@@ -1839,30 +1856,30 @@
         astro.position.y += jy;
       }
       blob.material.opacity = 0.34 * Math.max(0.35, 1 - Math.max(0, jy) * 1.6);
-      const RV = S.vehicle === "rover";
-      rover.visible = RV; if (rover.userData.head) rover.userData.head.visible = !(T3.fp && walking); roverTag.visible = false;   // first person looks out of the mast camera, over the deck
-      if (RV) {
-        // driving: the crew are inside. Parked: beside the airlock, nose out
+      const RV = S.vehicle === "rover", drv = RV && walking;                   // the rover is always there: parked beside the habitat, or out driving
+      rover.visible = true; if (rover.userData.head) rover.userData.head.visible = !(T3.fp && drv); roverTag.visible = false;   // first person looks out of the mast camera, over the deck
+      {
+        // driving: following its route or your keys. Parked: beside the habitat, nose out
         const hvx = hab.position.x + M.width_m / 2 - IDLE[0], hvy = M.height_m / 2 - hab.position.z - IDLE[1], hl = Math.hypot(hvx, hvy) || 1;   // from the airlock to the dome
-        const hyT = walking && T3.rvPos && T3.rvPos.hd != null ? T3.rvPos.hd                                                                         // the way it is actually moving
-          : walking && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                          // parked nose away from the dome
+        const hyT = drv && T3.rvPos && T3.rvPos.hd != null ? T3.rvPos.hd                                                                         // the way it is actually moving
+          : drv && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                          // parked nose away from the dome
         // a vehicle steers and rides on its suspension: ease the heading, height and tilt instead of snapping to every bend and bump
         const ez = r => 1 - Math.exp(-dtr * r);
-        { const was = T3.rvHy; if (T3.rvHy == null || !walking) T3.rvHy = hyT; else T3.rvHy += Math.atan2(Math.sin(hyT - T3.rvHy), Math.cos(hyT - T3.rvHy)) * ez(k && k.manual ? 14 : 2.2);
+        { const was = T3.rvHy; if (T3.rvHy == null || !drv) T3.rvHy = hyT; else T3.rvHy += Math.atan2(Math.sin(hyT - T3.rvHy), Math.cos(hyT - T3.rvHy)) * ez(k && k.manual ? 14 : 2.2);
           const dh = was == null ? 0 : Math.atan2(Math.sin(T3.rvHy - was), Math.cos(T3.rvHy - was)) / Math.max(dtr, 1e-3); T3.rvTurn = (T3.rvTurn || 0) + (dh - (T3.rvTurn || 0)) * ez(4); }
         const hy = T3.rvHy;
-        const fx = Math.sin(hy), fy = Math.cos(hy), mx0 = walking ? wx : IDLE[0] - hvy / hl * 7, my0 = walking ? wy : IDLE[1] + hvx / hl * 7;       // 7 m to the side of the airlock
+        const fx = Math.sin(hy), fy = Math.cos(hy), mx0 = drv ? wx : IDLE[0] - hvy / hl * 7, my0 = drv ? wy : IDLE[1] + hvx / hl * 7;       // 7 m to the side of the airlock
         const gz = (a, b) => ground(Math.min(M.width_m, Math.max(0, mx0 + a * fx - b * fy)), Math.min(M.height_m, Math.max(0, my0 + a * fy + b * fx)));
-        const zf = gz(1.6, 0), zb = gz(-1.6, 0), zl = gz(0, 1.3), zr = gz(0, -1.3), yT = (zf + zb + zl + zr) / 4, pT = -Math.atan2(zf - zb, 3.2), rT = Math.atan2(zl - zr, 2.6);
-        const S2 = T3.rvSus || (T3.rvSus = { y: yT, p: pT, r: rT }), big = Math.abs(S2.y - yT) > 30 || !walking;
+        const zf = gz(1.0, 0), zb = gz(-1.0, 0), zl = gz(0, 1.08), zr = gz(0, -1.08), yT = Math.max((zf + zb + zl + zr) / 4, ground(mx0, my0)) + 0.02, pT = -Math.atan2(zf - zb, 2.0), rT = Math.atan2(zl - zr, 2.16);   // sampled under the wheels, never below the ground at the centre
+        const S2 = T3.rvSus || (T3.rvSus = { y: yT, p: pT, r: rT }), big = Math.abs(S2.y - yT) > 30 || !drv;
         S2.y = big ? yT : S2.y + (yT - S2.y) * ez(6); S2.p = big ? pT : S2.p + (pT - S2.p) * ez(4); S2.r = big ? rT : S2.r + (rT - S2.r) * ez(4);
         rover.position.copy(P(mx0, my0, 0)); rover.position.y = S2.y;
         rover.rotation.set(S2.p, Math.atan2(fx, -fy), S2.r);
         const lp = T3.rvLast || [mx0, my0], dd = Math.hypot(mx0 - lp[0], my0 - lp[1]); T3.rvLast = [mx0, my0];
         if (dd < 50) { T3.rvRoll = (T3.rvRoll || 0) + dd / 0.5; rover.userData.wheels.forEach(w => { w.rotation.x = T3.rvRoll; }); }
-        { const st = walking && k.manual ? walk.steer || 0 : Math.max(-1, Math.min(1, (T3.rvTurn || 0) * 1.5)); rover.userData.steer.forEach(p => { p.rotation.y = st * 0.42 * (p.userData.sign || 1); }); }   // the front wheels follow the steering
-        if (walking) { astro.visible = false; blob.visible = false; astroTag.visible = false; }
-        const camR = cam.position.distanceTo(rover.position); roverTag.visible = camR > 60 && !T3.fp; roverTag.position.copy(rover.position); roverTag.position.y += 3.6;
+        { const st = drv && k.manual ? walk.steer || 0 : Math.max(-1, Math.min(1, (T3.rvTurn || 0) * 1.5)); rover.userData.steer.forEach(p => { p.rotation.y = st * 0.42 * (p.userData.sign || 1); }); }   // the front wheels follow the steering
+        if (drv) { astro.visible = false; blob.visible = false; astroTag.visible = false; }
+        const camR = cam.position.distanceTo(rover.position); roverTag.visible = RV && camR > 60 && !T3.fp; roverTag.position.copy(rover.position); roverTag.position.y += 3.6;
       }
       // the miss: a red line from where the suit thought you were to where you really are
       const ms = T3.miss && now < T3.miss.until ? T3.miss : null;
@@ -1951,6 +1968,8 @@
         const back = walking ? (T3.dir || new THREE.Vector3(0, 0, 1)) : new THREE.Vector3(-Math.sin(hab.rotation.y + 0.35), 0, -Math.cos(hab.rotation.y + 0.35));   // idle: stand in front of the astronaut, habitat behind
         const want = here.clone().addScaledVector(back, -dist); want.y = here.y + 1.3 + dist * 0.36;
         const gy = ground(Math.min(M.width_m, Math.max(0, want.x + M.width_m / 2)), Math.min(M.height_m, Math.max(0, M.height_m / 2 - want.z))) + 0.7; if (want.y < gy) want.y = gy;
+        { const hx = want.x - hab.position.x, hz = want.z - hab.position.z, hd = Math.hypot(hx, hz), keep = 6.2 * HS / 4.2;          // never inside the habitat: push the camera out round its walls
+          if (hd < keep && want.y < hab.position.y + 4.6) { const s = keep / Math.max(hd, 0.01); want.x = hab.position.x + hx * s; want.z = hab.position.z + hz * s; } }
         cam.position.lerp(want, 1 - Math.exp(-dtr * (walking && k.manual ? 5 : 3.2)));
         ctl.target.lerp(here.clone().setY(here.y + 1.45), 1 - Math.exp(-dtr * 9));
       } else if (walking && walk.follow !== false && !T3.drag && !T3.skyLook) ctl.target.lerp(here, 0.05);

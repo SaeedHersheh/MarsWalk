@@ -129,6 +129,11 @@ h2::before { content: ""; width: 20px; height: 2px; background: var(--blue-hi); 
   .route .node { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .route.live .line::after, .go.rec.on { animation: none; } }
+
+  /* restraint: quieter labels, fewer glows, one accent moment per page */
+  .eyebrow { text-transform: none !important; letter-spacing: 0.01em !important; font-size: 15px !important; font-weight: 600 !important; }
+  .brand img { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.7) !important; }
+  h1 em { background: none !important; -webkit-text-fill-color: currentColor !important; color: inherit !important; }
 </style>
 </head>
 <body>

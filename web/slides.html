@@ -149,6 +149,11 @@
     .planet, .delay .track i, .lk { animation: none; }
   }
   @media (prefers-reduced-motion: reduce) { .planet, .delay .track i, .lk { animation: none; } .slide { transition: none; } }
+
+  /* restraint: quieter labels, fewer glows, one accent moment per page */
+  .eyebrow { text-transform: none !important; letter-spacing: 0.01em !important; font-size: 15px !important; font-weight: 600 !important; }
+  .brand img { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.7) !important; }
+  .card .ic { box-shadow: none !important; }
 </style>
 </head>
 <body>
