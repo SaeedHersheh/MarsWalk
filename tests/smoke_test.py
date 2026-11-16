@@ -29,7 +29,7 @@ def check(name, fn):
 
 
 print("pages")
-for page in ["home.html", "globe.html", "index.html?site=jezero", "tour.html", "tour.html?short=1", "control.html", "slides.html", "report.html"]:
+for page in ["home.html", "globe.html", "index.html?site=jezero", "how.html", "tour.html", "tour.html?short=1", "control.html", "slides.html", "report.html"]:
     check(page, lambda p=page: (lambda s: None if s[0] == 200 and len(s[1]) > 200 else (_ for _ in ()).throw(RuntimeError(f"status {s[0]}, {len(s[1])} bytes")))(get("/" + p)))
 
 print("sites")

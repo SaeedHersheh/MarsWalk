@@ -673,3 +673,6 @@ body.mode-explore:not(.veh-rover) .radiodock { bottom: calc(var(--tbh) + 140px);
   .exfacts { font-size: 12px; gap: 4px 12px; }
   .exhow li { padding: 8px 10px; font-size: 12.5px; }
 }
+
+/* calmer top bar: the coordinates and data tag stay in a tooltip on the place name instead of crowding the bar */
+.crumbs small { display: none; }

@@ -22,7 +22,7 @@
   const HAB = M.habitat;
   {
     const [la, lo] = [M.site.lat, M.site.lon_e];
-    $("siteName").textContent = M.label; $("siteRes").textContent = `${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"} · ${M.kind === "region" ? "MOLA " + Math.round(M.DY) + " m" : "CTX 20 m"}`;
+    $("siteName").textContent = M.label; $("siteRes").textContent = `${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"} · ${M.kind === "region" ? "MOLA " + Math.round(M.DY) + " m" : "CTX 20 m"}`; $("siteName").title = $("siteRes").textContent;
     document.title = "Marswalk · " + M.label;
     if (M.kind === "region") document.querySelector(".credits").textContent = `Terrain: ${M.source}. Orbiters and Sun: JPL Horizons. Radiation is a model on the Curiosity RAD average (0.67 mSv/day). Suit speed (half Tobler) and drift (2 % of distance) are assumptions. This is a coarse site: use it to compare places, not to place footsteps.`;
     if (!M.heat) { document.querySelector('[data-l="heat"]').hidden = true; document.getElementById("w-cold").closest("label").hidden = true; }
@@ -173,7 +173,7 @@
     cost: "What the planner sees with your settings: green is cheap to cross, dark red is avoided.",
     elevation: "Height above the Mars datum. Brighter = higher.",
   };
-  const LNAME = { slope: "Slope", radiation: "Radiation", comms: "Relay blind spots", hab: "Habitat radio", sun: "Sun & shadow", heat: "Ground temp", cost: "Planner cost", elevation: "Elevation" };
+  const LNAME = { slope: "Steepness", radiation: "Radiation", comms: "Satellite blind spots", hab: "Habitat radio range", sun: "Sunlight and shadow", heat: "Ground temperature", cost: "Route difficulty", elevation: "Elevation" };   // plain names; the technical source sits in each layer's note
   async function drawLegend() {
     const act = [...S.layers].pop() || (S.base === "elevation" ? "elevation" : null);
     const el = $("legend"); $("layerNote").textContent = act ? NOTE[act] : "Select a layer to display it on the map.";

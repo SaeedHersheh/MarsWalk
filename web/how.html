@@ -1,6 +1,558 @@
 <!doctype html>
+<html lang="en">
+<head>
 <meta charset="utf-8">
-<title>Marswalk</title>
-<meta http-equiv="refresh" content="0; url=/#nogps">
-<script>location.replace("/#nogps");</script>
-<a href="/#nogps">How it works</a>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#04060a">
+<meta name="description" content="Marswalk by AirAwareNetwork: plan a walk on Mars on real NASA terrain, or step outside and experience it in first person and VR.">
+<link rel="icon" type="image/png" sizes="192x192" href="img/brand/logo-192.png?v=1794691885"><link rel="apple-touch-icon" href="img/brand/logo-192.png?v=1794691885">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Marswalk: how it works">
+<meta property="og:description" content="How Marswalk reads the ground, chooses the safest route, and keeps track of an astronaut on Mars without GPS.">
+<meta property="og:image" content="https://marswalk-266019376344.europe-west1.run.app/img/shots/base.jpg">
+<meta property="og:url" content="https://marswalk-266019376344.europe-west1.run.app/how.html">
+<meta name="twitter:card" content="summary_large_image">
+<title>Marswalk · How it works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #04060a; --panel: #0a0e15; --surface: #111723; --line: #1a2230; --line-2: #2b3649;
+    --ink: #ffffff; --text: #d6dce7; --dim: #8f9cb1; --faint: #627087;
+    --blue: #1a66e8; --blue-hi: #3b82f6; --accent: #8ab8ff; --red: #fc3d21; --live: #3ddc97; --mars: #e07a4f;
+    --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 var(--f-body); -webkit-text-size-adjust: 100%; }
+  a { color: inherit; }
+  img { display: block; max-width: 100%; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- top bar ---------- */
+  .top { position: fixed; z-index: 50; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 20px; padding: 14px clamp(16px, 4vw, 48px); transition: background 0.3s, border-color 0.3s; border-bottom: 1px solid transparent; }
+  .top.solid { background: rgba(4, 6, 10, 0.86); backdrop-filter: blur(12px); border-bottom-color: var(--line); }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+  .brand img { width: 42px; height: 42px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 20px rgba(80, 150, 255, 0.55); }
+  .brand b { display: block; font-size: 16px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); line-height: 1.15; }
+  .brand small { font-size: 11.5px; letter-spacing: 0.06em; color: var(--dim); }
+  .top nav { margin-left: auto; display: flex; gap: 6px; }
+  .top nav a { padding: 8px 14px; border-radius: 999px; text-decoration: none; font-size: 14px; font-weight: 500; color: var(--text); }
+  .top nav a:hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
+
+  /* ---------- hero: Mars turning in the dark ---------- */
+  .hero { touch-action: pan-y; position: relative; min-height: 100vh; min-height: 100svh; display: grid; align-items: center; padding: 110px clamp(16px, 5vw, 64px) 70px; overflow: hidden; isolation: isolate; }
+  #stars, #mars { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
+  #mars { z-index: -1; }
+  .hero::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg, rgba(4, 6, 10, 0.92) 0%, rgba(4, 6, 10, 0.55) 42%, rgba(4, 6, 10, 0) 70%), linear-gradient(0deg, var(--bg) 0%, rgba(4, 6, 10, 0) 26%); }
+  .heroin { max-width: 1240px; width: 100%; margin: 0 auto; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); }
+  .eyebrow::before { content: ""; width: 28px; height: 2px; background: var(--blue-hi); }
+  h1 { margin: 18px 0 18px; max-width: 760px; font-size: clamp(42px, 7vw, 92px); line-height: 0.98; letter-spacing: -0.03em; font-weight: 800; color: var(--ink); }
+  h1 em { font-style: normal; background: linear-gradient(100deg, #ffb08a, var(--mars) 45%, #c4502a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { max-width: 560px; margin: 0 0 40px; font-size: clamp(16px, 1.6vw, 19px); color: var(--text); }
+
+  /* ---------- the two ways in ---------- */
+  .modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; max-width: 900px; }
+  .mode { position: relative; display: grid; align-content: end; min-height: 300px; padding: 26px; border-radius: 22px; overflow: hidden; text-decoration: none; color: var(--ink); border: 1px solid var(--line-2); background: var(--panel); isolation: isolate; transform: translateZ(0); transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.35s, box-shadow 0.35s; }
+  .mode:hover, .mode:focus-visible { transform: translateY(-6px); border-color: var(--c); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--c), 0 0 60px -10px var(--c); }
+  .mode .art { position: absolute; inset: 0; z-index: -2; overflow: hidden; }
+  .mode::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgba(4, 6, 10, 0.96) 18%, rgba(4, 6, 10, 0.35) 60%, rgba(4, 6, 10, 0.1)); }
+  .mode small { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--c); }
+  .mode b { display: block; margin: 6px 0 8px; font-size: 30px; line-height: 1.1; letter-spacing: -0.01em; }
+  .mode p { margin: 0; max-width: 360px; font-size: 14.5px; line-height: 1.55; color: var(--text); }
+  .mode .go { display: inline-flex; align-items: center; gap: 8px; margin-top: 18px; padding: 11px 20px; width: max-content; border-radius: 999px; background: var(--c); color: #04060a; font-weight: 700; font-size: 14.5px; }
+  .mode .go svg { width: 16px; height: 16px; transition: transform 0.3s; }
+  .mode:hover .go svg { transform: translateX(4px); }
+  .plan { --c: #8ab8ff; }
+  .exp { --c: #ff9a6b; }
+  /* plan: a map with a route drawing itself */
+  .plan .art img { width: 100%; height: 100%; object-fit: cover; object-position: 30% 40%; filter: saturate(0.85) brightness(0.8); transform: scale(1.15); transition: transform 6s ease-out; }
+  .plan:hover .art img { transform: scale(1.22); }
+  .plan .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .route { fill: none; stroke: #6EE7A8; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 900; stroke-dashoffset: 900; animation: draw 4.5s 0.6s cubic-bezier(0.6, 0, 0.2, 1) forwards; filter: drop-shadow(0 0 6px rgba(110, 231, 168, 0.7)); }
+  .halo { fill: none; stroke: #8ab8ff; stroke-opacity: 0.28; stroke-width: 16; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 900; stroke-dashoffset: 900; animation: draw 4.5s 0.6s cubic-bezier(0.6, 0, 0.2, 1) forwards; }
+  .pin { fill: #1a66e8; stroke: #fff; stroke-width: 2.5; }
+  .pin.h { fill: #fff; stroke: #1a66e8; }
+  .sat { fill: #F5B85B; filter: drop-shadow(0 0 8px #F5B85B); animation: blink 2.4s ease-in-out infinite; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes blink { 50% { opacity: 0.35; } }
+  /* experience: the ground tilted away like a horizon, with the visor's dot */
+  .exp .art { perspective: 600px; background: linear-gradient(180deg, #d9a77c 0%, #c98a5f 32%, #6b3b25 33%); }
+  .exp .art img { position: absolute; left: -30%; width: 160%; top: 30%; height: 120%; object-fit: cover; transform-origin: 50% 0; transform: rotateX(62deg); filter: sepia(0.35) saturate(1.3) hue-rotate(-12deg) brightness(0.95); animation: walk 18s linear infinite; }
+  @keyframes walk { from { object-position: 50% 0%; } to { object-position: 50% 100%; } }
+  .exp .art::before { content: ""; position: absolute; left: 0; right: 0; top: 24%; height: 18%; z-index: 1; background: linear-gradient(180deg, rgba(217, 167, 124, 0), rgba(217, 167, 124, 0.85) 45%, rgba(217, 167, 124, 0)); }
+  .exp .art::after { content: ""; position: absolute; inset: 0; z-index: 2; background: radial-gradient(ellipse 80% 90% at 50% 45%, transparent 55%, rgba(4, 6, 10, 0.7) 100%); }
+  .reticle { position: absolute; z-index: 3; left: 50%; top: 21%; width: 26px; height: 26px; margin: -13px; border-radius: 50%; border: 2.5px solid rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.3); }
+  .reticle::after { content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px; border-radius: 50%; background: #fff; }
+  .chips { position: absolute; z-index: 3; top: 18px; right: 18px; display: flex; gap: 6px; }
+  .chips span { padding: 4px 10px; border-radius: 999px; background: rgba(4, 6, 10, 0.72); border: 1px solid rgba(255, 255, 255, 0.18); font: 600 11px var(--f-mono); letter-spacing: 0.04em; color: #fff; }
+  .scroll { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); text-decoration: none; }
+  .scroll i { width: 1px; height: 34px; background: linear-gradient(var(--accent), transparent); animation: drop 2s ease-in-out infinite; }
+  @keyframes drop { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+
+  /* ---------- sections ---------- */
+  section { padding: clamp(80px, 11vw, 140px) clamp(16px, 5vw, 64px); }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  h2 { margin: 14px 0 18px; max-width: 760px; font-size: clamp(30px, 4.2vw, 52px); line-height: 1.05; letter-spacing: -0.02em; font-weight: 800; color: var(--ink); }
+  .intro { max-width: 640px; margin: 0 0 52px; font-size: 17.5px; color: var(--dim); }
+  .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .reveal.in { opacity: 1; transform: none; }
+  /* no GPS: three steps */
+  .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; counter-reset: s; }
+  .step { position: relative; padding: 28px 26px 26px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); counter-increment: s; }
+  .step::before { content: "0" counter(s); font: 500 13px var(--f-mono); color: var(--faint); }
+  .step .ic { width: 52px; height: 52px; margin: 18px 0 18px; display: grid; place-items: center; border-radius: 14px; background: var(--c); color: #04060a; box-shadow: 0 0 40px -6px var(--c); }
+  .step .ic svg { width: 28px; height: 28px; }
+  .step b { display: block; font-size: 20px; color: var(--ink); margin-bottom: 8px; }
+  .step p { margin: 0; color: var(--dim); font-size: 15px; }
+  .step .meter { margin-top: 20px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .step .meter i { display: block; height: 100%; width: var(--w); background: var(--c); border-radius: 3px; }
+  .step .meter + small { display: block; margin-top: 8px; font: 12px var(--f-mono); color: var(--faint); }
+  /* data */
+  .data { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+  .data div { padding: 26px 24px; background: var(--bg); }
+  .data b { display: block; font-size: 17px; color: var(--ink); }
+  .data span { display: block; margin: 2px 0 10px; font: 12.5px var(--f-mono); color: var(--accent); }
+  .data p { margin: 0; font-size: 14.5px; color: var(--dim); }
+  /* who */
+  .who { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: clamp(30px, 6vw, 80px); align-items: center; }
+  .badge { position: relative; aspect-ratio: 1; display: grid; place-items: center; }
+  .badge::before { content: ""; position: absolute; inset: 6%; border-radius: 50%; background: radial-gradient(circle, rgba(59, 130, 246, 0.35), transparent 65%); filter: blur(10px); }
+  /* the full AirAwareNetwork artwork: the planet sits free in its own starfield, which fades into the page */
+  .badge img { position: relative; width: 112%; height: auto; aspect-ratio: 1; max-width: none; -webkit-mask-image: radial-gradient(circle closest-side, #000 66%, transparent 98%); mask-image: radial-gradient(circle closest-side, #000 66%, transparent 98%); }
+  /* a relay satellite on a tilted orbit: it passes behind the logo on the far side and in front of it on the near side */
+  .badge .orb { position: absolute; inset: -14%; width: 128%; height: 128%; overflow: visible; pointer-events: none; }
+  .badge .orb.back { z-index: 0; } .badge .orb.front { z-index: 2; }
+  .badge img { z-index: 1; }
+  .badge .orb { inset: -10%; width: 120%; height: 120%; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .who p { margin: 0 0 16px; font-size: 17px; color: var(--text); max-width: 640px; }
+  .builder { display: flex; gap: 16px; align-items: flex-start; max-width: 640px; margin: 6px 0 22px; padding: 18px 20px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line-2); }
+  .builder .av { flex: none; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #3ddc97); color: #04060a; font: 800 16px var(--f-body); letter-spacing: 0.04em; box-shadow: 0 0 24px -6px #3b82f6; }
+  .builder small { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+  .builder b { display: block; font-size: 19px; color: var(--ink); margin: 2px 0 4px; }
+  .who .builder p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--dim); }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 22px; }
+  .facts span { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .facts i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
+  .who p.lead { font-size: clamp(19px, 2vw, 23px); line-height: 1.45; color: var(--ink); }
+  .who p.lead b { background: linear-gradient(100deg, #8ab8ff, #3ddc97); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .who p em { font-style: normal; color: var(--ink); }
+  .visit { display: inline-flex; align-items: center; gap: 10px; margin-top: 10px; padding: 13px 22px; border-radius: 999px; background: var(--blue); color: #fff; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 0 34px -8px var(--blue-hi); transition: transform 0.3s, box-shadow 0.3s; }
+  .visit svg { width: 16px; height: 16px; transition: transform 0.3s; }
+  .visit:hover { transform: translateY(-2px); box-shadow: 0 0 44px -6px var(--blue-hi); }
+  .visit:hover svg { transform: translate(2px, -2px); }
+  .stack { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+  .stack span { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line-2); font-size: 13.5px; color: var(--text); }
+  /* end */
+  .final { text-align: center; padding-bottom: 60px; }
+  .final h2 { margin-left: auto; margin-right: auto; }
+  .final .modes { margin: 40px auto 0; }
+  .links { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 34px; }
+  .links a { display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 999px; border: 1px solid var(--line-2); text-decoration: none; font-size: 14.5px; font-weight: 500; }
+  .links a:hover { border-color: var(--accent); color: var(--ink); }
+  footer { padding: 30px clamp(16px, 5vw, 64px) 40px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 24px; justify-content: space-between; font-size: 13px; color: var(--faint); }
+
+
+
+  /* ---------- how it works: three cards that open ---------- */
+  .flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0 0 46px; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; background: var(--panel); }
+  .flow > div { position: relative; padding: 22px 24px; }
+  .flow > div + div { border-left: 1px solid var(--line); }
+  .flow > div + div::before { content: ""; position: absolute; left: -9px; top: 50%; width: 16px; height: 16px; margin-top: -8px; transform: rotate(45deg); background: var(--panel); border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .flow small { font: 500 12px var(--f-mono); color: var(--faint); letter-spacing: 0.08em; }
+  .flow b { display: block; margin: 4px 0 4px; font-size: 18px; color: var(--ink); }
+  .flow p { margin: 0; font-size: 14.5px; color: var(--dim); }
+  .flow .tool { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .flow .tool span { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-2); font: 12px var(--f-mono); color: var(--text); }
+  .map { margin: -26px 0 46px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .map div { padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .map div b { display: block; font-size: 13.5px; color: var(--ink); }
+  .map div i { font-style: normal; font: 12px var(--f-mono); color: var(--accent); }
+
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .card { position: relative; display: flex; flex-direction: column; text-align: left; padding: 0; border-radius: 22px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); cursor: pointer; overflow: hidden; transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.3s, box-shadow 0.35s; }
+  .card:hover { transform: translateY(-4px); border-color: var(--c); }
+  .card[aria-expanded="true"] { border-color: var(--c); box-shadow: 0 0 0 1px var(--c), 0 30px 80px -30px var(--c); }
+  .card .art { height: 150px; position: relative; background: radial-gradient(ellipse at 50% 120%, color-mix(in srgb, var(--c) 30%, transparent), transparent 70%), #070a10; border-bottom: 1px solid var(--line); }
+  .card .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .card .tx { padding: 22px 24px 24px; }
+  .card small { font-size: 12px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--c); }
+  .card b { display: block; margin: 6px 0 6px; font-size: 23px; color: var(--ink); }
+  .card p { margin: 0; font-size: 15px; color: var(--dim); }
+  .card .open { display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; font-weight: 700; font-size: 14px; color: var(--c); }
+  .card .open::after { content: "+"; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--c); font-size: 15px; line-height: 1; transition: transform 0.3s; }
+  .card[aria-expanded="true"] .open::after { transform: rotate(45deg); }
+  .lay { --c: #8ab8ff; } .rou { --c: #6EE7A8; } .nav { --c: #F5B85B; }
+
+  .panel { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), margin 0.5s; margin-top: 0; }
+  .panel.on { grid-template-rows: 1fr; margin-top: 18px; }
+  .panel > div { overflow: hidden; }
+  .pane { display: none; padding: 30px; border-radius: 22px; border: 1px solid var(--line-2); background: linear-gradient(180deg, #0c1220, var(--panel)); }
+  .pane.on { display: block; animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+  .pane h3 { margin: 0 0 6px; font-size: 26px; color: var(--ink); letter-spacing: -0.01em; }
+  .pane > p { margin: 0 0 24px; max-width: 760px; color: var(--dim); }
+
+  /* layers */
+  .lays { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .lays div { padding: 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+  .lays i { display: block; height: 8px; border-radius: 4px; margin-bottom: 12px; }
+  .lays b { display: block; color: var(--ink); font-size: 15.5px; }
+  .lays span { display: block; font: 11.5px var(--f-mono); color: var(--accent); margin: 2px 0 6px; }
+  .lays p { margin: 0; font-size: 13.5px; color: var(--dim); }
+
+  /* routing */
+
+  /* navigation */
+  .ngrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .src { display: flex; gap: 14px; padding: 16px 18px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); transition: border-color 0.3s, box-shadow 0.3s; }
+  .src.live { border-color: var(--k); box-shadow: 0 0 0 1px var(--k), 0 0 40px -16px var(--k); }
+  .src .dot { flex: none; width: 12px; height: 12px; margin-top: 6px; border-radius: 50%; background: var(--line-2); }
+  .src.live .dot { background: var(--k); box-shadow: 0 0 12px var(--k); }
+  .src b { display: block; color: var(--ink); }
+  .src p { margin: 2px 0 0; font-size: 14px; color: var(--dim); }
+  .src em { display: block; margin-top: 6px; font: 12px var(--f-mono); font-style: normal; color: var(--k); }
+  .scene { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); background: radial-gradient(ellipse at 70% 0%, #0f1a2e 0%, #05080e 70%); }
+  .scene svg { display: block; width: 100%; height: auto; }
+  .part .hit { fill: transparent; }
+  .ring { display: none; }
+  .lbl { font: 600 13px var(--f-body); fill: var(--dim); }
+  .link { fill: none; stroke-width: 2.5; stroke-linecap: round; transition: opacity 0.4s; }
+  .link.flow2 { stroke-dasharray: 2 10; animation: flw 1s linear infinite; }
+  @keyframes flw { to { stroke-dashoffset: -12; } }
+  .link.off { opacity: 0.1; animation: none; }
+  .ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; margin-top: 16px; }
+  .ctl label { display: grid; gap: 8px; font-size: 13.5px; color: var(--dim); }
+  .ctl input[type=range] { width: 100%; accent-color: #F5B85B; }
+  .ctl button { padding: 11px 20px; border-radius: 999px; border: 0; background: #F5B85B; color: #04060a; font-weight: 700; font-size: 14.5px; cursor: pointer; white-space: nowrap; }
+  .ctl button:disabled { opacity: 0.45; cursor: default; }
+  .now { margin-top: 14px; padding: 14px 18px; border-radius: 14px; background: #070a10; border: 1px solid var(--line); font-size: 15px; color: var(--text); }
+  .now b { color: var(--ink); }
+
+  @media (max-width: 960px) {
+    .flow, .cards { grid-template-columns: 1fr; }
+    .flow > div + div { border-left: 0; border-top: 1px solid var(--line); }
+    .flow > div + div::before { left: 50%; top: -9px; margin: 0 0 0 -8px; transform: rotate(135deg); }
+    .map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lays { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .lays, .ngrid { grid-template-columns: 1fr; }
+    .pane { padding: 22px 18px; }
+    .ctl { grid-template-columns: 1fr; }
+    .card .art { height: 120px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .link.flow2 { animation: none; } .pane.on { animation: none; } .panel { transition: none; } }
+
+
+  /* routing: the formula, a square to try, and the detour */
+  #nogps .lab { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; margin-bottom: 22px; }
+  #nogps .labin, #nogps .out, #nogps .why { padding: 22px; border-radius: 20px; background: var(--surface); border: 1px solid var(--line); }
+  #nogps h4 { margin: 0 0 14px; font-size: 17px; color: var(--ink); }
+  #nogps .sl { display: grid; gap: 8px; font-size: 14px; color: var(--dim); }
+  #nogps .sl b { color: #6EE7A8; font-family: var(--f-mono); }
+  #nogps .sl input { width: 100%; accent-color: #6EE7A8; }
+  #nogps .tg { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+  #nogps .tg button { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--dim); }
+  #nogps .tg button[aria-pressed="true"] { background: rgba(242, 184, 75, 0.14); border-color: #f2b84b; color: #ffd98a; }
+  #nogps .out { display: flex; flex-direction: column; justify-content: center; text-align: center; background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--k, #6EE7A8) 22%, transparent), transparent 70%), var(--surface); transition: background 0.4s; }
+  #nogps .out small { font-size: 13px; color: var(--dim); }
+  #nogps .out b { font: 800 clamp(44px, 6vw, 64px) var(--f-mono); color: var(--k, #6EE7A8); line-height: 1.1; transition: color 0.3s; }
+  #nogps .out span { font-size: 15px; color: var(--text); }
+  #nogps .out .meter { margin-top: 16px; height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+  #nogps .out .meter i { display: block; height: 100%; width: 0; background: var(--k, #6EE7A8); border-radius: 4px; transition: width 0.4s, background 0.3s; }
+  #nogps .paths { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  #nogps .path { padding: 16px; border-radius: 14px; border: 1px solid var(--line-2); background: #070a10; transition: border-color 0.3s, box-shadow 0.3s; }
+  #nogps .path.win { border-color: #6EE7A8; box-shadow: 0 0 0 1px #6EE7A8, 0 0 40px -18px #6EE7A8; }
+  #nogps .path small { display: block; font-size: 13px; color: var(--dim); }
+  #nogps .path b { display: block; margin: 2px 0; color: var(--ink); }
+  #nogps .path span { font: 600 15px var(--f-mono); color: var(--text); }
+  #nogps .path.win span { color: #6EE7A8; }
+  #nogps .why > p { margin: 14px 0 0; color: var(--dim); font-size: 15px; }
+  /* navigation: play and timeline */
+  #nogps .ctl { grid-template-columns: auto minmax(0, 1fr) auto; }
+  #nogps .play { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px 12px 16px; border-radius: 999px; border: 0; background: var(--blue); color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 0 30px -8px var(--blue-hi); }
+  #nogps .play svg { width: 18px; height: 18px; }
+  #nogps .play[aria-pressed="true"] { background: #2a3a5c; box-shadow: none; }
+  @media (max-width: 960px) { #nogps .lab { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) {
+    #nogps .ctl { grid-template-columns: 1fr; }
+    #nogps .play { justify-content: center; }
+    #nogps .paths { grid-template-columns: 1fr; }
+  }
+
+  #nogps .simple { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 6px 0 22px; padding: 0; }
+  #nogps .simple li { display: flex; gap: 14px; align-items: center; padding: 18px; border-radius: 16px; background: #070a10; border: 1px solid var(--line); font-size: 16px; color: var(--text); }
+  #nogps .simple b { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #6EE7A8; color: #04060a; font: 700 17px var(--f-mono); }
+  #nogps .doubtC, #doubtC { display: none; }
+  @media (max-width: 760px) { #nogps .simple { grid-template-columns: 1fr; } }
+
+  @media (max-width: 860px) {
+    .top nav { display: none; }
+    .hero { align-items: end; padding-top: 96px; }
+    .hero::after { background: linear-gradient(0deg, rgba(4, 6, 10, 0.96) 0%, rgba(4, 6, 10, 0.7) 55%, rgba(4, 6, 10, 0.15) 100%); }
+    .modes, .steps, .data { grid-template-columns: 1fr; }
+    .mode { min-height: 220px; padding: 22px; }
+    .mode b { font-size: 26px; }
+    .who { grid-template-columns: 1fr; }
+    .badge { width: 220px; margin: 0 auto; }
+    .scroll { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .route, .halo { animation: none; stroke-dashoffset: 0; }
+    .exp .art img, .sat, .scroll i { animation: none; }
+  }
+
+  /* restraint: quieter labels, fewer glows, one accent moment per page */
+  .eyebrow { text-transform: none !important; letter-spacing: 0.01em !important; font-size: 15px !important; font-weight: 600 !important; }
+  .brand img { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.7) !important; }
+  .mode:hover, .mode:focus-visible { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--c) !important; }
+  .step .ic, #nogps .simple b, .card .ic { box-shadow: none !important; }
+  .visit { box-shadow: none !important; }
+  .card[aria-expanded="true"] { box-shadow: 0 0 0 1px var(--c) !important; }
+  .facts i { box-shadow: none !important; }
+  .navcta { background: var(--blue) !important; color: #fff !important; }
+  .navcta:hover { background: var(--blue-hi) !important; }
+  .top nav a[aria-current="page"] { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
+  @media (max-width: 860px) { .top nav { display: flex !important; } .top nav a:not(.navcta) { display: none; } }
+</style>
+</head>
+<body>
+<header class="top solid" id="top">
+  <a class="brand" href="/" aria-label="Marswalk home"><img src="img/brand/logo-192.png" alt="" width="42" height="42"><span><b>Marswalk</b><small>AirAwareNetwork</small></span></a>
+  <nav aria-label="Pages"><a href="/">Home</a><a href="how.html" aria-current="page">How it works</a><a href="tour.html">Tour</a><a class="navcta" href="globe.html">Open the app</a></nav>
+</header>
+
+<main>
+  <section id="nogps" style="padding-top: clamp(110px, 12vw, 150px)">
+    <div class="wrap">
+      <span class="eyebrow reveal">How it works</span>
+      <h2 class="reveal">From a QGIS map to a planner that runs itself.</h2>
+      <p class="intro reveal">We first did it by hand in QGIS: clip the terrain, work out the slope, find a path. Then we rebuilt each of those steps in Python, so it runs for any place on Mars in about a minute.</p>
+
+      <div class="flow reveal">
+        <div><small>By hand</small><b>QGIS</b><p>We started at Jezero: clipped its detailed elevation, made a slope map and drew a first route by eye. Then the same on MOLA, for the whole planet.</p><div class="tool"><span>Clip raster</span><span>Slope</span><span>Least-cost path</span></div></div>
+        <div><small>Automated</small><b>Python pipelines</b><p>The same steps as scripts: Jezero in full detail, and any other place on Mars built from MOLA in about a minute.</p><div class="tool"><span>Python pipelines</span></div></div>
+        <div><small>Live</small><b>The planner</b><p>A web app that serves the layers, plans routes in a second, and tracks the satellites.</p><div class="tool"><span>Map</span><span>3D</span><span>VR</span></div></div>
+      </div>
+      <div class="map reveal">
+        <div><b>Clip raster by extent</b><i>→ windowed read</i></div>
+        <div><b>Slope</b><i>→ elevation gradient</i></div>
+        <div><b>Raster calculator</b><i>→ cost grid</i></div>
+        <div><b>Least-cost path</b><i>→ MCP search</i></div>
+        <div><b>Viewshed</b><i>→ habitat coverage</i></div>
+      </div>
+
+      <div class="cards steps reveal">
+        <button class="card lay" type="button" aria-expanded="false" data-pane="pLay"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g transform="translate(150 92)">
+<path d="M-90 20 L0 -12 L90 20 L0 52 Z" fill="#1d2a44" stroke="#3b82f6" stroke-opacity=".5"/>
+<path d="M-90 4 L0 -28 L90 4 L0 36 Z" fill="#2a3b5e" stroke="#8ab8ff" stroke-opacity=".6"/>
+<path d="M-90 -12 L0 -44 L90 -12 L0 20 Z" fill="url(#lg1)" stroke="#cfe0ff" stroke-opacity=".8"/></g>
+<defs><linearGradient id="lg1" x1="0" x2="1"><stop offset="0" stop-color="#2878dc"/><stop offset=".5" stop-color="#dcd250"/><stop offset="1" stop-color="#e07a4f"/></linearGradient></defs></svg></div><div class="tx"><b>The layers</b><p>Eight maps of the ground, each from real data.</p><span class="open">See the layers</span></div></button>
+        <button class="card rou" type="button" aria-expanded="false" data-pane="pRou"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+<g opacity=".35" stroke="#6EE7A8" stroke-width=".6"><path d="M0 0V150"/><path d="M20 0V150"/><path d="M40 0V150"/><path d="M60 0V150"/><path d="M80 0V150"/><path d="M100 0V150"/><path d="M120 0V150"/><path d="M140 0V150"/><path d="M160 0V150"/><path d="M180 0V150"/><path d="M200 0V150"/><path d="M220 0V150"/><path d="M240 0V150"/><path d="M260 0V150"/><path d="M280 0V150"/><path d="M300 0V150"/><path d="M0 0H300"/><path d="M0 20H300"/><path d="M0 40H300"/><path d="M0 60H300"/><path d="M0 80H300"/><path d="M0 100H300"/><path d="M0 120H300"/><path d="M0 140H300"/></g>
+<path d="M120 40 h40 v40 h-40z M180 80 h40 v40 h-40z" fill="#c8283c" opacity=".55"/>
+<path class="draw" d="M40 120 C 90 120, 100 90, 110 70 S 170 40, 175 65 S 240 70, 262 30" fill="none" stroke="#6EE7A8" stroke-width="4" stroke-linecap="round"/>
+<circle cx="40" cy="120" r="7" fill="#fff"/><circle cx="262" cy="30" r="7" fill="#1a66e8" stroke="#fff" stroke-width="2"/></svg></div><div class="tx"><b>The routing</b><p>How the safest walk is chosen, and what each weight does.</p><span class="open">How it chooses</span></div></button>
+        <button class="card nav" type="button" aria-expanded="false" data-pane="pNav"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+<path d="M-10 70 Q 150 -30 310 70" fill="none" stroke="#2b3649" stroke-dasharray="3 6"/>
+<path d="M0 135 L 70 128 C 110 120, 130 80, 160 78 C 190 80, 200 118, 240 124 L 300 128 L300 150 L0 150Z" fill="#7a3a20"/>
+<path d="M60 112 L 230 104" stroke="#3ddc97" stroke-width="2" stroke-dasharray="3 6" opacity=".5"/>
+<path d="M200 30 L 230 102" stroke="#F5B85B" stroke-width="2.5" stroke-dasharray="3 6"/>
+<path d="M48 126 v-10 a12 9 0 0 1 24 0 v10z" fill="#d6dce7"/><path d="M60 108 v-12" stroke="#d6dce7" stroke-width="2"/><circle cx="60" cy="94" r="3" fill="#3ddc97"/>
+<circle cx="232" cy="110" r="5" fill="#fff"/><circle cx="232" cy="110" r="16" fill="none" stroke="#8ab8ff" stroke-opacity=".6" stroke-dasharray="2 3"/>
+<g transform="translate(200 28)"><rect x="-16" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="5" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="-5" y="-6" width="10" height="12" rx="1.5" fill="#F5B85B"/></g></svg></div><div class="tx"><b>The navigation</b><p>No GPS: the habitat and the satellites take turns finding you.</p><span class="open">How it finds you</span></div></button>
+      </div>
+
+      <div class="panel" id="panel"><div>
+        <div class="pane" id="pLay">
+          <h3>The layers</h3>
+          <p>Turn any of these on over the map. The planner reads them too.</p>
+          <div class="lays">
+            <div><i style="background:linear-gradient(90deg,#2b5aa8,#5fb27a,#e0c060,#c0603a,#fff)"></i><b>Elevation</b><span>MOLA · CTX DTM</span><p>Height of the ground, shaded.</p></div>
+            <div><i style="background:linear-gradient(90deg,#3cc878,#ebdc50,#f59632,#d71e2d)"></i><b>Slope</b><span>CTX 20 m · HiRISE 1 m</span><p>How steep each spot is. The one that matters most.</p></div>
+            <div><i style="background:linear-gradient(90deg,#2878dc,#6e3caa,#dc506e,#ffc85a)"></i><b>Radiation</b><span>Curiosity RAD</span><p>Dose from the air above you and the open sky.</p></div>
+            <div><i style="background:linear-gradient(90deg,#3cdceb,#f0be46,#e6323c)"></i><b>Relay blind spots</b><span>JPL Horizons</span><p>Where hills hide the satellites for much of the day.</p></div>
+            <div><i style="background:linear-gradient(90deg,#3ddc97,#1a6e4a)"></i><b>Habitat radio</b><span>MOLA line of sight</span><p>Everywhere the habitat's mast can see you.</p></div>
+            <div><i style="background:linear-gradient(90deg,#0b1020,#3a4560,#f5d58a)"></i><b>Sun &amp; shadow</b><span>JPL Horizons Sun</span><p>Real shadows at the hour you walk.</p></div>
+            <div><i style="background:linear-gradient(90deg,#2a3d9a,#8a5ab0,#f07a4a,#ffd27a)"></i><b>Ground temperature</b><span>THEMIS · TES</span><p>How cold the ground is, through one Mars day.</p></div>
+            <div><i style="background:linear-gradient(90deg,#1ea078,#dcd250,#f07832,#c8283c,#19050f)"></i><b>Planner cost</b><span>all of the above</span><p>What the planner sees with your weights.</p></div>
+          </div>
+        </div>
+
+        <div class="pane" id="pRou">
+          <h3>How we pick the path</h3>
+          <ol class="simple">
+            <li><b>1</b><span>We cut the map into small squares, 20 m each.</span></li>
+            <li><b>2</b><span>Every square gets a score. Flat and safe is low. Steep or risky is high.</span></li>
+            <li><b>3</b><span>The computer finds the path with the lowest total score.</span></li>
+          </ol>
+          <div class="lab">
+            <div class="labin">
+              <h4>Try it on one square</h4>
+              <label class="sl" for="cSlope"><span>How steep is it? <b id="cSlopeV">6°</b></span><input id="cSlope" type="range" min="0" max="30" value="6"></label>
+              <div class="tg" role="group" aria-label="Anything else risky here?">
+                <button type="button" data-h="radiation" aria-pressed="false">More radiation</button>
+                <button type="button" data-h="comms" aria-pressed="false">No satellite signal</button>
+                <button type="button" data-h="shadow" aria-pressed="false">In shadow</button>
+                <button type="button" data-h="cold" aria-pressed="false">Very cold</button>
+              </div>
+            </div>
+            <div class="out" id="out">
+              <small>Score</small>
+              <b id="price">1</b>
+              <span id="priceTx">Easy. The path goes here.</span>
+              <div class="meter"><i id="priceBar"></i></div>
+            </div>
+          </div>
+          <div class="why">
+            <h4>That is why the path bends</h4>
+            <div class="paths">
+              <div class="path" id="pathA"><small>Straight over a hill</small><b>1 km, steep</b><span id="pa"></span></div>
+              <div class="path win" id="pathB"><small>Around the hill</small><b>2 km, flat</b><span id="pb"></span></div>
+            </div>
+            <p>Walking twice as far on flat ground still scores lower, so the planner goes around.</p>
+          </div>
+        </div>
+
+        <div class="pane" id="pNav">
+          <h3>How the astronaut is found</h3>
+          <p>There is no GPS on Mars. Two things tell the astronaut where they are, and they take turns: when one cannot see them, the other one can.</p>
+          <div class="ngrid">
+            <div class="src" id="sHab" style="--k:#3ddc97"><i class="dot"></i><div><b>The habitat</b><p>Its radio mast finds you while nothing blocks the view.</p><em>works close to home</em></div></div>
+            <div class="src" id="sSat" style="--k:#F5B85B"><i class="dot"></i><div><b>The satellite</b><p>When a hill hides you from home, a satellite above finds you instead.</p><em>works behind hills</em></div></div>
+          </div>
+          <div class="scene"><svg id="dia" viewBox="0 0 900 470" role="img" aria-label="The habitat, a ridge, the astronaut, a relay satellite and Earth, with the radio links between them">
+            <defs>
+              <linearGradient id="gnd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9a4d2c"/><stop offset="1" stop-color="#3a1a10"/></linearGradient>
+              <radialGradient id="doubt"><stop offset="0" stop-color="#8ab8ff" stop-opacity="0.35"/><stop offset="1" stop-color="#8ab8ff" stop-opacity="0.05"/></radialGradient>
+              <radialGradient id="eg"><stop offset="0" stop-color="#7cc4ff"/><stop offset="1" stop-color="#1b4fa8"/></radialGradient>
+            </defs>
+            <!-- orbit arc -->
+            <path d="M-20 170 Q 450 -40 920 170" fill="none" stroke="#2b3649" stroke-dasharray="3 7"/>
+            <!-- links -->
+            <path id="lkHab" class="link flow2" stroke="#3ddc97"/>
+            <path id="lkSat" class="link flow2" stroke="#F5B85B"/>
+            <path id="lkEarth" class="link flow2" stroke="#4fa3ff" d="M600 92 L 820 70"/>
+            <!-- the planned route -->
+            <path id="route" d="M150 370 C 260 360, 320 330, 400 322 S 560 352, 760 360" fill="none" stroke="#6EE7A8" stroke-width="3" stroke-dasharray="7 7" opacity="0.8"/>
+            <!-- ground with a ridge -->
+            <path id="ground" d="M0 380 L 150 372 C 260 362, 330 260, 400 250 C 470 260, 520 352, 620 360 L 900 368 L 900 470 L 0 470 Z" fill="url(#gnd)"/>
+
+            <g class="part" data-p="ridge"><rect class="hit" x="320" y="240" width="160" height="110"/><circle class="ring" cx="400" cy="290" r="62"/><text class="lbl" x="400" y="236" text-anchor="middle">Ridge</text></g>
+
+            <g class="part" data-p="hab"><rect class="hit" x="90" y="290" width="120" height="100"/>
+              <circle class="ring" cx="150" cy="345" r="50"/>
+              <path d="M118 372 v-22 a32 22 0 0 1 64 0 v22 Z" fill="#d6dce7"/><path d="M150 328 V 296" stroke="#d6dce7" stroke-width="3"/><circle cx="150" cy="294" r="5" fill="#3ddc97"/>
+              <text class="lbl" x="150" y="402" text-anchor="middle">Habitat mast</text></g>
+
+            <g class="part" data-p="suit" id="astro">
+              <circle id="doubtC" cx="0" cy="0" r="12" fill="url(#doubt)" stroke="#8ab8ff" stroke-opacity="0.5" stroke-dasharray="3 4"/>
+              <rect class="hit" x="-30" y="-48" width="60" height="60"/>
+              <circle class="ring" cx="0" cy="-18" r="30"/>
+              <circle cx="0" cy="-30" r="7" fill="#fff"/><rect x="-7" y="-23" width="14" height="18" rx="5" fill="#fff"/><path d="M-4 -5 l-3 8 M4 -5 l3 8" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+              <text class="lbl" x="0" y="-50" text-anchor="middle">Astronaut</text></g>
+
+            <g class="part" data-p="sat" id="satG">
+              <rect class="hit" x="-40" y="-26" width="80" height="52"/><circle class="ring" cx="0" cy="0" r="32"/>
+              <rect x="-26" y="-6" width="18" height="12" rx="1.5" fill="#1d4ed8" stroke="#93c5fd"/><rect x="8" y="-6" width="18" height="12" rx="1.5" fill="#1d4ed8" stroke="#93c5fd"/><rect x="-7" y="-8" width="14" height="16" rx="2" fill="#F5B85B"/>
+              <text class="lbl" x="0" y="-18" text-anchor="middle">Relay satellite</text></g>
+
+            <g class="part" data-p="earth"><rect class="hit" x="780" y="30" width="90" height="90"/><circle class="ring" cx="830" cy="70" r="40"/>
+              <circle cx="830" cy="70" r="24" fill="url(#eg)"/><text class="lbl" x="830" y="122" text-anchor="middle">Earth</text></g>
+
+            <g class="part" data-p="plan"><rect class="hit" x="640" y="390" width="200" height="60"/><circle class="ring" cx="760" cy="362" r="22"/>
+              <circle cx="760" cy="360" r="7" fill="#1a66e8" stroke="#fff" stroke-width="2"/><text class="lbl" x="760" y="400" text-anchor="middle">Next stop</text></g>
+          </svg></div>
+          <div class="ctl">
+            <button id="playB" class="play" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg><span>Play the walk</span></button>
+            <label for="walkR">or drag the astronaut <input id="walkR" type="range" min="0" max="100" value="5"></label>
+          </div>
+          <div class="now" id="now"></div>
+        </div>
+      </div></div>
+    </div>
+  </section>
+</main>
+<footer><span>Marswalk · AirAwareNetwork · NASA Space Apps Challenge 2026</span><span>Terrain: NASA / USGS / MSSS · Orbits: NASA JPL Horizons · Not affiliated with NASA</span><span style="flex-basis:100%">Built with help from AI assistants (Claude and Gemini). Voice-over uses text-to-speech.</span></footer>
+
+<script>document.querySelectorAll(".reveal").forEach(e => e.classList.add("in"));</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  // the three cards: one opens at a time, below them
+  const cards = document.querySelectorAll("#nogps .card"), panel = $("panel");
+  cards.forEach(c => c.addEventListener("click", () => {
+    const open = c.getAttribute("aria-expanded") !== "true";
+    cards.forEach(x => x.setAttribute("aria-expanded", String(x === c && open)));
+    document.querySelectorAll("#nogps .pane").forEach(p => p.classList.toggle("on", open && p.id === c.dataset.pane));
+    panel.classList.toggle("on", open);
+    if (open) { if (c.dataset.pane === "pNav") draw(); if (c.dataset.pane === "pRou") bars(); setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "nearest" }), 120); }
+  }));
+
+  // routing: the planner's real numbers (Safest style), shown as one score
+  const W = { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 };
+  const SC = [[0, 0], [3, 0], [5, .4], [8, 2], [12, 8], [16, 24], [20, 60], [25, 160], [45, 400]];
+  const pen = s => { for (let i = 1; i < SC.length; i++) if (s <= SC[i][0]) { const [a0, b0] = SC[i - 1], [a1, b1] = SC[i]; return b0 + (b1 - b0) * (s - a0) / (a1 - a0); } return 400; };
+  const on = new Set();
+  function bars() {
+    const s = +$("cSlope").value; $("cSlopeV").textContent = s + "°";
+    const m = 1 + W.slope * pen(s) + 6 * [...on].reduce((t, k) => t + W[k], 0), blocked = s > 18;
+    const k = blocked ? "#ff6b55" : m < 2 ? "#6EE7A8" : m < 8 ? "#f2b84b" : "#ff8a5b";
+    $("out").style.setProperty("--k", k);
+    $("price").textContent = blocked ? "No go" : m < 10 ? m.toFixed(1).replace(".0", "") : Math.round(m);
+    $("priceTx").textContent = blocked ? "Too steep to walk. The path never goes here." : m < 2 ? "Easy. The path goes here." : m < 8 ? "Costly. The path avoids it if it can." : "Very costly. The path goes around.";
+    $("priceBar").style.width = blocked ? "100%" : Math.min(100, Math.log(m) / Math.log(60) * 100) + "%";
+    $("pa").textContent = "score " + Math.round(1 * (1 + pen(11))); $("pb").textContent = "score " + Math.round(2 * (1 + pen(3)));
+  }
+  $("cSlope").addEventListener("input", bars);
+  document.querySelectorAll("#nogps .tg button").forEach(b => b.onclick = () => { const k = b.dataset.h; on.has(k) ? on.delete(k) : on.add(k); b.setAttribute("aria-pressed", String(on.has(k))); bars(); });
+
+  // navigation: the habitat finds you while it can see you; the moment a hill hides you, the satellite takes over, and back again
+  const groundY = x => {
+    const P = [[0, 380], [150, 372], [260, 345], [330, 280], [400, 250], [470, 262], [520, 330], [620, 360], [900, 368]];
+    for (let i = 1; i < P.length; i++) if (x <= P[i][0]) { const a = P[i - 1], b = P[i], k = (x - a[0]) / (b[0] - a[0]), s = k * k * (3 - 2 * k); return a[1] + (b[1] - a[1]) * s; }
+    return 368;
+  };
+  let satK = 0.62, playing = 0;
+  function draw() {
+    const v = +$("walkR").value / 100, x = 150 + v * 610, y = groundY(x) - 2, hab = x <= 418;
+    const sx = 120 + satK * 660, sy = 170 - Math.sin(Math.PI * (sx + 20) / 940) * 140;
+    $("astro").setAttribute("transform", `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    $("satG").setAttribute("transform", `translate(${sx.toFixed(1)} ${sy.toFixed(1)})`);
+    $("lkHab").setAttribute("d", `M150 294 L ${x.toFixed(1)} ${(y - 30).toFixed(1)}`);
+    $("lkSat").setAttribute("d", `M${sx.toFixed(1)} ${(sy + 8).toFixed(1)} L ${x.toFixed(1)} ${(y - 30).toFixed(1)}`);
+    $("lkEarth").setAttribute("d", `M${(sx + 20).toFixed(1)} ${sy.toFixed(1)} L 806 72`);
+    if (draw.hab !== hab) {                                                   // only touch classes and text when the hand-over happens
+      draw.hab = hab;
+      $("lkHab").classList.toggle("off", !hab); $("lkSat").classList.toggle("off", hab); $("lkEarth").classList.toggle("off", hab);
+      $("sHab").classList.toggle("live", hab); $("sSat").classList.toggle("live", !hab);
+      $("now").innerHTML = hab ? `<b>The habitat sees the astronaut.</b> It tells the suit where it is.` : `<b>The hill blocks the habitat.</b> The satellite takes over right away.`;
+    }
+  }
+  const ease = k => k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  function stop() { if (!playing) return; cancelAnimationFrame(playing); playing = 0; $("playB").setAttribute("aria-pressed", "false"); $("playB").querySelector("span").textContent = "Play the walk"; }
+  $("walkR").addEventListener("input", () => { stop(); draw(); });
+  $("playB").onclick = () => {
+    if (playing) return stop();
+    $("playB").setAttribute("aria-pressed", "true"); $("playB").querySelector("span").textContent = "Stop";
+    const t0 = performance.now(), D = 12000;                                    // out over the hill and back, one smooth loop
+    const frame = now => {
+      const k = Math.min(1, (now - t0) / D), there = k < 0.5 ? ease(k * 2) : ease((1 - k) * 2);
+      $("walkR").value = 5 + there * 80; satK = 0.3 + k * 0.5; draw();
+      if (k < 1) playing = requestAnimationFrame(frame); else stop();
+    };
+    playing = requestAnimationFrame(frame);
+  };
+  draw(); bars();
+})();
+</script>
+</body>
+</html>
