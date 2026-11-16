@@ -354,9 +354,9 @@
       <p class="intro reveal">We first did it by hand in QGIS: clip the terrain, work out the slope, find a path. Then we rebuilt each of those steps in Python, so it runs for any place on Mars in about a minute.</p>
 
       <div class="flow reveal">
-        <div><small>01 · by hand</small><b>QGIS</b><p>We started at Jezero: clipped its detailed elevation, made a slope map and drew a first route by eye. Then the same on MOLA, for the whole planet.</p><div class="tool"><span>Clip raster</span><span>Slope</span><span>Least-cost path</span></div></div>
-        <div><small>02 · automated</small><b>Python pipelines</b><p>The same steps as scripts: Jezero in full detail, and any other place on Mars built from MOLA in about a minute.</p><div class="tool"><span>rasterio</span><span>NumPy</span><span>scikit-image</span></div></div>
-        <div><small>03 · live</small><b>The planner</b><p>A web app that serves the layers, plans routes in a second, and tracks the satellites.</p><div class="tool"><span>FastAPI</span><span>Leaflet</span><span>three.js</span></div></div>
+        <div><small>By hand</small><b>QGIS</b><p>We started at Jezero: clipped its detailed elevation, made a slope map and drew a first route by eye. Then the same on MOLA, for the whole planet.</p><div class="tool"><span>Clip raster</span><span>Slope</span><span>Least-cost path</span></div></div>
+        <div><small>Automated</small><b>Python pipelines</b><p>The same steps as scripts: Jezero in full detail, and any other place on Mars built from MOLA in about a minute.</p><div class="tool"><span>Python pipelines</span></div></div>
+        <div><small>Live</small><b>The planner</b><p>A web app that serves the layers, plans routes in a second, and tracks the satellites.</p><div class="tool"><span>Map</span><span>3D</span><span>VR</span></div></div>
       </div>
       <div class="map reveal">
         <div><b>Clip raster by extent</b><i>→ windowed read</i></div>
@@ -371,12 +371,12 @@
 <path d="M-90 20 L0 -12 L90 20 L0 52 Z" fill="#1d2a44" stroke="#3b82f6" stroke-opacity=".5"/>
 <path d="M-90 4 L0 -28 L90 4 L0 36 Z" fill="#2a3b5e" stroke="#8ab8ff" stroke-opacity=".6"/>
 <path d="M-90 -12 L0 -44 L90 -12 L0 20 Z" fill="url(#lg1)" stroke="#cfe0ff" stroke-opacity=".8"/></g>
-<defs><linearGradient id="lg1" x1="0" x2="1"><stop offset="0" stop-color="#2878dc"/><stop offset=".5" stop-color="#dcd250"/><stop offset="1" stop-color="#e07a4f"/></linearGradient></defs></svg></div><div class="tx"><small>01</small><b>The layers</b><p>Eight maps of the ground, each from real data.</p><span class="open">See the layers</span></div></button>
+<defs><linearGradient id="lg1" x1="0" x2="1"><stop offset="0" stop-color="#2878dc"/><stop offset=".5" stop-color="#dcd250"/><stop offset="1" stop-color="#e07a4f"/></linearGradient></defs></svg></div><div class="tx"><b>The layers</b><p>Eight maps of the ground, each from real data.</p><span class="open">See the layers</span></div></button>
         <button class="card rou" type="button" aria-expanded="false" data-pane="pRou"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
 <g opacity=".35" stroke="#6EE7A8" stroke-width=".6"><path d="M0 0V150"/><path d="M20 0V150"/><path d="M40 0V150"/><path d="M60 0V150"/><path d="M80 0V150"/><path d="M100 0V150"/><path d="M120 0V150"/><path d="M140 0V150"/><path d="M160 0V150"/><path d="M180 0V150"/><path d="M200 0V150"/><path d="M220 0V150"/><path d="M240 0V150"/><path d="M260 0V150"/><path d="M280 0V150"/><path d="M300 0V150"/><path d="M0 0H300"/><path d="M0 20H300"/><path d="M0 40H300"/><path d="M0 60H300"/><path d="M0 80H300"/><path d="M0 100H300"/><path d="M0 120H300"/><path d="M0 140H300"/></g>
 <path d="M120 40 h40 v40 h-40z M180 80 h40 v40 h-40z" fill="#c8283c" opacity=".55"/>
 <path class="draw" d="M40 120 C 90 120, 100 90, 110 70 S 170 40, 175 65 S 240 70, 262 30" fill="none" stroke="#6EE7A8" stroke-width="4" stroke-linecap="round"/>
-<circle cx="40" cy="120" r="7" fill="#fff"/><circle cx="262" cy="30" r="7" fill="#1a66e8" stroke="#fff" stroke-width="2"/></svg></div><div class="tx"><small>02</small><b>The routing</b><p>How the safest walk is chosen, and what each weight does.</p><span class="open">How it chooses</span></div></button>
+<circle cx="40" cy="120" r="7" fill="#fff"/><circle cx="262" cy="30" r="7" fill="#1a66e8" stroke="#fff" stroke-width="2"/></svg></div><div class="tx"><b>The routing</b><p>How the safest walk is chosen, and what each weight does.</p><span class="open">How it chooses</span></div></button>
         <button class="card nav" type="button" aria-expanded="false" data-pane="pNav"><div class="art"><svg viewBox="0 0 300 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
 <path d="M-10 70 Q 150 -30 310 70" fill="none" stroke="#2b3649" stroke-dasharray="3 6"/>
 <path d="M0 135 L 70 128 C 110 120, 130 80, 160 78 C 190 80, 200 118, 240 124 L 300 128 L300 150 L0 150Z" fill="#7a3a20"/>
@@ -384,7 +384,7 @@
 <path d="M200 30 L 230 102" stroke="#F5B85B" stroke-width="2.5" stroke-dasharray="3 6"/>
 <path d="M48 126 v-10 a12 9 0 0 1 24 0 v10z" fill="#d6dce7"/><path d="M60 108 v-12" stroke="#d6dce7" stroke-width="2"/><circle cx="60" cy="94" r="3" fill="#3ddc97"/>
 <circle cx="232" cy="110" r="5" fill="#fff"/><circle cx="232" cy="110" r="16" fill="none" stroke="#8ab8ff" stroke-opacity=".6" stroke-dasharray="2 3"/>
-<g transform="translate(200 28)"><rect x="-16" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="5" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="-5" y="-6" width="10" height="12" rx="1.5" fill="#F5B85B"/></g></svg></div><div class="tx"><small>03</small><b>The navigation</b><p>No GPS: the habitat and the satellites take turns finding you.</p><span class="open">How it finds you</span></div></button>
+<g transform="translate(200 28)"><rect x="-16" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="5" y="-4" width="11" height="8" fill="#1d4ed8" stroke="#93c5fd"/><rect x="-5" y="-6" width="10" height="12" rx="1.5" fill="#F5B85B"/></g></svg></div><div class="tx"><b>The navigation</b><p>No GPS: the habitat and the satellites take turns finding you.</p><span class="open">How it finds you</span></div></button>
       </div>
 
       <div class="panel" id="panel"><div>
@@ -504,7 +504,7 @@
       <p class="intro reveal">Nothing on the ground is invented. Where a number is a model or an assumption, the app says so.</p>
       <div class="data reveal">
         <div><b>Global terrain</b><span>MOLA · Mars Global Surveyor</span><p>463 m elevation for the whole planet, so you can plan anywhere on the globe.</p></div>
-        <div><b>Jezero in detail</b><span>CTX DTM 20 m · HiRISE 1 m</span><p>The Perseverance landing site at walking resolution, with slope from the sharpest data there is.</p></div>
+        <div><b>Jezero in detail</b><span>CTX DTM 20 m · HiRISE 1 m</span><p>The Perseverance landing site at walking resolution, with slopes from HiRISE 1 m where it covers.</p></div>
         <div><b>Satellites and Sun</b><span>NASA JPL Horizons</span><p>Real positions of four relay orbiters and the Sun, minute by minute, for each site.</p></div>
         <div><b>Ground temperature</b><span>THEMIS · TES</span><p>At Jezero: night-time infrared and albedo through a heat model, at the hour you walk.</p></div>
         <div><b>Radiation</b><span>Curiosity RAD</span><p>The measured surface dose, scaled by the air above you and the open sky.</p></div>

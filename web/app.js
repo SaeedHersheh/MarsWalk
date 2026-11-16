@@ -380,6 +380,19 @@
   /* ---------- relay panel ---------- */
   function currentPass(t) { return DB.passes.find(p => p.start <= t && t < p.end); }
   function sampleAt(p, t) { let b = p.samples[0]; for (const s of p.samples) { if (s[0] <= t) b = s; else break; } return b; }
+  // the satellite in the sky glides between the minute-by-minute Horizons samples: a smooth curve through the sky directions, not a jump each minute
+  function sampleSmooth(p, t) {
+    const S2 = p.samples, n = S2.length; if (n < 2) return S2[0];
+    let i = 0; while (i < n - 2 && S2[i + 1][0] <= t) i++;
+    const v = s => { const a = s[1] * Math.PI / 180, e = s[2] * Math.PI / 180; return [Math.sin(a) * Math.cos(e), Math.cos(a) * Math.cos(e), Math.sin(e)]; };
+    const P0 = v(S2[Math.max(0, i - 1)]), P1 = v(S2[i]), P2 = v(S2[i + 1]), P3 = v(S2[Math.min(n - 1, i + 2)]);
+    const u = Math.max(0, Math.min(1, (t - S2[i][0]) / ((S2[i + 1][0] - S2[i][0]) || 1))), u2 = u * u, u3 = u2 * u;
+    const cr = k => 0.5 * (2 * P1[k] + (-P0[k] + P2[k]) * u + (2 * P0[k] - 5 * P1[k] + 4 * P2[k] - P3[k]) * u2 + (-P0[k] + 3 * P1[k] - 3 * P2[k] + P3[k]) * u3);   // Catmull-Rom
+    const x = cr(0), y = cr(1), z = cr(2), L = Math.hypot(x, y, z) || 1;
+    const az = (Math.atan2(x / L, y / L) * 180 / Math.PI + 360) % 360, el = Math.asin(Math.max(-1, Math.min(1, z / L))) * 180 / Math.PI;
+    const r0 = S2[i][3], r1 = S2[i + 1][3];
+    return [t, az, el, r0 != null && r1 != null ? r0 + (r1 - r0) * u : r0];
+  }
   let NXT = { passes: [], horizon: [] };                 // "what's next for the habitat", terrain-aware
   const loadNext = async () => { try { NXT = await J("/api/next?hours=50&t=" + Math.floor(Date.now() / 1000 - 1800)); } catch (e) { /* keep old */ } };
   await loadNext();
@@ -805,7 +818,7 @@
     walk.rest = r.stopsReq.slice(1 + k); if (!walk.rest.length) walk.rest = [HAB];
     walk.mx = q.x - walk.drift[0]; walk.my = q.y - walk.drift[1];           // the true position (believed = true + drift)
     const j = Math.min(r.x.length - 1, q.i + 3); walk.hd = Math.atan2(r.x[j] - q.x, r.y[j] - q.y) || 0;
-    walk.manual = true; walk.still = true; walk.blocked = 0; walk.ri = Math.max(0, q.i - 1); syncDrive(); T3.dirty = true;
+    walk.manual = true; walk.still = true; walk.blocked = 0; walk.v = 0; walk.steer = 0; walk.ri = Math.max(0, q.i - 1); syncDrive(); T3.dirty = true;
     if (S.speed > 30) { const b30 = document.querySelector('.spd[data-s="30"]'); if (b30) b30.click(); }
     camWalk();
     if (!T3.vr) toast("Manual control", matchMedia("(pointer: coarse)").matches ? "Use the stick: up to walk, sideways to turn." : "W / S walk, A / D turn (or the arrow keys).", "#8ab8ff");
@@ -828,6 +841,11 @@
   }
   function driveInput() {
     if (T3.vr && T3.vrHold) return [0, 0];               // tour: standing still while looking round
+    if (T3.vr && T3.vr.desk && T3.vrHead) {               // VR on a computer: W/S walk, the body turns toward where you look
+      const h = T3.vrHead, k = walk.keys || {}; let e = h.hd - walk.hd; e = Math.atan2(Math.sin(e), Math.cos(e));
+      const f = (k.w || k.arrowup ? 1 : 0) - (k.s || k.arrowdown ? 1 : 0);
+      return [Math.max(-1, Math.min(1, e * 3)), f];
+    }
     if (T3.vr && T3.vrHead) {                             // VR: walk where you look at a steady pace; look down at the panel to stop
       const h = T3.vrHead, gp = padAxes(); let e = h.hd - walk.hd; e = Math.atan2(Math.sin(e), Math.cos(e));
       const f = gp && Math.abs(gp[1]) > 0.15 ? gp[1] : h.atCard || h.pitch < -0.55 ? 0 : 1, t = h.atCard || Math.abs(e) > 0.32 ? 0 : Math.max(-1, Math.min(1, e * 3));      // small head turns steer; look further aside to look around without turning
@@ -842,18 +860,31 @@
   function offRoute(r, x, y) { let m = 1e12; for (let i = 0; i < r.x.length; i += 2) { const d = (r.x[i] - x) ** 2 + (r.y[i] - y) ** 2; if (d < m) m = d; } return Math.sqrt(m); }
   function manualStep(dt, now) {
     const r = walk.route, [turn, fwd] = driveInput(), simDt = dt * S.speed;
-    walk.hd += turn * (S.vehicle === "rover" ? 0.9 : 1.9) * dt * (fwd < 0 ? -1 : 1);
-    const sl0 = slopeAt(walk.mx, walk.my) ?? 0, x0 = walk.mx, y0 = walk.my;
-    let step = 0; walk.still = Math.abs(fwd) < 0.05;
-    if (!walk.still) {
-      const v = S.vehicle === "rover" ? 2.8 * (1 - 0.6 * Math.min(1, sl0 / 20)) * (fwd < 0 ? 0.4 : 1)        // rover: about 10 km/h on the flat (assumed)
-        : 1.25 * (T3.vr ? 1.5 : 1) * Math.max(0.2, 1 - sl0 / 32) * (fwd < 0 ? 0.5 : 1);     // VR: a brisk 1.9 m/s on the flat                   // m/s in a suit, slower on slope
-      step = v * Math.abs(fwd) * simDt;
-      const sg = Math.sign(fwd), nx = walk.mx + Math.sin(walk.hd) * step * sg, ny = walk.my + Math.cos(walk.hd) * step * sg, sl = slopeAt(nx, ny);
-      if (sl == null || nx < DX * 2 || ny < DY * 2 || nx > M.width_m - DX * 2 || ny > M.height_m - DY * 2) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Edge of the mapped area", "Turn back.", "#F5B85B"); } }
-      else if (sl > (S.vehicle === "rover" ? 25 : 34) && sl > sl0) { step = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Too steep", `${sl.toFixed(0)}° ahead. ${S.vehicle === "rover" ? "The rover cannot climb that" : "A suited astronaut cannot climb that"}. Go around.`, "#F0616B"); } }
-      else { walk.mx = nx; walk.my = ny; }
-      if (!step) walk.still = true;
+    // Movement with momentum. The rover drives like a car: throttle, coasting, brakes, reverse, and steering that needs speed.
+    // On foot the astronaut speeds up, slows and turns smoothly instead of snapping to full speed.
+    const sl0 = slopeAt(walk.mx, walk.my) ?? 0, x0 = walk.mx, y0 = walk.my, rv = S.vehicle === "rover", h = Math.min(dt, 0.1);
+    walk.v = walk.v || 0; walk.steer = walk.steer || 0;
+    if (rv) {
+      const vmax = 4.2 * (1 - 0.55 * Math.min(1, sl0 / 20)), vrev = 1.6;               // free driving: about 15 km/h on the flat (assumed), slower uphill
+      if (fwd > 0.05) walk.v += (walk.v < 0 ? 4.5 : 1.7) * fwd * h;                        // throttle (brakes first if rolling backwards)
+      else if (fwd < -0.05) walk.v += (walk.v > 0.25 ? -4.5 : -1.2) * -fwd * h;            // brake, then reverse
+      else walk.v -= Math.sign(walk.v) * Math.min(Math.abs(walk.v), 0.9 * h);              // coast to a stop
+      walk.v = Math.max(-vrev, Math.min(vmax, walk.v));
+      walk.steer += (turn - walk.steer) * Math.min(1, h * 5);                              // the steering wheel takes a moment to turn
+      const sp = Math.abs(walk.v), grip = Math.min(1, sp / 1.2) * (1 - 0.3 * Math.min(1, sp / vmax));
+      walk.hd += walk.steer * 0.85 * grip * Math.sign(walk.v || 1) * h;                    // no turning on the spot; reverse steers like a car
+    } else {
+      const vwalk = 1.25 * (T3.vr ? 1.5 : 1) * Math.max(0.2, 1 - sl0 / 32), target = fwd >= 0 ? vwalk * fwd : 0.5 * vwalk * fwd;
+      walk.v += (target - walk.v) * Math.min(1, h * 5);                                    // about 0.4 s to full pace
+      walk.steer += (turn - walk.steer) * Math.min(1, h * 9);
+      walk.hd += walk.steer * 1.9 * h * (walk.v < -0.05 ? -1 : 1);
+    }
+    let step = 0; walk.still = Math.abs(walk.v) < 0.05 && Math.abs(fwd) < 0.05;
+    if (Math.abs(walk.v) > 0.01) {
+      const d = walk.v * simDt, nx = walk.mx + Math.sin(walk.hd) * d, ny = walk.my + Math.cos(walk.hd) * d, sl = slopeAt(nx, ny);
+      if (sl == null || nx < DX * 2 || ny < DY * 2 || nx > M.width_m - DX * 2 || ny > M.height_m - DY * 2) { walk.v = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Edge of the mapped area", "Turn back.", "#F5B85B"); } }
+      else if (sl > (rv ? 25 : 34) && sl > sl0) { walk.v = 0; if (now - (walk.blocked || 0) > 4000) { walk.blocked = now; toast("Too steep", `${sl.toFixed(0)}° ahead. ${rv ? "The rover cannot climb that" : "A suited astronaut cannot climb that"}. Go around.`, "#F0616B"); } }
+      else { walk.mx = nx; walk.my = ny; step = Math.abs(d); }
     }
     walk.odo += step; walk.dose += (r.dose_msv / (r.time_s || 1)) * simDt;
     const z = elevAt(walk.mx, walk.my) ?? walk.zNow; walk.zNow = z;
@@ -1045,7 +1076,7 @@
     const ctl = new THREE.OrbitControls(cam, cv); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.49; ctl.minDistance = 2.5; ctl.maxDistance = 45000 * K;
     ctl.addEventListener("start", () => { T3.drag = true; }); ctl.addEventListener("end", () => { T3.drag = false; if (T3.chase) T3.chaseK = Math.min(14, Math.max(0.35, cam.position.distanceTo(ctl.target) / chaseBase())); });
     // following distance: close in real time, further back the faster time runs, so the ground never streaks past
-    function chaseBase() { return (S.vehicle === "rover" ? 1.4 : 1) * 6.5 * Math.pow(walk.on ? Math.max(1, S.speed) : 1, 0.55) * (cam.aspect < 1 ? 1.25 : 1); }
+    function chaseBase() { return (S.vehicle === "rover" ? 1.05 : 1) * 6.5 * Math.pow(walk.on ? Math.max(1, S.speed) : 1, 0.55) * (cam.aspect < 1 ? 1.25 : 1); }
     const P = (x, y, z) => new THREE.Vector3(x - M.width_m / 2, (z - M.zmin) * EX, -(y - M.height_m / 2));
     const hz = elevAt(...HAB);
     const homeCam = () => { ctl.target.copy(P(HAB[0] - 500 * K, HAB[1] + 700 * K, hz)); cam.position.copy(P(HAB[0] + 2200 * K, HAB[1] - 3600 * K, hz + 1300 * K)); };
@@ -1245,76 +1276,122 @@
        a cabin with a wraparound windscreen, two suitports at the back (the crew climb into their suits from inside), solar panel,
        mast and high-gain dish on the roof. Built in metres, facing +Z. */
     function makeRover() {
+      // A robotic Mars rover in the style of Spirit, Opportunity and Curiosity: a foil-wrapped body under a winged solar deck,
+      // a camera mast, a high-gain dish, a folded arm, and six wheels on rocker-bogie suspension with corner steering.
       const g = new THREE.Group(), ud = g.userData; g.rotation.order = "YXZ";
-      const shell = pbr({ color: 0xf2f1ec, roughness: 0.5, metalness: 0.05, envMapIntensity: 0.6 });
-      const frame = pbr({ color: 0x3a4048, roughness: 0.55, metalness: 0.6, envMapIntensity: 0.8 });
-      const glass = pbr({ color: 0x0b1420, roughness: 0.08, metalness: 0.9, envMapIntensity: 1.6 });
-      const tyre = pbr({ color: 0x2a2724, roughness: 0.95, bumpMap: NOISE, bumpScale: 0.04 });
-      const hub = pbr({ color: 0xb9bec4, roughness: 0.35, metalness: 0.85 });
-      const red = pbr({ color: 0xfc3d21, roughness: 0.5 }), cells = pbr({ map: CELLS, roughness: 0.3, metalness: 0.5, envMapIntensity: 1.4 });
-      const lamp = new THREE.MeshBasicMaterial({ color: 0xfff4d6 });
-      const gold = pbr({ color: 0xc9a65a, roughness: 0.35, metalness: 0.9, envMapIntensity: 1.2 });       // foil, like the wrap on NASA hardware
-      const mesh = pbr({ color: 0x8d9298, roughness: 0.6, metalness: 0.7, bumpMap: NOISE, bumpScale: 0.03 }); // woven wire tyres, as on the Apollo rover
-      const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
-      const box = (w, h, d, m, x, y, z) => add(new THREE.BoxGeometry(w, h, d), m, x, y, z);
-      // a pressurised crew rover in the style of NASA's Space Exploration Vehicle: a rounded cabin with a big bubble window, six wheels on rocker arms
-      box(2.2, 0.26, 4.6, frame, 0, 0.95, 0);                                            // chassis deck
-      box(2.0, 0.18, 3.6, gold, 0, 0.78, 0);                                             // foil-wrapped equipment bay under the deck
-      add(new THREE.CylinderGeometry(1.08, 1.08, 2.7, 40, 1, true), shell, 0, 2.05, -0.35, Math.PI / 2);        // the cabin: a pressure tube lying along the rover
-      add(new THREE.SphereGeometry(1.08, 40, 20, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 2.05, -1.7, -Math.PI / 2).scale.set(1, 0.55, 1);   // flat rear end cap
-      const dome = pbr({ color: 0x3d6a92, roughness: 0.04, metalness: 0.35, envMapIntensity: 2.2, transparent: true, opacity: 0.82 });   // tinted visor glass
-      const bub = add(new THREE.SphereGeometry(1.08, 40, 24, 0, Math.PI * 2, 0, Math.PI / 2), dome, 0, 2.05, 1.0, Math.PI / 2); bub.scale.set(1, 0.85, 1);   // the bubble window at the front
-      add(new THREE.CylinderGeometry(0.98, 0.98, 1.6, 32), frame, 0, 2.05, 0.2, Math.PI / 2);   // dark cabin inside, seen through the bubble
-      add(new THREE.TorusGeometry(1.08, 0.06, 12, 48), frame, 0, 2.05, 1.0);            // window frame ring
-      box(2.2, 0.32, 2.0, glass, 0, 2.25, -0.25).scale.set(1.0, 1, 1);                   // side window band
-      add(new THREE.TorusGeometry(1.09, 0.05, 10, 48), red, 0, 2.05, -1.25);             // a red band round the cabin
-      for (const x of [-0.5, 0.5]) { add(new THREE.CylinderGeometry(0.36, 0.36, 0.14, 32), hub, x, 2.0, -2.32, Math.PI / 2); add(new THREE.TorusGeometry(0.36, 0.05, 10, 32), frame, x, 2.0, -2.38); }   // suitports on the back
-      box(1.7, 0.5, 0.5, frame, 0, 1.22, -2.15);                                         // rear porch under the suitports
-      // solar wings on a roof mast, tilted to the Sun
-      box(0.12, 0.5, 0.12, hub, 0, 3.3, -0.6);
-      for (const s of [-1, 1]) { const w = box(1.7, 0.04, 1.3, cells, s * 1.05, 3.55, -0.6); w.rotation.z = s * 0.18; }
-      box(0.5, 0.06, 1.3, frame, 0, 3.53, -0.6);
-      // a high-gain antenna on a mast, and a smaller one
-      add(new THREE.CylinderGeometry(0.035, 0.035, 1.1, 10), hub, -0.75, 3.35, -1.45);
-      const dish = add(new THREE.SphereGeometry(0.36, 24, 12, 0, Math.PI * 2, 0, 0.85), gold, -0.75, 3.95, -1.45, -2.2); dish.material.side = THREE.DoubleSide;
-      add(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8), hub, 0.75, 3.3, -1.5);
-      // lights and cameras on the nose
-      for (const x of [-0.75, 0.75]) { add(new THREE.CylinderGeometry(0.11, 0.11, 0.08, 16), lamp, x, 1.32, 2.33, Math.PI / 2); }
-      box(1.9, 0.3, 0.3, frame, 0, 1.15, 2.25);                                          // front bumper
-      for (const x of [-0.4, 0.4]) box(0.16, 0.16, 0.2, frame, x, 3.12, 0.55);           // stereo cameras on the roof front
-      ud.wheels = [];
-      for (const z of [-1.7, 0, 1.7]) for (const x of [-1.35, 1.35]) {
-        const w = new THREE.Group(); w.position.set(x, 0.55, z);
-        const t = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.42, 32), mesh); t.rotation.z = Math.PI / 2; t.castShadow = true; w.add(t);
-        for (let k = 0; k < 10; k++) { const c = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.06, 0.12), frame); const a = k * Math.PI / 5; c.position.set(0, Math.cos(a) * 0.55, Math.sin(a) * 0.55); c.rotation.x = -a; w.add(c); }   // tread chevrons, so the turning shows
-        const h = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.46, 18), hub); h.rotation.z = Math.PI / 2; w.add(h);
-        g.add(w); ud.wheels.push(w);
-        box(0.16, 0.16, 0.9, frame, x * 0.82, 0.8, z * 0.75);                            // rocker arm to the wheel
+      const foil = pbr({ color: 0xc89b45, roughness: 0.32, metalness: 0.9, bumpMap: FOIL, bumpScale: 0.4, envMapIntensity: 1.3 });
+      const white = pbr({ color: 0xe9e6df, roughness: 0.5, metalness: 0.1, envMapIntensity: 0.7 });
+      const alu = pbr({ color: 0xbcc2c8, roughness: 0.32, metalness: 0.9, envMapIntensity: 1.1 });
+      const dark = pbr({ color: 0x1a1d21, roughness: 0.55, metalness: 0.45 });
+      const panel = pbr({ map: CELLS, color: 0x6e5c52, roughness: 0.42, metalness: 0.55, envMapIntensity: 1.1, side: THREE.DoubleSide });
+      const glassM = pbr({ color: 0x0b1220, roughness: 0.05, metalness: 0.9, envMapIntensity: 2 });
+      const tyreM = pbr({ color: 0xa9adb2, roughness: 0.45, metalness: 0.85, bumpMap: NOISE, bumpScale: 0.02, envMapIntensity: 1.0 });
+      const add = (geo, m, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, parent = g) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = o.receiveShadow = true; parent.add(o); return o; };
+      const box = (w, h, d, m, x, y, z, parent) => add(new THREE.BoxGeometry(w, h, d), m, x, y, z, 0, 0, 0, parent);
+      const rod = (a, b, r, m) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), L = A.distanceTo(B), o = add(new THREE.CylinderGeometry(r, r, L, 10), m); o.position.copy(A).add(B).multiplyScalar(0.5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), B.clone().sub(A).normalize()); return o; };
+      // body (warm electronics box) and the deck on top
+      box(1.3, 0.5, 1.75, foil, 0, 0.95, 0);
+      box(1.34, 0.06, 1.79, white, 0, 1.23, 0);
+      // solar deck: a centre panel and three wings, the way the MER rovers carry them
+      const wing = (pts, y) => { const sh = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, z))); const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.035, bevelEnabled: false }); geo.rotateX(Math.PI / 2); const m = add(geo, panel, 0, y, 0); return m; };
+      wing([[-0.95, -1.05], [0.95, -1.05], [0.95, 0.95], [-0.95, 0.95]], 1.31);
+      wing([[0.95, -0.95], [1.75, -0.6], [1.75, 0.45], [0.95, 0.75]], 1.29);
+      wing([[-0.95, -0.95], [-1.75, -0.6], [-1.75, 0.45], [-0.95, 0.75]], 1.29);
+      wing([[-0.8, -1.05], [0.8, -1.05], [0.55, -1.75], [-0.55, -1.75]], 1.29);
+      for (const [x0, x1] of [[0.95, 1.75], [-0.95, -1.75]]) { rod([x0, 1.28, -0.95], [x1, 1.28, -0.6], 0.012, alu); rod([x0, 1.28, 0.75], [x1, 1.28, 0.45], 0.012, alu); }
+      // camera mast with a stereo head
+      add(new THREE.CylinderGeometry(0.06, 0.07, 1.05, 14), white, 0.35, 1.85, 0.62);
+      box(0.22, 0.14, 0.2, white, 0.35, 2.3, 0.62);
+      const head = new THREE.Group(); head.position.set(0.35, 2.47, 0.62); g.add(head);
+      box(0.58, 0.16, 0.2, white, 0, 0, 0, head); box(0.2, 0.12, 0.12, dark, 0, -0.12, 0, head);
+      for (const x of [-0.22, -0.12, 0.12, 0.22]) add(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 14), glassM, x, 0.01, 0.11, Math.PI / 2, 0, 0, head);
+      ud.head = head;
+      // high-gain dish on a gimbal, low-gain antenna, a calibration target
+      add(new THREE.CylinderGeometry(0.035, 0.05, 0.32, 10), alu, -0.45, 1.5, -0.35);
+      const dish = add(new THREE.CylinderGeometry(0.28, 0.28, 0.05, 32), white, -0.45, 1.72, -0.35, 0.9, 0.5, 0);
+      add(new THREE.CylinderGeometry(0.22, 0.24, 0.02, 32), alu, 0, 0.03, 0, 0, 0, 0, dish);
+      add(new THREE.CylinderGeometry(0.012, 0.012, 0.75, 8), alu, -0.25, 1.68, -0.85);
+      box(0.1, 0.02, 0.1, dark, 0.55, 1.36, 0.25);
+      // the arm, folded across the front with its instrument turret
+      rod([-0.5, 0.88, 0.95], [-0.5, 0.95, 1.25], 0.045, white); rod([-0.5, 0.95, 1.25], [0.35, 0.92, 1.3], 0.04, white);
+      rod([0.35, 0.92, 1.3], [0.35, 0.62, 1.22], 0.04, white);
+      const turret = new THREE.Group(); turret.position.set(0.35, 0.56, 1.2); g.add(turret);
+      box(0.16, 0.16, 0.16, dark, 0, 0, 0, turret); add(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 10), alu, 0.12, 0, 0, 0, 0, Math.PI / 2, turret); add(new THREE.CylinderGeometry(0.04, 0.03, 0.12, 10), alu, 0, -0.12, 0, 0, 0, 0, turret);
+      // six wheels on rocker-bogies; front and rear wheels steer
+      ud.wheels = []; ud.steer = [];
+      const R = 0.3, TW = 0.26, WX = 1.08, WZ = [0.98, -0.02, -0.98];
+      const wheel = (x, z, steers, sign) => {
+        const pivot = new THREE.Group(); pivot.position.set(x, R, z); g.add(pivot); pivot.userData.sign = sign;
+        const w = new THREE.Group(); pivot.add(w);
+        add(new THREE.CylinderGeometry(R, R, TW, 32, 1, true), tyreM, 0, 0, 0, 0, 0, Math.PI / 2, w).material.side = THREE.DoubleSide;
+        for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; add(new THREE.BoxGeometry(TW, 0.035, 0.05), dark, 0, Math.cos(a) * (R + 0.012), Math.sin(a) * (R + 0.012), -a, 0, 0, w).castShadow = false; }
+        const side = Math.sign(x);
+        add(new THREE.CircleGeometry(R * 0.96, 28), tyreM, side * TW * 0.42, 0, 0, 0, side * Math.PI / 2, 0, w);
+        add(new THREE.CylinderGeometry(0.07, 0.07, TW * 0.9, 14), dark, 0, 0, 0, 0, 0, Math.PI / 2, w);
+        for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, sp = add(new THREE.BoxGeometry(0.02, R * 0.9, 0.04), dark, side * TW * 0.45, Math.cos(a) * R * 0.45, Math.sin(a) * R * 0.45, -a + 0.35, 0, 0, w); sp.castShadow = false; }
+        ud.wheels.push(w); if (steers) ud.steer.push(pivot);
+      };
+      for (const sx of [-1, 1]) {
+        WZ.forEach((z, i) => wheel(sx * WX, z, i !== 1, i === 2 ? -1 : 1));
+        const piv = [sx * 0.86, 0.92, 0.12], bogie = [sx * 0.98, 0.62, -0.5];
+        rod(piv, [sx * WX, R + 0.05, WZ[0]], 0.04, white);                   // rocker to the front wheel
+        rod(piv, bogie, 0.04, white);                                        // rocker to the bogie pivot
+        rod(bogie, [sx * WX, R + 0.05, WZ[1]], 0.035, white);                // bogie to the middle wheel
+        rod(bogie, [sx * WX, R + 0.05, WZ[2]], 0.035, white);                // bogie to the rear wheel
+        add(new THREE.CylinderGeometry(0.07, 0.07, 0.12, 14), alu, ...piv, 0, 0, Math.PI / 2);
+        for (const z of [WZ[0], WZ[2]]) rod([sx * WX, R + 0.05, z], [sx * WX, R + 0.28, z], 0.03, alu);   // steering actuators
       }
       return g;
     }
     function makeHab() {
+      // A surface habitat (1 unit = 4.2 m): an inflatable main module with a domed roof under a regolith berm, a lab module on a tunnel,
+      // an airlock facing the walk, the 8 m radio mast the navigation uses, and two rows of solar arrays.
       const g = new THREE.Group();
-      const shell = pbr({ color: 0xffffff, map: DOMETEX, bumpMap: DOMETEX, bumpScale: 0.015, roughness: 0.6, envMapIntensity: 0.6 });
-      const metal = pbr({ color: 0x9ba6ae, roughness: 0.38, metalness: 0.85, envMapIntensity: 1.1 });
-      const dark = pbr({ color: 0x1d2227, roughness: 0.55, metalness: 0.3 });
-      const regolith = pbr({ color: 0x6f5642, roughness: 1, bumpMap: NOISE, bumpScale: 0.05 });
-      const cells = pbr({ map: CELLS, roughness: 0.3, metalness: 0.5, side: THREE.DoubleSide, envMapIntensity: 1.4 });
-      mk(g, new THREE.SphereGeometry(1, 56, 28, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 0.1, 0);
-      mk(g, new THREE.CylinderGeometry(1.03, 1.08, 0.14, 56), metal, 0, 0.07, 0);
-      const berm = mk(g, new THREE.TorusGeometry(1.3, 0.24, 16, 56), regolith, 0, 0.12, 0); berm.rotation.x = Math.PI / 2; berm.scale.set(1, 1, 0.55);
-      const lock = mk(g, new THREE.CylinderGeometry(0.27, 0.27, 0.75, 28), shell, 0, 0.36, 1.18); lock.rotation.x = Math.PI / 2;
-      mk(g, new THREE.TorusGeometry(0.23, 0.035, 12, 28), metal, 0, 0.36, 1.56);
-      mk(g, new THREE.CircleGeometry(0.21, 28), dark, 0, 0.36, 1.562);
-      mk(g, new THREE.SphereGeometry(0.035, 10, 8), pbr({ color: 0xffd9a0, emissive: 0xffc070, emissiveIntensity: 1.2 }), 0, 0.72, 1.25);
-      for (const [i, a] of [[0, 0.5], [1, 2.2], [2, 3.7]]) { const r = mk(g, new THREE.BoxGeometry(0.34, 0.05, 0.22), metal, Math.sin(a) * 0.62, 0.84, Math.cos(a) * 0.62); r.rotation.y = a; }   // radiators
-      mk(g, new THREE.CylinderGeometry(0.018, 0.03, 1.5, 10), metal, 0.45, 1.15, -0.25);
-      const dish = mk(g, new THREE.SphereGeometry(0.27, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), metal, 0.45, 1.9, -0.25); dish.rotation.x = -0.65; dish.material.side = THREE.DoubleSide;
-      for (let i = 0; i < 3; i++) {                                                   // solar field
-        const x = -2.3 + i * 1.2;
-        mk(g, new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8), metal, x, 0.25, -2.0);
-        const p = mk(g, new THREE.BoxGeometry(1.0, 0.035, 0.62), cells, x, 0.56, -2.05); p.rotation.x = -0.6;
+      const shell = pbr({ color: 0xf4f2ec, map: DOMETEX, bumpMap: DOMETEX, bumpScale: 0.012, roughness: 0.58, envMapIntensity: 0.65 });
+      const rib = pbr({ color: 0xd9d6cf, roughness: 0.5, metalness: 0.15 });
+      const metal = pbr({ color: 0xa3adb5, roughness: 0.36, metalness: 0.85, envMapIntensity: 1.1 });
+      const dark = pbr({ color: 0x1b2026, roughness: 0.55, metalness: 0.35 });
+      const regolith = pbr({ color: 0x7a5a44, roughness: 1, bumpMap: NOISE, bumpScale: 0.06 });
+      const cells = pbr({ map: CELLS, color: 0x9aa6b8, roughness: 0.28, metalness: 0.55, side: THREE.DoubleSide, envMapIntensity: 1.4 });
+      const warm = pbr({ color: 0xffe2b0, emissive: 0xffb860, emissiveIntensity: 1.6 });
+      const beacon = pbr({ color: 0xff5a4a, emissive: 0xff3020, emissiveIntensity: 2 });
+      const accent = pbr({ color: 0xe8622c, roughness: 0.45 });
+      // main module: a short cylinder with a domed roof, ribs, a band, and a berm of regolith bags round its base
+      mk(g, new THREE.CylinderGeometry(1, 1.02, 0.62, 64, 1, true), shell, 0, 0.31, 0).material.side = THREE.DoubleSide;
+      const roof = mk(g, new THREE.SphereGeometry(1, 64, 24, 0, Math.PI * 2, 0, Math.PI / 2), shell, 0, 0.62, 0); roof.scale.y = 0.62;
+      for (const [y, r] of [[0.16, 1.02], [0.46, 1.005], [0.62, 1.0]]) { const o = mk(g, new THREE.TorusGeometry(r, 0.018, 8, 72), rib, 0, y, 0); o.rotation.x = Math.PI / 2; }
+      const band = mk(g, new THREE.CylinderGeometry(1.006, 1.006, 0.05, 64, 1, true), accent, 0, 0.52, 0); band.material.side = THREE.DoubleSide;
+      const berm = mk(g, new THREE.TorusGeometry(1.08, 0.2, 14, 64), regolith, 0, 0.06, 0); berm.rotation.x = Math.PI / 2; berm.scale.set(1, 1, 0.75);
+      // windows: warm light from inside
+      for (const a of [0.9, 1.9, 2.6, -0.9, -1.9]) { const w = mk(g, new THREE.CircleGeometry(0.07, 24), warm, Math.sin(a) * 1.022, 0.36, Math.cos(a) * 1.022); w.rotation.y = a; const fr = mk(g, new THREE.TorusGeometry(0.075, 0.012, 8, 24), metal, Math.sin(a) * 1.025, 0.36, Math.cos(a) * 1.025); fr.rotation.y = a; }
+      // airlock facing the walk (the walk starts in front of its hatch)
+      const lock = mk(g, new THREE.CylinderGeometry(0.3, 0.3, 0.62, 32), shell, 0, 0.32, 1.22); lock.rotation.x = Math.PI / 2;
+      mk(g, new THREE.TorusGeometry(0.3, 0.03, 10, 32), metal, 0, 0.32, 1.53);
+      mk(g, new THREE.CircleGeometry(0.22, 28), dark, 0, 0.32, 1.54);
+      mk(g, new THREE.TorusGeometry(0.22, 0.015, 8, 28), warm, 0, 0.32, 1.545);
+      mk(g, new THREE.BoxGeometry(0.3, 0.02, 0.32), metal, 0, 0.02, 1.68);
+      mk(g, new THREE.SphereGeometry(0.035, 10, 8), warm, 0, 0.7, 1.32);
+      // lab module on a tunnel, to the side
+      const lab = mk(g, new THREE.CylinderGeometry(0.42, 0.42, 1.3, 40), shell, -1.95, 0.42, 0.25); lab.rotation.x = Math.PI / 2;
+      for (const z of [-0.4, 0.9]) { const c = mk(g, new THREE.SphereGeometry(0.42, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), shell, -1.95, 0.42, z); c.rotation.x = z > 0 ? Math.PI / 2 : -Math.PI / 2; }
+      for (const z of [-0.1, 0.25, 0.6]) { const o = mk(g, new THREE.TorusGeometry(0.425, 0.014, 8, 40), rib, -1.95, 0.42, z); }
+      const tun = mk(g, new THREE.CylinderGeometry(0.17, 0.17, 0.6, 20), metal, -1.25, 0.3, 0.2); tun.rotation.z = Math.PI / 2;
+      for (const z of [0.0, 0.4]) { const w = mk(g, new THREE.CircleGeometry(0.06, 20), warm, -1.5, 0.48, z); w.rotation.y = -Math.PI / 2; }
+      const pad = mk(g, new THREE.CylinderGeometry(0.5, 0.5, 0.02, 40), regolith, -1.95, 0.01, 0.25);
+      // the radio mast: about 8 m to the dish, with a red beacon on top
+      mk(g, new THREE.CylinderGeometry(0.022, 0.04, 1.85, 10), metal, 0.62, 0.95, -0.55);
+      for (let k = 0; k < 5; k++) mk(g, new THREE.TorusGeometry(0.05, 0.008, 6, 12), metal, 0.62, 0.3 + k * 0.33, -0.55).rotation.x = Math.PI / 2;
+      const dish = mk(g, new THREE.SphereGeometry(0.26, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2), metal, 0.62, 1.82, -0.55); dish.rotation.x = -0.7; dish.material.side = THREE.DoubleSide;
+      mk(g, new THREE.SphereGeometry(0.03, 10, 8), beacon, 0.62, 1.92, -0.55);
+      for (const a of [0, 2.1, 4.2]) { const gx = 0.62 + Math.sin(a) * 0.45, gz = -0.55 + Math.cos(a) * 0.45; const L = Math.hypot(0.45, 1.5); const gy = mk(g, new THREE.CylinderGeometry(0.004, 0.004, L, 4), dark, (gx + 0.62) / 2, 0.75, (gz - 0.55) / 2); gy.lookAt(0.62, 1.5, -0.55); gy.rotateX(Math.PI / 2); }
+      // solar arrays: two rows, tilted to the sky
+      for (let row = 0; row < 2; row++) for (let i = 0; i < 4; i++) {
+        const x = -1.2 + i * 0.85, z = -2.15 - row * 0.75;
+        mk(g, new THREE.CylinderGeometry(0.018, 0.018, 0.34, 8), metal, x, 0.17, z);
+        const pnl = mk(g, new THREE.BoxGeometry(0.76, 0.03, 0.5), cells, x, 0.36, z); pnl.rotation.x = -0.55;
+        mk(g, new THREE.BoxGeometry(0.78, 0.035, 0.02), metal, x, 0.36 + 0.13, z - 0.22).rotation.x = -0.55;
       }
+      mk(g, new THREE.BoxGeometry(0.06, 0.03, 1.2), dark, 0.0, 0.02, -1.45);                // power line to the habitat
       return g;
     }
     function makeSat(hex) {
@@ -1371,7 +1448,7 @@
     const astro = makeAstronaut(); astro.scale.setScalar(AS); sc.add(astro); T3.astro = astro;
     const astroTag = labelSprite("Astronaut", "#8ab8ff"); sc.add(astroTag);
     const rover = makeRover(); rover.visible = false; sc.add(rover); T3.rover = rover;
-    const roverTag = labelSprite("Crew rover", "#8ab8ff"); roverTag.visible = false; sc.add(roverTag);
+    const roverTag = labelSprite("Rover", "#8ab8ff"); roverTag.visible = false; sc.add(roverTag);
     const blob = new THREE.Mesh(new THREE.CircleGeometry(0.5, 28), new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, opacity: 0.34, map: (() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 2, 32, 32, 31); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })() }));
     blob.rotation.x = -Math.PI / 2; blob.renderOrder = 2; sc.add(blob);
     let missLine = null, missTag = null, missId = 0;
@@ -1718,7 +1795,8 @@
       let wx = walking ? k.x : IDLE[0], wy = walking ? k.y : IDLE[1];
       if (walking && S.vehicle === "rover") {
         const R = T3.rvPos;
-        if (!R || Math.hypot(k.x - R.x, k.y - R.y) > 400) T3.rvPos = { x: k.x, y: k.y, vx: 0, vy: 0, hd: T3.rvPos ? T3.rvPos.hd : null };
+        if (k.manual) T3.rvPos = { x: k.x, y: k.y, vx: 0, vy: 0, hd: Math.atan2(k.hdx, k.hdy) };                // you are driving: the motion is already smooth, follow it exactly
+        else if (!R || Math.hypot(k.x - R.x, k.y - R.y) > 400) T3.rvPos = { x: k.x, y: k.y, vx: 0, vy: 0, hd: T3.rvPos ? T3.rvPos.hd : null };
         else {
           const w = 2.6 * Math.max(1, S.speed / 6), n = Math.min(60, Math.ceil(Math.min(dtr, 0.1) * w / 0.2));   // stiffer at fast time rates, so it never trails far behind
           for (let i = 0, h = Math.min(dtr, 0.1) / n; i < n; i++) {                                             // a critically damped spring: no overshoot, no wobble
@@ -1762,7 +1840,7 @@
       }
       blob.material.opacity = 0.34 * Math.max(0.35, 1 - Math.max(0, jy) * 1.6);
       const RV = S.vehicle === "rover";
-      rover.visible = RV && !(T3.fp && walking); roverTag.visible = false;
+      rover.visible = RV; if (rover.userData.head) rover.userData.head.visible = !(T3.fp && walking); roverTag.visible = false;   // first person looks out of the mast camera, over the deck
       if (RV) {
         // driving: the crew are inside. Parked: beside the airlock, nose out
         const hvx = hab.position.x + M.width_m / 2 - IDLE[0], hvy = M.height_m / 2 - hab.position.z - IDLE[1], hl = Math.hypot(hvx, hvy) || 1;   // from the airlock to the dome
@@ -1770,7 +1848,8 @@
           : walking && Math.hypot(k.hdx, k.hdy) > 1e-6 ? Math.atan2(k.hdx, k.hdy) : Math.atan2(-hvx, -hvy);                                          // parked nose away from the dome
         // a vehicle steers and rides on its suspension: ease the heading, height and tilt instead of snapping to every bend and bump
         const ez = r => 1 - Math.exp(-dtr * r);
-        if (T3.rvHy == null || !walking) T3.rvHy = hyT; else T3.rvHy += Math.atan2(Math.sin(hyT - T3.rvHy), Math.cos(hyT - T3.rvHy)) * ez(2.2);
+        { const was = T3.rvHy; if (T3.rvHy == null || !walking) T3.rvHy = hyT; else T3.rvHy += Math.atan2(Math.sin(hyT - T3.rvHy), Math.cos(hyT - T3.rvHy)) * ez(k && k.manual ? 14 : 2.2);
+          const dh = was == null ? 0 : Math.atan2(Math.sin(T3.rvHy - was), Math.cos(T3.rvHy - was)) / Math.max(dtr, 1e-3); T3.rvTurn = (T3.rvTurn || 0) + (dh - (T3.rvTurn || 0)) * ez(4); }
         const hy = T3.rvHy;
         const fx = Math.sin(hy), fy = Math.cos(hy), mx0 = walking ? wx : IDLE[0] - hvy / hl * 7, my0 = walking ? wy : IDLE[1] + hvx / hl * 7;       // 7 m to the side of the airlock
         const gz = (a, b) => ground(Math.min(M.width_m, Math.max(0, mx0 + a * fx - b * fy)), Math.min(M.height_m, Math.max(0, my0 + a * fy + b * fx)));
@@ -1781,6 +1860,7 @@
         rover.rotation.set(S2.p, Math.atan2(fx, -fy), S2.r);
         const lp = T3.rvLast || [mx0, my0], dd = Math.hypot(mx0 - lp[0], my0 - lp[1]); T3.rvLast = [mx0, my0];
         if (dd < 50) { T3.rvRoll = (T3.rvRoll || 0) + dd / 0.5; rover.userData.wheels.forEach(w => { w.rotation.x = T3.rvRoll; }); }
+        { const st = walking && k.manual ? walk.steer || 0 : Math.max(-1, Math.min(1, (T3.rvTurn || 0) * 1.5)); rover.userData.steer.forEach(p => { p.rotation.y = st * 0.42 * (p.userData.sign || 1); }); }   // the front wheels follow the steering
         if (walking) { astro.visible = false; blob.visible = false; astroTag.visible = false; }
         const camR = cam.position.distanceTo(rover.position); roverTag.visible = camR > 60 && !T3.fp; roverTag.position.copy(rover.position); roverTag.position.y += 3.6;
       }
@@ -1822,14 +1902,14 @@
       const t = walk.on ? walk.simT : Date.now() / 1000;
       let sm = null, orb = null, ap = null;
       if (T3.testSat) { sm = [0, T3.testSat.az, T3.testSat.el]; orb = T3.testSat.orbiter; }
-      else { ap = DB.passes.find(p => p.samples.length && t >= p.samples[0][0] && t <= p.samples[p.samples.length - 1][0]); if (ap) { sm = sampleAt(ap, t); orb = ap.orbiter; } }
+      else { ap = DB.passes.find(p => p.samples.length && t >= p.samples[0][0] && t <= p.samples[p.samples.length - 1][0]); if (ap) { sm = sampleSmooth(ap, t); orb = ap.orbiter; } }
       beam.visible = false;
       if (sm && sm[2] > 1 && ORB[orb]) {
         const far = 70000 * K, dir = skyDir(sm[1], sm[2]), spos = cam.position.clone().addScaledVector(dir, far); T3.satPos = spos; T3.satDir = dir; T3.herePos = here.clone();
         const mdl = sats[orb] || (sats[orb] = makeSat(parseInt(ORB[orb].c.slice(1), 16))); if (!mdl.userData.nofog) { mdl.userData.nofog = true; mdl.traverse(o2 => { if (o2.material) o2.material.fog = false; }); }
         if (mdl.parent !== satHolder) satHolder.add(mdl);
         Object.values(sats).forEach(m2 => { m2.visible = m2 === mdl; });
-        mdl.scale.setScalar(SSC); mdl.position.copy(spos); mdl.rotation.y += dtr * 0.12;
+        mdl.scale.setScalar(SSC); mdl.position.copy(spos); mdl.lookAt(here); mdl.rotateX(-Math.PI / 2);   // steady, with its underside to the planet
         const txt = sm[3] ? `${orb} · ${Math.round(sm[3]).toLocaleString("en-US")} km away` : `${orb} · ${Math.round(sm[2])}°`;
         if (!satLabel || satLabel.userData.text !== txt) { if (satLabel) { satHolder.remove(satLabel); satLabel.material.map.dispose(); } satLabel = labelSprite(txt, ORB[orb].c); satLabel.material.fog = false; satHolder.add(satLabel); }
         satLabel.position.copy(spos); satLabel.position.y += 1100 * K;
@@ -1855,7 +1935,7 @@
         if (moving && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8);                // the head drifts back to face the way you walk
         const f = T3.fpDir.clone().applyAxisAngle(UP, L.yaw), right = new THREE.Vector3(-f.z, 0, f.x);
         const bob = moving ? Math.abs(Math.cos(T3.phase)) * 0.05 : 0, sway = moving ? Math.sin(T3.phase) * 0.03 : 0;
-        if (inRover) { cam.position.copy(here).addScaledVector(T3.fpDir, 1.3).addScaledVector(right, 0.45); cam.position.y = rover.position.y + 2.15; if (moving === false && walking && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8); }   // driver's seat, behind the windscreen
+        if (inRover) { cam.position.copy(here).addScaledVector(T3.fpDir, 0.62).addScaledVector(right, 0.35); cam.position.y = rover.position.y + 2.5; if (moving === false && walking && !T3.looking) L.yaw *= Math.exp(-dtr * 0.8); }   // the view from the rover’s mast camera
         else { cam.position.copy(here).addScaledVector(right, sway).addScaledVector(f, 0.12); cam.position.y = here.y + 1.68 + jy + bob; }
         ctl.target.copy(cam.position).addScaledVector(f, 3 * Math.cos(L.pitch)); ctl.target.y += 3 * Math.sin(L.pitch);
         if (T3.vr && T3.vr.q) { T3.vrDt = dtr; vrDraw(here, jy); return; }
@@ -1923,7 +2003,7 @@
   {
     const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.id = "t3vr"; b.title = "Phone VR: put the phone in a Cardboard or Gear VR holder";
     b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v6a2.5 2.5 0 0 1-2.5 2.5h-3l-2-2.5h-3L8.5 17h-3A2.5 2.5 0 0 1 3 14.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="11.5" r="1.6" fill="currentColor"/><circle cx="16" cy="11.5" r="1.6" fill="currentColor"/></svg>VR';
-    b.hidden = !matchMedia("(pointer: coarse)").matches; b.onclick = () => vrEnter();
+    b.hidden = false; b.title = matchMedia("(pointer: coarse)").matches ? b.title : "VR: look with the mouse, walk with W A S D"; b.onclick = () => vrEnter();
     $("tools3d").appendChild(b);
     const bar = document.createElement("div"); bar.className = "vrbar"; bar.id = "vrBar"; bar.hidden = true;
     bar.innerHTML = '<button type="button" id="vrCenter">Recenter</button><button type="button" class="x" id="vrExit">Exit VR</button>';
@@ -1937,6 +2017,7 @@
     if (!T3.vr.q) T3.vr.q = vrQ.clone(); else T3.vr.q.slerp(vrQ, 0.6);
   }
   async function vrEnter() {
+    if (!matchMedia("(pointer: coarse)").matches) return vrDesk();       // a computer: mouse look and the keyboard instead of a motion sensor
     // Ask for everything inside the same tap: browsers only allow full screen and motion access from a user gesture.
     const el = document.documentElement, fsReq = el.requestFullscreen || el.webkitRequestFullscreen;
     const fs = fsReq ? Promise.resolve(fsReq.call(el, { navigationUI: "hide" })).catch(() => null) : Promise.resolve(null);
@@ -1959,6 +2040,30 @@
     if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look: small head turns steer, and looking further to the side just looks around. Your info card is on your left and your radio is on your right: look at either to pause, look away to walk on.", "#8ab8ff");
     else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
     T3.vr.go = setTimeout(() => { if (!T3.vr || !S.route) return; if (!walk.on) startWalk(); takeControl(); if (S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); } }, 5000);
+  }
+  // VR on a computer: the same two-eye view and side screens; the mouse turns the head, W/S walk where you look, A/D turn
+  function vrDesk() {
+    const el = document.documentElement; try { (el.requestFullscreen || el.webkitRequestFullscreen).call(el, { navigationUI: "hide" })?.catch?.(() => {}); } catch (e) { /* fine */ }
+    if (S.view !== "3d") setView("3d");
+    setCam("fp", true); if (walk.on && S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); }
+    const q = new THREE.Quaternion(), e3 = new THREE.Euler(0, 0, 0, "YXZ");
+    T3.vr = { q: q.clone(), yaw0: null, head: { yaw: 0, pitch: 0 }, desk: true };
+    document.body.classList.add("vr"); T3.dirty = true;
+    const view = $("view3d"), H = T3.vr.head;
+    const look = (dx, dy) => { H.yaw -= dx * 0.0024; H.pitch = Math.max(-1.25, Math.min(1.25, H.pitch - dy * 0.0024)); };
+    let drag = null;
+    T3.vr.onMove = e => { if (document.pointerLockElement === view) look(e.movementX, e.movementY); else if (drag) { look(e.clientX - drag[0], e.clientY - drag[1]); drag = [e.clientX, e.clientY]; } };
+    T3.vr.onDown = e => { drag = [e.clientX, e.clientY]; if (view.requestPointerLock && document.pointerLockElement !== view) try { view.requestPointerLock(); } catch (er) { /* fine */ } };
+    T3.vr.onUp = () => { drag = null; };
+    addEventListener("pointermove", T3.vr.onMove); view.addEventListener("pointerdown", T3.vr.onDown); addEventListener("pointerup", T3.vr.onUp);
+    let last = performance.now();
+    T3.vr.desk = setInterval(() => {                                       // A/D turn the head; the body follows where you look
+      if (!T3.vr) return; const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now;
+      const k = walk.keys || {}; H.yaw += ((k.a || k.arrowleft ? 1 : 0) - (k.d || k.arrowright ? 1 : 0)) * 1.6 * dt;
+      e3.set(H.pitch, H.yaw, 0, "YXZ"); T3.vr.q.setFromEuler(e3);
+    }, 16);
+    if (S.route) { guide("VR on this computer", "Click the view to look around with the mouse. W and S walk where you look, A and D turn. Your info card is on your left and your radio on your right: hold the dot on a button for two seconds to press it. Esc leaves VR.", "#8ab8ff"); if (!walk.on) startWalk(); takeControl(); }
+    else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
   }
   // tour: VR without a phone, the head moved by a script
   function vrDemo(on) {
@@ -1999,6 +2104,7 @@
   }
   function vrExit() {
     if (!T3.vr) return;
+    if (T3.vr.desk) { clearInterval(T3.vr.desk); removeEventListener("pointermove", T3.vr.onMove); $("view3d").removeEventListener("pointerdown", T3.vr.onDown); removeEventListener("pointerup", T3.vr.onUp); if (document.pointerLockElement) document.exitPointerLock(); }
     removeEventListener("deviceorientation", onOri); removeEventListener("deviceorientationabsolute", onOri); clearTimeout(T3.vr.go); T3.vr = null; T3.vrHead = null; document.body.classList.remove("vr"); $("vrBar").hidden = true;
     if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
     try { screen.orientation.unlock(); } catch (e) { /* fine */ }
@@ -2007,6 +2113,7 @@
     T3.dirty = true;
   }
   document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && T3.vr && T3.vr.q) vrExit(); });
+  addEventListener("keydown", e => { if (e.key === "Escape" && T3.vr && T3.vr.desk && !document.pointerLockElement) vrExit(); });
   $("view3d").addEventListener("pointerdown", () => { if (!T3.vr) return; const bar = $("vrBar"); bar.hidden = false; clearTimeout(bar.t); bar.t = setTimeout(() => { bar.hidden = true; }, 4000); });
   $("vrExit").onclick = vrExit;
   $("vrCenter").onclick = () => { if (T3.vr) T3.vr.yaw0 = null; $("vrBar").hidden = true; };
@@ -2058,7 +2165,7 @@
   function setVehicle(v, replan = true) {
     S.vehicle = v === "rover" ? "rover" : "foot"; document.body.classList.toggle("veh-rover", S.vehicle === "rover");
     document.querySelectorAll(".veh").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === S.vehicle)));
-    $("vehHint").textContent = S.vehicle === "rover" ? "The crew ride in a pressurised rover at about 10 km/h on flat ground, on slopes up to 20° (assumed), and suit up through the suitports at each stop." : "Two astronauts walk in suits at about 2 to 4 km/h, on slopes up to the policy's limit.";
+    $("vehHint").textContent = S.vehicle === "rover" ? "A robotic rover, planned at about 10 km/h on flat ground and on slopes up to 20° (assumed). Driven by hand it reaches about 15 km/h." : "Two astronauts walk in suits at about 2 to 4 km/h, on slopes up to the policy's limit.";
     T3.dirty = true; if (replan && !walk.on) plan(0);
   }
   document.querySelectorAll(".veh").forEach(b => b.onclick = () => setVehicle(b.dataset.v));
@@ -2484,7 +2591,7 @@
       { sel: "#map", soft: true, pre: () => { setView("2d"); if (phone()) closeSheet(); }, t: "The map", x: "This is the ground around the habitat, marked H. Tap anywhere to add a waypoint, and drag a marker to move it. The route is planned again each time." },
       { sel: "#stops", pre: () => panel("mission"), t: "Plan: your waypoints", x: "Your stops are listed here in walking order. Remove one with the ×, or choose whether the walk ends back at the habitat." },
       { sel: "#styles", pre: () => panel("mission"), t: "Plan: how careful to be", x: "Safest keeps to flat ground even if it is longer. Fastest takes the short way over steeper ground. Balanced sits between the two." },
-      { sel: ".veh", pre: () => panel("mission"), t: "Plan: on foot or by rover", x: "Two astronauts walking, or a pressurised crew rover at about 10 km/h. The route, its time and the slopes it will take change with the choice." },
+      { sel: ".veh", pre: () => panel("mission"), t: "Plan: on foot or by rover", x: "Two astronauts walking, or a robotic rover at about 10 km/h. The route, its time and the slopes it will take change with the choice." },
       { sel: "#stats", alt: "#verdict", pre: () => panel("mission"), t: "Plan: check the walk", x: "Distance, time, climb, radiation dose and how steep it gets, with a plain-words verdict above." },
       { sel: "#navBox", pre: () => { panel("mission"); setTimeout(() => { const nb = $("navBox"); if (nb) nb.scrollIntoView({ block: "center" }); }, 60); }, t: "Plan: navigation without GPS", x: "How sure the astronaut's position will be along the route. The band under the route turns green near the habitat and at each satellite pass, and amber to red where the suit's own estimate has drifted. Pins mark each satellite fix." },
       { sel: "#layerChips", pre: () => { flat(); panel("layers"); lay(null); }, t: "Layers: read the ground", x: "Each layer colours the map with one thing that matters on a walk. One tap turns a layer on or off; the opacity slider lets the ground show through." },

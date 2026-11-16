@@ -127,7 +127,7 @@
     <header><img src="img/brand/logo-192.png" alt="AirAwareNetwork logo"><div><b>MARSWALK</b><small>AirAwareNetwork · EVA traverse plan</small></div>
       <div class="doc"><b>${id}</b><br>Generated ${utc(R.made)} UTC<br>Page 1 of 2</div></header>
     <h1>${esc(site.label)}</h1>
-    <p class="meta"><b>${ll(site.lat, site.lon)}</b> · ${rover ? "Pressurised crew rover" : "On foot, 2 crew in suits"} · <b>${plan.policy}</b> route policy · departs <b>${utc(r.depart)} UTC</b> · terrain ${esc(site.res)}</p>
+    <p class="meta"><b>${ll(site.lat, site.lon)}</b> · ${rover ? "Robotic rover" : "On foot, 2 crew in suits"} · <b>${plan.policy}</b> route policy · departs <b>${utc(r.depart)} UTC</b> · terrain ${esc(site.res)}</p>
     <div class="verdict v-${worstLvl}"><i>${LV[worstLvl === "go" ? "ok" : worstLvl === "watch" ? "warn" : "bad"][0]}</i>${verdictTxt}</div>
     <div class="tiles">
       ${tile("Distance", km(total), "km", `${stops.length - 1} legs`)}
