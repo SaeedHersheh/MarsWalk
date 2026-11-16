@@ -1,17 +1,43 @@
----
-title: Marswalk
-emoji: 🚀
-colorFrom: blue
-colorTo: red
-sdk: docker
-app_port: 7860
-pinned: false
-short_description: Mars EVA route planner on real NASA data
----
-
 # Marswalk
 
-Walking-route planner for Jezero crater on real NASA data. NASA Space Apps 2026, team AirAware.
+**Walk Mars before anyone does.** Marswalk plans safe walking and driving routes on real NASA terrain, and keeps an astronaut found and in touch where there is no GPS. Then it lets you rehearse the route in true-scale 3D or phone VR.
+
+Built for the NASA Space Apps Challenge 2026 by **Saeed Hersheh** (team lead, AirAwareNetwork).
+
+- Live app: https://marswalk-266019376344.europe-west1.run.app/
+- Guided tour (about five minutes, with voice-over): https://marswalk-266019376344.europe-west1.run.app/tour.html
+- Short demo: https://marswalk-266019376344.europe-west1.run.app/tour.html?short=1
+- Slides: https://marswalk-266019376344.europe-west1.run.app/slides.html
+
+## What it does
+
+- **Pick anywhere on Mars.** A 3D globe; click a point and the server builds a 178 km site from NASA MOLA elevation in about a minute. Jezero crater is a detailed site (MRO CTX 20 m, HiRISE 1 m slopes).
+- **Read the ground.** Eight layers: elevation, slope, radiation, relay-satellite blind spots, habitat radio coverage, sunlight and shadow, ground temperature, and the planner's cost.
+- **Plan the safest route.** The map is cut into 20 m cells; each cell's cost is walking time × (1 + slope penalty + 6 × weighted hazards), and a least-cost path search finds the route. Safest, Balanced and Fastest styles; a crew rover option.
+- **Navigate without GPS.** The suit's step counting drifts; the habitat's radio mast fixes the position while it can see the crew; real relay orbiters (MRO, Mars Odyssey, TGO, Mars Express, orbits from NASA JPL Horizons) fix it when they pass overhead. The planner forecasts the position uncertainty along the route.
+- **Talk home.** A radio to the habitat and to Earth mission control, with the real light delay; replies wait at the orbiter for the next pass. Mission control runs in its own page (`control.html`).
+- **Rehearse it.** True-scale 3D, first person, the crew rover, and phone VR with gaze buttons and two side screens.
+- **Report it.** Every plan exports a two-page PDF mission report with figures, tables and a go / no-go check.
+
+## Data
+
+All terrain, orbit, Sun and radiation data come from NASA and USGS sources; see [DATA_SOURCES.md](DATA_SOURCES.md) for every source with links. Anything that is a model or an assumption (suit speed, position drift, radio accuracy, rover speed) is labelled as one in the app.
+
+## Built with
+
+QGIS (first prototype) · Python: FastAPI, rasterio, NumPy, SciPy, scikit-image · PostgreSQL · Leaflet · three.js · Google Cloud Run.
+
+Built with help from AI assistants (Claude and Gemini). The voice-over uses the browser's text-to-speech.
+
+## Test
+
+With the server running:
+
+```bash
+.venv/Scripts/python tests/smoke_test.py http://127.0.0.1:8077
+```
+
+It loads every page and, for several sites, every layer, the satellite passes, and a walking and a rover route.
 
 ## Run
 

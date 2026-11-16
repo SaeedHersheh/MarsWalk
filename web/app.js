@@ -604,7 +604,8 @@
     d.querySelector(".vox").onclick = e => { e.stopPropagation(); setVoice(!VOICE.on); };
     d.onclick = () => d.remove();
     $("toasts").replaceChildren(d);
-    clearTimeout(toast.h); toast.h = setTimeout(() => d.remove(), Math.min(18000, 6000 + text.length * 55));
+    const ph = matchMedia("(max-width: 760px)").matches;                  // phones: less screen, so the message goes sooner
+    clearTimeout(toast.h); toast.h = setTimeout(() => d.remove(), ph ? Math.min(9000, 4500 + text.length * 30) : Math.min(18000, 6000 + text.length * 55));
     speak(text);
   }
   $("voiceLay").onclick = () => setVoice(!VOICE.on); $("voiceLay").setAttribute("aria-pressed", String(VOICE.on));
@@ -1936,18 +1937,25 @@
     if (!T3.vr.q) T3.vr.q = vrQ.clone(); else T3.vr.q.slerp(vrQ, 0.6);
   }
   async function vrEnter() {
-    if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function") {
-      await DeviceOrientationEvent.requestPermission().catch(() => "denied");      // iPhone asks here; elsewhere the 2 s check below says if no data comes
-    }
-    try { await document.documentElement.requestFullscreen({ navigationUI: "hide" }); } catch (e) { /* not allowed here */ }
-    try { await screen.orientation.lock("landscape"); } catch (e) { /* turn the phone sideways yourself */ }
-    try { T3.wake = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; } catch (e) { T3.wake = null; }
+    // Ask for everything inside the same tap: browsers only allow full screen and motion access from a user gesture.
+    const el = document.documentElement, fsReq = el.requestFullscreen || el.webkitRequestFullscreen;
+    const fs = fsReq ? Promise.resolve(fsReq.call(el, { navigationUI: "hide" })).catch(() => null) : Promise.resolve(null);
+    const perm = window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === "function"
+      ? DeviceOrientationEvent.requestPermission().catch(() => "denied") : Promise.resolve("granted");      // iPhone asks here
+    T3.vr = { q: null, yaw0: null }; addEventListener("deviceorientation", onOri);                         // listen straight away
+    document.body.classList.add("vr"); T3.dirty = true;
     if (S.view !== "3d") setView("3d");
     T3.vrLite = T3.lite; if (T3.api) { if (!T3.lite) T3.api.setLite(true); T3.api.vrPixels(true); }
     setCam("fp", true); if (walk.on && S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); }
-    T3.vr = { q: null, yaw0: null }; addEventListener("deviceorientation", onOri);
-    document.body.classList.add("vr"); T3.dirty = true;
-    setTimeout(() => { if (T3.vr && !T3.vr.q) { vrExit(); toast("No gyroscope data", "This browser gave no motion data. Open the page over https (the 8443 server) in Chrome on the phone.", "#F0616B"); } }, 2000);
+    const [, p] = await Promise.all([fs, perm]);
+    if (p === "denied") toast("Motion access needed", "VR turns the view with your phone's motion sensors. If nothing moves, allow motion access for this site and press VR again.", "#F5B85B");
+    try { await screen.orientation.lock("landscape"); } catch (e) { /* turn the phone sideways yourself */ }
+    try { T3.wake = navigator.wakeLock ? await navigator.wakeLock.request("screen") : null; } catch (e) { T3.wake = null; }
+    if (!T3.vr) return;
+    // some phones only report the absolute version of the sensor: fall back to it if the usual one stays silent
+    setTimeout(() => { if (T3.vr && !T3.vr.q) addEventListener("deviceorientationabsolute", onOri); }, 1500);
+    setTimeout(() => { if (T3.vr && !T3.vr.q) toast("Waiting for motion data", "Move the phone a little.", "#F5B85B"); }, 3000);
+    setTimeout(() => { if (T3.vr && !T3.vr.q) { vrExit(); toast("No motion sensor data", "This browser gave no motion data, so VR cannot follow your head. Try Chrome on Android or Safari on iPhone, on the https site.", "#F0616B"); } }, 7000);
     if (S.route) guide("VR on", "Put the phone in the headset. In five seconds you start walking. You walk where you look: small head turns steer, and looking further to the side just looks around. Your info card is on your left and your radio is on your right: look at either to pause, look away to walk on.", "#8ab8ff");
     else toast("No route yet", "Plan a route first, then press VR.", "#F5B85B");
     T3.vr.go = setTimeout(() => { if (!T3.vr || !S.route) return; if (!walk.on) startWalk(); takeControl(); if (S.speed > 1) { const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click(); } }, 5000);
@@ -1991,8 +1999,8 @@
   }
   function vrExit() {
     if (!T3.vr) return;
-    removeEventListener("deviceorientation", onOri); clearTimeout(T3.vr.go); T3.vr = null; T3.vrHead = null; document.body.classList.remove("vr"); $("vrBar").hidden = true;
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    removeEventListener("deviceorientation", onOri); removeEventListener("deviceorientationabsolute", onOri); clearTimeout(T3.vr.go); T3.vr = null; T3.vrHead = null; document.body.classList.remove("vr"); $("vrBar").hidden = true;
+    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document)?.catch?.(() => {});
     try { screen.orientation.unlock(); } catch (e) { /* fine */ }
     if (T3.wake) { T3.wake.release().catch(() => {}); T3.wake = null; }
     if (T3.api) { T3.api.vrPixels(false); if (!T3.vrLite) T3.api.setLite(false); }
@@ -2245,11 +2253,13 @@
     $("rdSub").textContent = !COM.mic ? "Use the quick messages" : rec ? `via ${lk ? (lk.hab ? "the habitat mast" : lk.orbiter) : "the orbiter"}` : lk ? (lk.hab ? "straight over the habitat mast" : COM.dest === "earth" && lm ? `arrives in ${lm.toFixed(1)} min` : `via ${lk.orbiter}`) : COM.dest === "earth" && hb.ok ? "switch to Habitat to talk now" : "messages queue until a link opens";
     const nowS = Date.now() / 1000 + COM.off, pend = COM.q.length + [...COM.srv.values()].filter(m => m.to === "astronaut" ? !m.delivered : m.status === "in_flight" && m.arrive > nowS).length;
     $("rdBadge").hidden = !pend; $("rdBadge").textContent = pend;
+    $("rdFabBadge").hidden = !pend; $("rdFabBadge").textContent = pend;
   }
   const setDest = d => { COM.dest = d; document.querySelectorAll(".dest").forEach(x => x.setAttribute("aria-pressed", x.dataset.d === d)); renderMsgs(); };
   document.querySelectorAll("[data-rd]").forEach(b => b.onclick = () => setDest(b.dataset.rd));
   $("rdQuick").innerHTML = QUICK.slice(0, 3).map(t => `<button type="button">${t}</button>`).join("");
   $("rdQuick").addEventListener("click", e => { const b = e.target.closest("button"); if (b) queueMsg({ kind: "text", text: b.textContent }); });
+  $("rdFab").onclick = () => { const d = $("radioDock"), o = !d.classList.contains("open"); d.classList.toggle("open", o); $("rdFab").setAttribute("aria-expanded", String(o)); $("rdFab").setAttribute("aria-label", o ? "Close the radio" : "Open the radio"); };   // phones: the radio folds into one button
   $("rdOpen").onclick = () => { if (!mq.matches) showPanel(true); openSheet("relay"); setTimeout(() => $("radio").scrollIntoView({ block: "start", behavior: "smooth" }), 250); };
   { const t = $("rdTalk"); t.addEventListener("pointerdown", pttDown); ["pointerup", "pointercancel", "pointerleave"].forEach(ev => t.addEventListener(ev, pttUp)); t.addEventListener("contextmenu", e => e.preventDefault()); }
   const talk = $("talkBtn");
