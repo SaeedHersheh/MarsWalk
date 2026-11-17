@@ -751,3 +751,33 @@ body.walking .simask, body.tour .simask { display: none !important; }
   .simask p { font-size: 13px; }
   body[data-sheet]:not([data-sheet=""]) .simask { display: none !important; }
 }
+
+
+/* ---------- science goals, space weather, load, new layers ---------- */
+.swx { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.025); }
+.swx > i { width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: #8f9cb1; }
+.swx b { display: block; font-size: 14px; color: var(--ink); }
+.swx span { display: block; font-size: 13px; line-height: 1.5; color: var(--text); }
+.swx[data-s="quiet"] > i { background: #3ddc97; }
+.swx[data-s="watch"] { border-color: rgba(245, 184, 91, 0.55); background: rgba(245, 184, 91, 0.07); }
+.swx[data-s="watch"] > i { background: #f5b85b; }
+.swx[data-s="storm"] { border-color: rgba(240, 97, 107, 0.6); background: rgba(240, 97, 107, 0.08); }
+.swx[data-s="storm"] > i { background: #f0616b; }
+.goals { display: grid; gap: 8px; }
+.goal { display: grid; gap: 3px; text-align: left; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line-2); background: transparent; color: var(--text); cursor: pointer; }
+.goal b { font-size: 14.5px; color: var(--ink); }
+.goal small { font-size: 12.5px; color: var(--dim); }
+.goal:hover { border-color: var(--accent); }
+.goal[aria-pressed="true"] { border-color: var(--blue-hi); background: var(--accent-dim); }
+.stoplist { display: grid; gap: 4px; margin-top: 8px; }
+.stoplist span, .scistops span { font-size: 13px; color: var(--text); }
+.stoplist b, .scistops b { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 11.5px; }
+.scistops { display: grid; gap: 5px; margin-bottom: 10px; padding: 12px 14px; border-radius: 12px; background: rgba(110, 231, 168, 0.06); border: 1px solid rgba(110, 231, 168, 0.25); }
+.scistops small { font-size: 12.5px; font-weight: 600; color: #6ee7a8; }
+.loadrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--dim); }
+body.veh-rover .loadrow { display: none; }
+.sw.g-rocks { background: linear-gradient(90deg, #cd7d46, #f53c32); }
+.sw.g-min { background: conic-gradient(#ff0000 0 25%, #00ff00 0 50%, #00ffff 0 75%, #ff8000 0); }
+.minkey { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 4px 0; }
+.minkey span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); }
+.minkey i { flex: none; width: 10px; height: 10px; border-radius: 2px; }

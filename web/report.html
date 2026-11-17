@@ -107,8 +107,12 @@
   ];
   if (r.ground_min_c != null) checks.push([r.ground_min_c >= -80 ? "ok" : "warn", `Ground temperature ${r.ground_min_c.toFixed(0)} to ${r.ground_max_c.toFixed(0)} °C along the route.`]);
   // a short reason for each check, so the verdict says what failed
-  const SHORT = [`steepest point ${r.max_slope.toFixed(0)}° is over the ${plan.maxSlope}° limit`, `${dur(r.time_s)} is over the 8 h limit`, "part of it is in darkness",
+  const sw = r.space_weather || {}, swLv = { quiet: "ok", watch: "warn", storm: "bad" }[sw.status] || "warn";
+  const SHORT0 = [`steepest point ${r.max_slope.toFixed(0)}° is over the ${plan.maxSlope}° limit`, `${dur(r.time_s)} is over the 8 h limit`, "part of it is in darkness",
     "no relay satellite in view", `position uncertainty reaches ±${Math.round(worstErr)} m`, `${dur(r.longest_gap_s)} with no relay link`, "very cold ground"];
+  const SHORT = SHORT0.slice(0, checks.length);
+  checks.push([swLv, `Space weather at Mars (NASA DONKI): ${sw.summary || "not checked."}`]); SHORT.push("space weather");
+  if (r.rocky_pct != null) { checks.push([r.rocky_pct <= 25 ? "ok" : "warn", `${r.rocky_pct.toFixed(0)} % of the route crosses rock-rich ground (THEMIS night infrared).`]); SHORT.push("rocky ground"); }
   const why = lv => checks.map((c, i) => c[0] === lv ? SHORT[i] : null).filter(Boolean).join("; ");
   const worstLvl = checks.some(c => c[0] === "bad") ? "nogo" : checks.some(c => c[0] === "warn") ? "watch" : "go";
   const LV = { ok: ["GO", "t-ok"], warn: ["WATCH", "t-warn"], bad: ["NO-GO", "t-bad"] };
@@ -116,7 +120,8 @@
   // ---------- stops ----------
   const stops = R.stops.map((p, k) => {
     const home = Math.hypot(p.x - site.hab[0], p.y - site.hab[1]) < 60, dw = (r.dwell || []).find(w => Math.abs(w.t - p.t) < 1);
-    return { ...p, name: home ? (k === 0 ? "Habitat airlock (start)" : "Habitat airlock (return)") : `Waypoint ${k}`, tag: home ? "H" : String(k), dwell: dw ? dw.min : 0 };
+    const mn = (r.stop_minerals || [])[k], lab = plan.science && plan.science.labels ? plan.science.labels[k - 1] : null;
+    return { ...p, name: home ? (k === 0 ? "Habitat airlock (start)" : "Habitat airlock (return)") : `Waypoint ${k}${lab ? ": " + lab : mn ? ": " + mn : ""}`, tag: home ? "H" : String(k), dwell: dw ? dw.min : 0 };
   });
 
   // ---------- page 1 ----------
@@ -127,7 +132,7 @@
     <header><img src="img/brand/logo-192.png" alt="AirAwareNetwork logo"><div><b>MARSWALK</b><small>AirAwareNetwork · EVA traverse plan</small></div>
       <div class="doc"><b>${id}</b><br>Generated ${utc(R.made)} UTC<br>Page 1 of 2</div></header>
     <h1>${esc(site.label)}</h1>
-    <p class="meta"><b>${ll(site.lat, site.lon)}</b> · ${rover ? "Robotic rover" : "On foot, 2 crew in suits"} · <b>${plan.policy}</b> route policy · departs <b>${utc(r.depart)} UTC</b> · terrain ${esc(site.res)}</p>
+    <p class="meta"><b>${ll(site.lat, site.lon)}</b> · ${rover ? "Robotic rover" : `On foot, 2 crew in suits${plan.load ? `, carrying ${plan.load} kg` : ""}`} · <b>${plan.policy}</b> route policy · departs <b>${utc(r.depart)} UTC</b> · terrain ${esc(site.res)}</p>
     <div class="verdict v-${worstLvl}"><i>${LV[worstLvl === "go" ? "ok" : worstLvl === "watch" ? "warn" : "bad"][0]}</i>${verdictTxt}</div>
     <div class="tiles">
       ${tile("Distance", km(total), "km", `${stops.length - 1} legs`)}
@@ -145,6 +150,7 @@
       <div>
         <h2>Go / no-go</h2>
         <ul class="checks">${checks.map(([lv, t]) => `<li><span class="tag ${LV[lv][1]}">${LV[lv][0]}</span><span>${t}</span></li>`).join("")}</ul>
+        ${plan.science ? `<h2>Science goal</h2><p class="note"><b>${esc(plan.science.title)}.</b> ${esc(plan.science.why)} Data: ${esc(plan.science.data)}.</p>` : ""}
         ${r.warnings.length ? `<h2>Planner warnings</h2><ul class="checks">${r.warnings.map(w => `<li><span class="tag t-warn">NOTE</span><span>${esc(w)}</span></li>`).join("")}</ul>` : ""}
         <h2>Slope along the route</h2>
         <svg viewBox="0 0 300 26" style="border:0">${(() => { const m = r.slope_mix; let x = 0; return [["green", "#1f9d6b"], ["yellow", "#e0a020"], ["steep", "#d6402f"]].map(([k, c]) => { const w = m[k] * 3; const o = `<rect x="${x}" y="0" width="${w}" height="12" fill="${c}"/>${w > 26 ? `<text x="${x + 3}" y="23" font-size="9" font-family="IBM Plex Mono" fill="#5d6a80">${m[k].toFixed(1)}%</text>` : ""}`; x += w; return o; }).join(""); })()}</svg>

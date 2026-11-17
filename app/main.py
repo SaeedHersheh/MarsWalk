@@ -1,12 +1,14 @@
 """Marswalk API: layers, orbiter passes, and route planning over real Mars terrain.
 
-Sites:  "jezero" = the detailed one (CTX 20 m, HiRISE slopes, heat model).
+Sites:  "jezero" = the first detailed one (CTX 20 m, HiRISE slopes, heat model, CRISM minerals), data in data/.
+        "gale"   = Curiosity's site, detailed from the USGS MSL HiRISE DEM (pipeline/build_gale.py), data in data/sites/gale/.
         anything else = a region built on demand from global MOLA 463 m (pipeline/build_site.py).
 Every endpoint takes ?site=<id> (default jezero).
 
 Run:  .venv/Scripts/python -m uvicorn app.main:app --port 8077
 """
 import io, json, os, sys, threading, time
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 import numpy as np
@@ -15,7 +17,8 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
-from scipy.ndimage import maximum_filter
+import requests
+from scipy.ndimage import maximum_filter, uniform_filter
 from skimage.graph import MCP_Geometric
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +31,7 @@ D = os.path.join(ROOT, "data")
 MIN_EL = fetch_passes.MIN_EL
 SUIT = 0.5          # ASSUMPTION: a suited walker moves at half Tobler speed
 WALK_DRIFT = 0.02   # ASSUMPTION: dead-reckoning error = 2 % of distance since last fix
+LOAD_PER_KG = 0.006  # ASSUMPTION: each kg carried (tools, samples, drill) slows a suited walker by 0.6 % (40 kg -> 24 % slower)
 UHF_HZ = 437.1e6    # orbiter -> surface UHF relay link (Odyssey/MER value; MRO Electra tunes 435-450 MHz)
 C_KMS = 299792.458
 REFRESH_S = 6 * 3600
@@ -145,6 +149,14 @@ class Site:
         if os.path.exists(os.path.join(d, "heat.npy")):
             self.HEAT = np.load(os.path.join(d, "heat.npy"))
             self.HEAT_META = json.load(open(os.path.join(d, "heat_meta.json")))
+
+        # Rocky ground from THEMIS night IR (pipeline/build_rocks.py), minerals from CRISM (pipeline/build_minerals.py, Jezero)
+        self.ROCK = None
+        if os.path.exists(os.path.join(d, "rock.npy")):
+            self.ROCK = np.nan_to_num(np.load(os.path.join(d, "rock.npy")).astype("float32"), nan=0.0)
+        self.MIN, self.MIN_META = None, None
+        if os.path.exists(os.path.join(d, "minerals.npy")):
+            self.MIN = np.load(os.path.join(d, "minerals.npy")); self.MIN_META = json.load(open(os.path.join(d, "minerals_meta.json")))
 
         self.PACE_ISO = (1.0 / tobler_ms(np.tan(np.radians(self.SLOPE)))).astype("float32")   # s per metre
         self.PACE_ROVER = (1.0 / rover_ms(np.tan(np.radians(self.SLOPE)))).astype("float32")
@@ -280,6 +292,7 @@ class Site:
             glo, ghi = np.percentile(g[::4, ::4], (2, 98))
             cold = np.clip((ghi - g) / max(ghi - glo, 1e-6), 0, 1)
         return {
+            "rocks": self.ROCK if self.ROCK is not None else np.zeros((self.H, self.W), "float32"),
             "cold": cold,
             "slope": slope_pen(self.HAZB),
             "radiation": np.clip((self.RAD - lo) / max(hi - lo, 1e-9), 0, 1),
@@ -336,6 +349,22 @@ class Site:
             L[name] = {"lo": round(float(lo)), "hi": round(float(hi)),
                        "unit": "ground °C at this moment (THEMIS + TES + Sun, heat model)",
                        "check": self.HEAT_META.get("check_day_ir_r")}
+        elif name == "rocks":
+            if self.ROCK is None:
+                raise HTTPException(404, "no THEMIS night data here")
+            rgba = ramp(self.ROCK, [(0, (150, 110, 70, 0)), (.25, (170, 120, 80, 60)), (.5, (205, 125, 70, 150)), (.8, (230, 90, 55, 210)), (1, (245, 60, 50, 235))])
+            L[name] = {"lo": "typical ground", "hi": "rock-rich", "unit": "rocky ground: warm at night in THEMIS infrared (Mars Odyssey)"}
+        elif name == "minerals":
+            if self.MIN is None:
+                raise HTTPException(404, "no mineral map here")
+            rgba = np.zeros((self.H, self.W, 4), "uint8")
+            present = []
+            for k, v in self.MIN_META["classes"].items():
+                k = int(k); hi, md = self.MIN == k + 16, self.MIN == k
+                if hi.any() or md.any():
+                    rgba[hi] = (*v["hi"], 235); rgba[md] = (*v["md"], 190)
+                    present.append({"name": v["name"], "color": "rgb(%d,%d,%d)" % tuple(v["hi"]), "cells": int(hi.sum() + md.sum())})
+            L[name] = {"classes": sorted(present, key=lambda p: -p["cells"]), "unit": "minerals seen by MRO CRISM (bright = high confidence)", "source": self.MIN_META["source"]}
         elif name == "cost":
             cost, nogo = self.cost_grid(json.loads(wkey), t, 25.0)
             v = np.log(cost / self.PACE_ISO.min())
@@ -396,6 +425,7 @@ class RouteReq(BaseModel):
     dwell_min: float = 15.0                  # science time at each intermediate stop
     round_trip: bool = True
     vehicle: str = "foot"                    # "foot" (suited walk) or "rover" (crew rover)
+    load_kg: float = 0.0                     # what the walker carries besides the suit (tools, samples)
 
 
 class SiteReq(BaseModel):
@@ -435,7 +465,7 @@ def sites():
             out.append({"id": sid, "label": m.get("label", "Jezero crater"), "kind": m.get("kind", "detail"),
                         "lat": info["lat"], "lon_e": info["lon_e"], "elev_km": info["elev_km"],
                         "cell_m": round(m["DY"]), "size_km": round(m["height_m"] / 1000)})
-    return out
+    return sorted(out, key=lambda s: s["kind"] != "detail")     # detailed sites first
 
 
 @app.post("/api/sites")
@@ -443,11 +473,12 @@ def make_site(q: SiteReq):
     """Plan anywhere: build a region around (lat, lon) from global MOLA, then fetch its orbiter passes."""
     if not (-90 <= q.lat <= 90):
         raise HTTPException(400, "latitude out of range")
-    jz = get_site("jezero"); m = jz.meta
     lon = ((q.lon + 180) % 360) - 180
-    x = (m["R"] * np.radians(lon) - m["eqc_left"]) / m["eqc_res"]; y = (m["eqc_top"] - m["R"] * np.radians(q.lat)) / m["eqc_res"]
-    if 0 <= x < jz.W and 0 <= y < jz.H:          # inside the detailed map: use it
-        return {"id": "jezero", "label": "Jezero crater", "kind": "detail"}
+    for dd in (s for s in sites() if s["kind"] == "detail"):   # inside a detailed map (Jezero, Gale): use it
+        m = get_site(dd["id"]).meta
+        x = (m["R"] * np.radians(lon) - m["eqc_left"]) / m["eqc_res"]; y = (m["eqc_top"] - m["R"] * np.radians(q.lat)) / m["eqc_res"]
+        if 0 <= x < m["W"] and 0 <= y < m["H"]:
+            return {"id": dd["id"], "label": dd["label"], "kind": "detail"}
     try:
         sid = build_site.build(q.lat, lon, q.name)
     except Exception as e:
@@ -504,7 +535,8 @@ def meta(site: str = "jezero"):
             "rad": {"base": RAD_BASE, "column": COL_BASE, "lambda": LAMBDA, "career": CAREER_MSV,
                     "min": float(S.RAD.min()), "max": float(S.RAD.max())},
             "eqc_bottom": S.bottom, "heat": S.HEAT_META,
-            "habitat_name": "Octavia E. Butler Landing" if jz else "chosen point",
+            "habitat_name": S.meta.get("habitat_name") or ("Octavia E. Butler Landing" if jz else "chosen point"),
+            "layers_extra": {"rocks": S.ROCK is not None, "minerals": S.MIN is not None},
             "hirise": None if S.HIRISE is None else {
                 "coverage": float(S.HIRISE.mean()),
                 "box": [float(v) for v in (np.where(S.HIRISE.any(0))[0][[0, -1]] * S.DX).tolist()
@@ -585,7 +617,8 @@ def route(q: RouteReq):
     z = S.Z[rr, cc].astype("float64")
     seg = np.hypot(np.diff(x), np.diff(y))
     s = np.divide(np.diff(z), seg, out=np.zeros_like(seg), where=seg > 0)
-    dt = seg / (rover_ms(s) if rover else tobler_ms(s))   # rover speed, or real direction-aware Tobler time on foot
+    lf = 1.0 if rover else max(0.5, 1 - LOAD_PER_KG * max(0.0, q.load_kg))     # a heavy load slows the walk
+    dt = seg / ((rover_ms(s) if rover else tobler_ms(s)) * lf)   # rover speed, or real direction-aware Tobler time on foot
     d = np.concatenate([[0], np.cumsum(seg)])
     t = np.concatenate([[0], np.cumsum(dt)])
     dwell = []
@@ -636,6 +669,23 @@ def route(q: RouteReq):
            "steep": float(wgt[sl >= 15].sum() / tot * 100)}
     if S.meta.get("kind") == "region":
         warn.append(f"coarse terrain: {DY:.0f} m cells hide rocks, scarps and small craters")
+    rocky = float(wgt[S.ROCK[rr, cc] > 0.5].sum() / tot * 100) if S.ROCK is not None else None
+    if rocky is not None and rocky > 25:
+        warn.append(f"{rocky:.0f}% of the route crosses rock-rich ground (THEMIS night infrared): expect boulders")
+    stop_min, route_min = None, None
+    if S.MIN is not None:                                  # which minerals CRISM sees at each stop and along the way
+        names = {int(k): v["name"] for k, v in S.MIN_META["classes"].items()}
+        def at(r0, c0):
+            w = S.MIN[max(0, r0 - 2):r0 + 3, max(0, c0 - 2):c0 + 3] % 16; w = w[w > 0]
+            return names[int(np.bincount(w).argmax())] if w.size else None
+        stop_min = [at(int(rr[i]), int(cc[i])) for i in stop_idx]
+        k = S.MIN[rr, cc] % 16; route_min = {names[int(c)]: round(float(wgt[k == c].sum()), 1) for c in np.unique(k) if c > 0}
+    sw = space_weather()
+    for c_ in sw.get("cme", []):                           # a coronal mass ejection reaching Mars during (or 12 h around) the EVA
+        if t_dep - 12 * 3600 <= c_["arrival"] <= t_dep + total_t + 12 * 3600:
+            warn.append(f"space weather: a coronal mass ejection is forecast to reach Mars around {datetime.fromtimestamp(c_['arrival'], timezone.utc):%d %b %H:%M} UTC (NASA DONKI). Stay close to shelter")
+    if sw.get("sep_recent"):
+        warn.append("space weather: a solar energetic particle event was detected in the last two days (NASA DONKI)")
     # ground temperature under the walker, at the moment they are there
     ground = None
     if S.HEAT is not None:
@@ -659,7 +709,172 @@ def route(q: RouteReq):
         "career_pct": dose / CAREER_MSV * 100, "rad_day_avg": float(S.RAD[rr, cc].mean()),
         "contacts": contacts, "contact_min": len(in_contact), "longest_gap_s": float(gap),
         "sun_el": [round(v, 1) for v in sun_el], "depart": t_dep, "warnings": warn, "vehicle": q.vehicle,
+        "load_kg": 0.0 if rover else q.load_kg, "rocky_pct": rocky, "stop_minerals": stop_min, "route_minerals": route_min,
+        "space_weather": {k: sw.get(k) for k in ("status", "summary", "checked")},
     }
+
+
+# ---------- space weather at Mars: NASA DONKI (Space Weather Database Of Notifications, Knowledge, Information) ----------
+# CME arrival forecasts at Mars come from the WSA-Enlil runs CCMC posts to DONKI; SEP events are detected particle storms.
+SW = {"t": 0.0, "data": {"status": "unknown", "summary": "Space weather not checked yet.", "cme": [], "sep": []}}
+
+
+def _ts(s):
+    return datetime.strptime(s[:16], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc).timestamp()
+
+
+def space_weather():
+    if time.time() - SW["t"] < (3 * 3600 if SW["data"].get("ok") else 600):
+        return SW["data"]
+    key = os.environ.get("NASA_API_KEY", "DEMO_KEY"); now = datetime.now(timezone.utc); nowt = now.timestamp()
+    s, e = (now - timedelta(days=14)).strftime("%Y-%m-%d"), now.strftime("%Y-%m-%d")
+    out = {"checked": nowt, "source": "NASA DONKI (CCMC WSA-Enlil CME forecasts, SEP events)", "cme": [], "sep": [], "ok": True}
+    try:
+        sims = requests.get(f"https://api.nasa.gov/DONKI/WSAEnlilSimulations?startDate={s}&endDate={e}&api_key={key}", timeout=20).json() or []
+        hits = []
+        for sim in sorted(sims, key=lambda q: q.get("modelCompletionTime") or ""):
+            for i in sim.get("impactList") or []:
+                if i.get("location") == "Mars" and i.get("arrivalTime"):
+                    hits.append({"arrival": _ts(i["arrivalTime"]), "glancing": bool(i.get("isGlancingBlow")), "minor": bool(i.get("isMinorImpact")),
+                                 "link": sim.get("link"), "run": sim.get("modelCompletionTime")})
+        merged = []                                     # the same CME is modelled several times: keep the newest run of each
+        for h in sorted(hits, key=lambda q: q["arrival"]):
+            if merged and h["arrival"] - merged[-1]["arrival"] < 18 * 3600:
+                if (h["run"] or "") >= (merged[-1]["run"] or ""): merged[-1] = h
+            else:
+                merged.append(h)
+        out["cme"] = [h for h in merged if h["arrival"] > nowt - 2 * 86400]
+        seps = requests.get(f"https://api.nasa.gov/DONKI/SEP?startDate={s}&endDate={e}&api_key={key}", timeout=20).json() or []
+        out["sep"] = [{"t": _ts(q["eventTime"]), "link": q.get("link"), "instruments": [i.get("displayName") for i in q.get("instruments") or []]} for q in seps]
+    except Exception as ex:
+        out["ok"] = False; out["error"] = str(ex)[:160]
+    out["sep_recent"] = any(q["t"] > nowt - 2 * 86400 for q in out["sep"])
+    soon = [c for c in out["cme"] if nowt - 86400 <= c["arrival"] <= nowt + 7 * 86400]
+    now_hit = [c for c in out["cme"] if abs(c["arrival"] - nowt) <= 86400]
+    fmt = lambda t_: datetime.fromtimestamp(t_, timezone.utc).strftime("%a %d %b, %H:%M UTC")
+    if not out["ok"]:
+        out["status"], out["summary"] = "unknown", "Space weather could not be checked just now (NASA DONKI did not answer). Plan with the usual margins."
+    elif now_hit or out["sep_recent"]:
+        out["status"] = "storm"
+        out["summary"] = ("A coronal mass ejection is arriving at Mars around " + fmt(now_hit[0]["arrival"]) + ". " if now_hit else "") + \
+                         ("Energetic particles were detected in the last two days. " if out["sep_recent"] else "") + \
+                         "Keep EVAs short and close to the habitat until it passes."
+    elif soon:
+        c = soon[0]
+        out["status"] = "watch"
+        out["summary"] = (f"A coronal mass ejection is forecast to reach Mars around {fmt(c['arrival'])}"
+                          f"{' (a glancing blow)' if c['glancing'] else ''}. Plan EVAs to be back inside before then.")
+    else:
+        out["status"], out["summary"] = "quiet", "No coronal mass ejection is forecast to reach Mars in the next 7 days, and no particle storm in the last 2 days."
+    SW["t"], SW["data"] = time.time(), out
+    return out
+
+
+@app.get("/api/spaceweather")
+def get_space_weather():
+    return space_weather()
+
+
+# ---------- science goals: where to go and why, picked from the data ----------
+RAW = os.path.join(D, "raw")
+_TRAV = {}
+
+
+def traverse(name):
+    """NASA's published rover traverse (end-of-drive positions): MSL (Curiosity) or M20 (Perseverance)."""
+    if name not in _TRAV:
+        p = os.path.join(RAW, f"{name}_waypoints.json")
+        _TRAV[name] = [f["properties"] for f in json.load(open(p))["features"]] if os.path.exists(p) else []
+    return _TRAV[name]
+
+
+def _xy(S, lon, lat):
+    m = S.meta
+    return ((m["R"] * np.radians(lon) - m["eqc_left"]) * np.cos(np.radians(m["lat0"])), m["R"] * np.radians(lat) - S.bottom)
+
+
+def _order(S, pts):
+    """Visit nearest-first from the habitat."""
+    out, cur, rest = [], S.HAB, list(pts)
+    while rest:
+        j = min(range(len(rest)), key=lambda i: (rest[i]["x"] - cur[0]) ** 2 + (rest[i]["y"] - cur[1]) ** 2)
+        cur = (rest[j]["x"], rest[j]["y"]); out.append(rest.pop(j))
+    return out
+
+
+def mineral_targets(S, classes, reach, n=3, sep_m=600):
+    cls, hi = S.MIN % 16, S.MIN >= 16
+    mask = np.isin(cls, classes) & hi
+    if mask.sum() < 30:
+        mask = np.isin(cls, classes)
+    dens = uniform_filter(mask.astype("float32"), size=9)            # how much of the 180 m around is this mineral
+    yy, xx = np.ogrid[:S.H, :S.W]
+    dist = np.hypot((xx + 0.5) * S.DX - S.HAB[0], (S.H - 1 - yy + 0.5) * S.DY - S.HAB[1])
+    names = {int(k): v["name"] for k, v in S.MIN_META["classes"].items()}
+    for r_ in (reach, reach * 2.5):
+        score = np.where(mask & (dist <= r_) & (dist > 150) & (S.HAZ < 15) & S.VALID, dens, 0)
+        picks = []
+        while len(picks) < n and score.max() > 0.15:
+            i = int(score.argmax()); r0, c0 = divmod(i, S.W)
+            x, y = (c0 + 0.5) * S.DX, (S.H - 1 - r0 + 0.5) * S.DY
+            picks.append({"x": float(x), "y": float(y), "label": f"{names[int(cls[r0, c0])]}{', high confidence' if hi[r0, c0] else ''}"})
+            score[(np.hypot((xx + 0.5) * S.DX - x, (S.H - 1 - yy + 0.5) * S.DY - y) < sep_m)] = 0
+        if picks:
+            return _order(S, picks), r_ > reach
+    return [], False
+
+
+def traverse_targets(S, name, reach, sol_lo=0, sol_hi=10 ** 6, n=4):
+    pts = []
+    for f in traverse(name):
+        if not (sol_lo <= f["sol"] <= sol_hi):
+            continue
+        x, y = _xy(S, f["lon"], f["lat"])
+        if 0 < x < S.W * S.DX and 0 < y < S.H * S.DY and S.VALID[S.rc(x, y)]:
+            pts.append({"x": float(x), "y": float(y), "sol": f["sol"], "d": float(np.hypot(x - S.HAB[0], y - S.HAB[1]))})
+    if not pts:
+        return [], False
+    near = [p for p in pts if p["d"] <= reach]
+    far = not near
+    use = near or sorted(pts, key=lambda p: p["d"])[:max(n * 3, 8)]
+    use = sorted(use, key=lambda p: p["sol"])
+    pick = [use[round(i * (len(use) - 1) / max(n - 1, 1))] for i in range(min(n, len(use)))]
+    seen, out = set(), []
+    for p in pick:
+        if p["sol"] not in seen:
+            seen.add(p["sol"]); out.append({"x": p["x"], "y": p["y"], "label": f"{'Curiosity' if name == 'MSL' else 'Perseverance'} stopped here on sol {p['sol']}"})
+    return out, far
+
+
+@app.get("/api/science")
+def science(site: str = "jezero", vehicle: str = "foot"):
+    S = get_site(site); reach = 12000.0 if vehicle == "rover" else 4500.0
+    objs = []
+    def add(oid, title, why, data, stops_far):
+        stops, far = stops_far
+        if stops:
+            objs.append({"id": oid, "title": title, "why": why, "data": data, "stops": stops, "far": far})
+    if S.MIN is not None:
+        crism = "MRO CRISM mineral map (UMass Amherst, Zenodo 5575824)"
+        add("carbonate", "Carbonates: where life could leave a trace",
+            "Carbonates form in water, and on Earth they can trap and keep signs of ancient life. That is why Perseverance is sampling them. CRISM sees magnesium carbonate at these spots.",
+            crism, mineral_targets(S, [2, 6], reach))
+        add("olivine", "Olivine: the crater floor's volcanic rock",
+            "Olivine-rich rock covers much of Jezero's floor. Where water has started to change it, it shows how long the lake lasted.",
+            crism, mineral_targets(S, [1, 4, 5], reach))
+        add("clay", "Clays: rock changed by water",
+            "Smectite clays form when rock sits in water for a long time, and they are good at preserving organic molecules.",
+            crism, mineral_targets(S, [3, 10, 9], reach))
+    if S.id == "jezero":
+        add("perseverance", "Follow Perseverance",
+            "Walk where NASA's rover drove: its own end-of-drive positions, from the published traverse.",
+            "NASA Mars 2020 traverse (mars.nasa.gov)", traverse_targets(S, "M20", reach))
+    if S.id == "gale":
+        add("boxwork", "Boxwork on Mount Sharp (Curiosity, 2025)",
+            "Boxwork is a web of low ridges left where groundwater filled cracks with minerals that later outlasted the rock around them. Curiosity drove into this area in 2025 to study it. These stops are Curiosity's own end-of-drive positions from that year.",
+            "NASA MSL traverse (mars.nasa.gov)", traverse_targets(S, "MSL", reach, 4410, 4755))
+    return {"objectives": objs, "reach_m": reach,
+            "note": None if objs else "Science goals use detailed orbital data. Jezero (CRISM minerals) and Gale (Curiosity's boxwork drive) have it."}
 
 
 @app.get("/", include_in_schema=False)

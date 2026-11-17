@@ -119,6 +119,16 @@ Assumed values: dust optical depth 0.5, ground emissivity 0.95. The result is la
 
 ---
 
+## 6b · Minerals — build_minerals
+
+The spectral layer. The CRISM mineral map of Jezero (UMass Amherst, Zenodo 5575824) is a georeferenced RGB image where each colour is one mineral class at high or medium confidence. The pipeline turns colours back into classes (olivine, Mg-carbonate, smectite clays, pyroxenes and mixtures) and lays them on the 20 m Jezero grid in the same equirectangular frame. The server uses it for the Minerals layer, for the mineral at each stop, and to pick science stops: dense, high-confidence patches within reach, on safe slopes, at least 600 m apart.
+
+## 6c · Rocky Ground — build_rocks
+
+THEMIS night infrared tiles (Mars Odyssey, 100 m, from NASA Mars Trek) for any site between 60°N and 60°S. Rock holds the day's heat and stays warm at night; dust and sand cool fast. The warmer-than-median half of the site is stretched from 0 to 1 and lightly smoothed. The server adds it to the route cost with the Rocky ground weight and warns when over a quarter of a route crosses rock-rich ground. `build_site` runs it for every new site.
+
+---
+
 ## 7 · Satellite Passes — fetch_passes
 
 | Stage | Detail |

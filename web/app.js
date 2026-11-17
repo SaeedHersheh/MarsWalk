@@ -22,10 +22,14 @@
   const HAB = M.habitat;
   {
     const [la, lo] = [M.site.lat, M.site.lon_e];
-    $("siteName").textContent = M.label; $("siteRes").textContent = `${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"} · ${M.kind === "region" ? "MOLA " + Math.round(M.DY) + " m" : "CTX 20 m"}`; $("siteName").title = $("siteRes").textContent;
+    $("siteName").textContent = M.label; $("siteRes").textContent = `${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"} · ${M.kind === "region" ? "MOLA " + Math.round(M.DY) + " m" : M.res_label || "CTX 20 m"}`; $("siteName").title = $("siteRes").textContent;
     document.title = "Marswalk · " + M.label;
     if (M.kind === "region") document.querySelector(".credits").textContent = `Terrain: ${M.source}. Orbiters and Sun: JPL Horizons. Radiation is a model on the Curiosity RAD average (0.67 mSv/day). Suit speed (half Tobler) and drift (2 % of distance) are assumptions. This is a coarse site: use it to compare places, not to place footsteps.`;
+    else if (SITE !== "jezero") document.querySelector(".credits").textContent = `Terrain: ${M.source}. Orbiters and Sun: JPL Horizons. Radiation: Curiosity RAD measured 0.67 mSv/day here at Gale (22 g/cm² of air above), scaled by each spot's air column and open sky. Rocky ground: THEMIS night infrared. No ground temperature model at this site. Suit speed (half Tobler) and drift (2 % of distance) are assumptions.`;
     if (!M.heat) { document.querySelector('[data-l="heat"]').hidden = true; document.getElementById("w-cold").closest("label").hidden = true; }
+    const X = M.layers_extra || {};
+    if (!X.rocks) { document.querySelector('[data-l="rocks"]').hidden = true; document.getElementById("w-rocks").closest("label").hidden = true; }
+    if (!X.minerals) document.querySelector('[data-l="minerals"]').hidden = true;
   }
   const DRIFT = M.assumptions.drift_fraction;
   const cosLat = Math.cos(M.lat0 * Math.PI / 180);
@@ -94,7 +98,7 @@
       const st = q && mode !== "explore" ? q.split(";").map(v => v.split(",").map(Number)).filter(p => p.length === 2 && p.every(Number.isFinite)) : [];
       return st.length ? st : SITE === "jezero" ? [[15100, 16000], [12700, 16300]] : [];
     })(),
-    roundTrip: true, vehicle: "foot", style: "safe", weights: { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, maxSlope: 18,
+    roundTrip: true, vehicle: "foot", style: "safe", weights: { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2, rocks: 0.5 }, maxSlope: 18, load: 0, science: null,
     departOff: 0,                                 // minutes after "now"
     base: "ortho", layers: new Set(), opacity: 0.8,
     route: null, view: "2d", speed: 120, sound: false, doppler: false, truth: true,
@@ -128,7 +132,7 @@
   const baseElev = L.imageOverlay(Q("/api/layer/elevation.png"), bounds);
   const overlays = {};
   const ll = (x, y) => [y, x];
-  if (SITE === "jezero") map.setView(ll(HAB[0] - 1800, HAB[1] + 900), -2.5); else map.fitBounds(bounds, { padding: [-120, -120] });
+  if (M.kind !== "region") map.setView(ll(HAB[0] - 1800, HAB[1] + 900), -2.5); else map.fitBounds(bounds, { padding: [-120, -120] });
   baseOrtho.once("load", () => $("loader").hidden = true);
 
   // where the slope comes from the HiRISE 1 m DTM instead of CTX 20 m
@@ -140,7 +144,7 @@
     return Q(`/api/layer/${n}.png?t=${t}` + (n === "cost" ? `&w=${encodeURIComponent(JSON.stringify(S.weights))}` : ""));
   };
   function syncLayers() {
-    for (const n of ["slope", "radiation", "comms", "hab", "sun", "heat", "cost"]) {
+    for (const n of ["slope", "radiation", "comms", "hab", "sun", "heat", "rocks", "minerals", "cost"]) {
       const on = S.layers.has(n);
       if (on) {
         const u = layerUrl(n);
@@ -161,6 +165,8 @@
     sun: ["linear-gradient(90deg,#0e1646 0%,#0e1646 30%,#ffe1aa 100%)", "shadow", "full sun", ""],
     heat: ["linear-gradient(90deg,#140e46,#283caa,#4696d2,#9664be,#e1506e,#fa963c,#fff096)", "", "", ""],
     cost: ["linear-gradient(90deg,#1ea078,#dcd250,#f07832,#c8283c,#19050f)", "easy", "no-go", "what the planner sees with your weights"],
+    rocks: ["linear-gradient(90deg,rgba(170,120,80,.25),#cd7d46,#e65a37,#f53c32)", "typical ground", "rock-rich", "Warm at night in THEMIS infrared (Mars Odyssey): rock holds heat, dust does not."],
+    minerals: ["", "", "", ""],
     elevation: ["linear-gradient(90deg,#261860,#2446aa,#2096c8,#46be78,#c8dc5a,#f0b43c,#e16e2d,#faf4ec)", "", "", ""],
   };
   const NOTE = {
@@ -171,13 +177,24 @@
     sun: "Dark blue = night, or shadow cast by the terrain right now.",
     heat: "Ground temperature at the clock time. Cold ground drains suit power.",
     cost: "What the planner sees with your settings: green is cheap to cross, dark red is avoided.",
+    rocks: "Red = ground that stays warm at night, which means bare rock and boulder fields. Sand and dust cool fast. The planner steers round it by the Rocky ground weight.",
+    minerals: "Minerals MRO's CRISM spectrometer identifies from orbit. Bright colours are high-confidence detections. Carbonates and clays formed in water: prime science targets.",
     elevation: "Height above the Mars datum. Brighter = higher.",
   };
-  const LNAME = { slope: "Steepness", radiation: "Radiation", comms: "Satellite blind spots", hab: "Habitat radio range", sun: "Sunlight and shadow", heat: "Ground temperature", cost: "Route difficulty", elevation: "Elevation" };   // plain names; the technical source sits in each layer's note
+  const LNAME = { slope: "Steepness", radiation: "Radiation", comms: "Satellite blind spots", hab: "Habitat radio range", sun: "Sunlight and shadow", heat: "Ground temperature", cost: "Route difficulty", elevation: "Elevation", rocks: "Rocky ground", minerals: "Minerals (CRISM)" };   // plain names; the technical source sits in each layer's note
   async function drawLegend() {
     const act = [...S.layers].pop() || (S.base === "elevation" ? "elevation" : null);
     const el = $("legend"); $("layerNote").textContent = act ? NOTE[act] : "Select a layer to display it on the map.";
     if (!act) { el.innerHTML = ""; $("mapLegend").hidden = true; return; }
+    if (act === "minerals") {                                         // a list of colours, not a scale
+      try {
+        const g = await J(`/api/legend/minerals`);
+        const sw = g.classes.slice(0, 8).map(c => `<span><i style="background:${c.color}"></i>${c.name}</span>`).join("");
+        el.innerHTML = `<div class="minkey">${sw}</div><div class="unit">${g.unit}. ${g.source}.</div>`;
+        $("mapLegend").innerHTML = `<b>${LNAME[act]}</b><div class="minkey">${sw}</div>`; $("mapLegend").hidden = false;
+      } catch (e) { el.innerHTML = ""; }
+      return;
+    }
     let [bar, lo, hi, unit] = LEG[act];
     if (["radiation", "comms", "elevation", "sun", "heat"].includes(act)) {
       try {
@@ -228,7 +245,7 @@
     $("stops").querySelectorAll("button").forEach(b => b.onclick = () => { if (walk.on) return; S.stops.splice(+b.dataset.i, 1); plan(); });
   }
   const fEl = z => z == null ? "—" : (Math.round(z) < 0 ? "−" : "") + Math.abs(Math.round(z)).toLocaleString("en-US") + " m";
-  const fmtLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${la.toFixed(3)}°N ${lo.toFixed(3)}°E`; };
+  const fmtLL = (x, y) => { const [lo, la] = lonLat(x, y); return `${Math.abs(la).toFixed(3)}°${la >= 0 ? "N" : "S"} ${Math.abs(lo).toFixed(3)}°${lo >= 0 ? "E" : "W"}`; };
   map.on("click", e => {
     if (walk.on) return;
     if (MODE === "explore") { const { lng: x0, lat: y0 } = e.latlng; if (T3.exPick && x0 > 0 && y0 > 0 && x0 < M.width_m && y0 < M.height_m) T3.exPick([x0, y0]); return; }   // Experience: a tap picks the destination, nothing else
@@ -250,7 +267,7 @@
   function plan(delay = 0) { clearTimeout(planTimer); planTimer = setTimeout(doPlan, delay); }
   async function requestRoute(stops, depart) {
     return J("/api/route", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ site: SITE, stops, weights: S.weights, depart, max_slope: S.maxSlope, round_trip: false, vehicle: S.vehicle }) });
+      body: JSON.stringify({ site: SITE, stops, weights: S.weights, depart, max_slope: S.maxSlope, round_trip: false, vehicle: S.vehicle, load_kg: S.vehicle === "rover" ? 0 : S.load }) });
   }
   async function doPlan() {
     drawStops();
@@ -288,8 +305,11 @@
     $("moreStats").innerHTML =
       st("Climb", Math.round(r.climb_m), "m") +
       (r.ground_c ? st("Ground", `${Math.round(r.ground_min_c)}…${Math.round(r.ground_max_c)}`, "°C", r.ground_min_c < -80 ? "bad" : "") : "") +
-      st("Longest silence", (r.longest_gap_s / 3600).toFixed(1), "h", r.longest_gap_s > 4 * 3600 ? "bad" : "");
-    $("warns").innerHTML = r.warnings.map(w => `<div class="warn">${w}</div>`).join("") +
+      st("Longest silence", (r.longest_gap_s / 3600).toFixed(1), "h", r.longest_gap_s > 4 * 3600 ? "bad" : "") +
+      (r.rocky_pct != null ? st("Rocky ground", Math.round(r.rocky_pct), "%", r.rocky_pct > 25 ? "bad" : "") : "") +
+      (r.load_kg ? st("Carrying", r.load_kg, "kg") : "");
+    const sm = (r.stop_minerals || []).map((m2, i) => i && i <= S.stops.length && m2 ? `<span><b>${i}</b> ${m2}</span>` : "").join("");
+    $("warns").innerHTML = (sm ? `<div class="scistops"><small>What CRISM sees at your stops</small>${sm}</div>` : "") + r.warnings.map(w => `<div class="warn">${w}</div>`).join("") +
       `<p class="note">Radiation on this walk: ${(r.dose_msv * 1000).toFixed(0)} µSv (${r.career_pct.toFixed(3)} % of the ${M.rad ? M.rad.career : 600} mSv career limit). Standing still in the open here costs about ${r.rad_day_avg.toFixed(2)} mSv a day.</p>`;
     $("contacts").innerHTML = r.contacts.map(c => `<div><i class="dot" style="background:${ORB[c.orbiter].c}"></i><span>${c.orbiter} ${c.start ? fUTC(c.start) + " UTC" : "blocked"}</span><span>${c.minutes} min · ${c.max_el}°${c.blocked_min ? ` · ${c.blocked_min} blocked` : ""}</span></div>`).join("");
     drawProfile(); drawTimeline(); drawNav(); T3.dirty = true; if (T3.syncFlow) T3.syncFlow();
@@ -303,11 +323,13 @@
     const pick = a => idx.map(i => a[i]);
     const R = {
       made: Date.now() / 1000, backUrl: location.href,
-      site: { id: SITE, label: M.label, lat: M.site.lat, lon: M.site.lon_e, kind: M.kind, res: M.kind === "region" ? `MOLA ${Math.round(M.DY)} m` : "CTX 20 m (HiRISE 1 m slope)", source: M.source, basemap: new URL(M.basemap, location.href).href, w: M.width_m, h: M.height_m, hab: HAB },
-      plan: { vehicle: S.vehicle, policy: POLICY(), weights: { ...S.weights }, maxSlope: S.maxSlope },
+      site: { id: SITE, label: M.label, lat: M.site.lat, lon: M.site.lon_e, kind: M.kind, res: M.kind === "region" ? `MOLA ${Math.round(M.DY)} m` : M.res_label || "CTX 20 m (HiRISE 1 m slope)", source: M.source, basemap: new URL(M.basemap, location.href).href, w: M.width_m, h: M.height_m, hab: HAB },
+      plan: { vehicle: S.vehicle, policy: POLICY(), weights: { ...S.weights }, maxSlope: S.maxSlope, load: S.vehicle === "rover" ? 0 : S.load,
+        science: S.science ? { title: S.science.title, why: S.science.why, data: S.science.data, labels: S.science.stops.map(s => s.label) } : null },
       route: { distance_m: r.distance_m, time_s: r.time_s, climb_m: r.climb_m, dose_msv: r.dose_msv, max_slope: r.max_slope, slope_mix: r.slope_mix, slope_limit_used: r.slope_limit_used,
         career_pct: r.career_pct, rad_day_avg: r.rad_day_avg, contacts: r.contacts, contact_min: r.contact_min, longest_gap_s: r.longest_gap_s, sun_el: r.sun_el, depart: r.depart,
-        warnings: r.warnings, dwell: r.dwell, ground_min_c: r.ground_min_c, ground_max_c: r.ground_max_c },
+        warnings: r.warnings, dwell: r.dwell, ground_min_c: r.ground_min_c, ground_max_c: r.ground_max_c,
+        stop_minerals: r.stop_minerals, route_minerals: r.route_minerals, rocky_pct: r.rocky_pct, space_weather: r.space_weather },
       series: { x: pick(r.x), y: pick(r.y), z: pick(r.z), d: pick(r.d), slope: pick(r.slope), err: idx.map(i => +F.err[i].toFixed(1)), src: idx.map(i => F.src[i]) },
       stops: r.stop_idx.map(i => ({ x: r.x[i], y: r.y[i], z: r.z[i], d: r.d[i], t: r.t[i] })),
       nav: { fixes: F.fixes.map(f => ({ orbiter: f.orbiter, t: f.t, d: r.d[f.i], x: r.x[f.i], y: r.y[f.i], before: f.before })), worst: { d: r.d[F.worst], err: F.err[F.worst] }, habKm: F.habKm },
@@ -2352,16 +2374,16 @@
   $("t3sat").onclick = () => T3.api && T3.api.lookSat();
   $("t3top").onclick = () => T3.api && T3.api.top();
   $("t3reset").onclick = () => T3.api && T3.api.reset();
-  for (const k of ["slope", "radiation", "comms", "shadow", "cold"]) {
+  for (const k of ["slope", "radiation", "comms", "shadow", "cold", "rocks"]) {
     const el = $("w-" + k), o = $("o-" + k), show = () => o.textContent = (+el.value * 100).toFixed(0) + "%"; show();
     el.oninput = () => { S.weights[k] = +el.value; show(); markCustom(); if (!walk.on) plan(250); if (S.layers.has("cost")) syncLayers(); };
   }
   $("maxslope").oninput = e => { S.maxSlope = +e.target.value; $("o-maxslope").textContent = S.maxSlope + "°"; markCustom(); if (!walk.on) plan(250); };
   // route styles: one tap sets all the weights
   const STYLES = {
-    safe: { w: { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, max: 18, hint: "Stays on flat green ground and detours round anything steeper, even when that makes the walk much longer. Goes onto amber only if there is no other way." },
-    balanced: { w: { slope: 0.4, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, max: 22, hint: "Takes a moderate slope when it saves a lot of walking, but still avoids anything steep." },
-    fast: { w: { slope: 0.08, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2 }, max: 25, hint: "Shortest way. Expect slopes up to 25° and more risk of a fall." },
+    safe: { w: { slope: 1, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2, rocks: 0.5 }, max: 18, hint: "Stays on flat green ground and detours round anything steeper, even when that makes the walk much longer. Goes onto amber only if there is no other way." },
+    balanced: { w: { slope: 0.4, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2, rocks: 0.3 }, max: 22, hint: "Takes a moderate slope when it saves a lot of walking, but still avoids anything steep." },
+    fast: { w: { slope: 0.08, radiation: 0.3, comms: 0.3, shadow: 0.2, cold: 0.2, rocks: 0.1 }, max: 25, hint: "Shortest way. Expect slopes up to 25° and more risk of a fall." },
   };
   function markCustom() { S.style = "custom"; document.querySelectorAll(".style").forEach(b => b.setAttribute("aria-pressed", "false")); $("styleHint").textContent = "Custom settings."; }
   function applyStyle(id, replan = true) {
@@ -2385,8 +2407,44 @@
     document.querySelectorAll(".veh").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === S.vehicle)));
     $("vehHint").textContent = S.vehicle === "rover" ? "A robotic rover, planned at about 10 km/h on flat ground and on slopes up to 20° (assumed). Driven by hand it reaches about 15 km/h." : "Two astronauts walk in suits at about 2 to 4 km/h, on slopes up to the policy's limit.";
     T3.dirty = true; if (replan && !walk.on) plan(0);
+    if (T3.loadGoals) T3.loadGoals();
   }
   document.querySelectorAll(".veh").forEach(b => b.onclick = () => setVehicle(b.dataset.v));
+  /* ---------- what the astronauts carry: tools and samples slow a suited walker (assumption: 0.6 % per kg) ---------- */
+  document.querySelectorAll("[data-load]").forEach(b => b.onclick = () => {
+    S.load = +b.dataset.load; document.querySelectorAll("[data-load]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    if (!walk.on) plan(0);
+  });
+  /* ---------- space weather at Mars, from NASA DONKI (checked by the server, kept for 3 hours) ---------- */
+  const SWX = { status: "unknown", summary: "" };
+  async function loadSpaceWeather() {
+    try {
+      const d = await J("/api/spaceweather"); Object.assign(SWX, d);
+      const T = { quiet: "Space weather: quiet", watch: "Space weather: watch", storm: "Space weather: storm", unknown: "Space weather: not checked" };
+      $("swx").dataset.s = d.status; $("swxT").textContent = T[d.status] || T.unknown; $("swxS").textContent = d.summary;
+      $("swx").title = "NASA DONKI: CME arrival forecasts at Mars (CCMC WSA-Enlil) and solar energetic particle events";
+    } catch (e) { $("swxS").textContent = "Could not reach the space weather service."; }
+  }
+  loadSpaceWeather(); setInterval(loadSpaceWeather, 30 * 60 * 1000);
+  T3.swx = SWX;
+  /* ---------- science goals: what to study here, with the stops picked from NASA data by the server ---------- */
+  async function loadGoals() {
+    const box = $("goals"); let d;
+    try { d = await J(`/api/science?vehicle=${S.vehicle}`); } catch (e) { box.innerHTML = ""; return; }
+    if (!d.objectives.length) {
+      box.innerHTML = `<p class="hint">${d.note} <a href="index.html?site=jezero">Open Jezero</a> · <a href="index.html?site=gale">Open Gale</a></p>`;
+      $("goalWhy").hidden = true; return;
+    }
+    $("goalWhy").hidden = false;
+    box.innerHTML = d.objectives.map((o, i) => `<button type="button" class="goal" data-i="${i}" aria-pressed="${S.science && S.science.id === o.id}"><b>${o.title}</b><small>${o.stops.length} stop${o.stops.length > 1 ? "s" : ""} · ${o.data}</small></button>`).join("");
+    box.querySelectorAll(".goal").forEach(b => b.onclick = () => {
+      const o = d.objectives[+b.dataset.i]; S.science = o;
+      box.querySelectorAll(".goal").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+      S.stops = o.stops.map(s => [s.x, s.y]); plan(0);
+      $("goalWhy").innerHTML = `${o.why}${o.far ? ` <b>${S.vehicle === "rover" ? "These are far away." : "These are beyond walking range: try the rover."}</b>` : ""}<br><span class="stoplist">${o.stops.map((s, k) => `<span><b>${k + 1}</b> ${s.label}</span>`).join("")}</span>`;
+    });
+  }
+  T3.loadGoals = loadGoals; loadGoals();
   setVehicle(new URLSearchParams(location.search).get("vehicle") === "rover" ? "rover" : "foot", false);
   function setDepart(min) {
     S.departOff = Math.max(0, Math.min(1440, min)); $("depart").value = S.departOff;
@@ -2693,7 +2751,7 @@
   $("panelTog").onclick = togglePanel;
   $("zin").onclick = () => S.view === "3d" ? T3.api && T3.api.zoom(0.75) : map.zoomIn(0.5);
   $("zout").onclick = () => S.view === "3d" ? T3.api && T3.api.zoom(1.33) : map.zoomOut(0.5);
-  $("zhome").onclick = () => S.view === "3d" ? T3.api && T3.api.reset() : (SITE === "jezero" ? map.setView(ll(HAB[0] - 1800, HAB[1] + 900), -2.5) : map.fitBounds(bounds, { padding: [-120, -120] }));
+  $("zhome").onclick = () => S.view === "3d" ? T3.api && T3.api.reset() : (M.kind !== "region" ? map.setView(ll(HAB[0] - 1800, HAB[1] + 900), -2.5) : map.fitBounds(bounds, { padding: [-120, -120] }));
   const coach = $("coach");
   function dismissCoach() { coach.hidden = true; try { localStorage.setItem("mw_coach", "1"); } catch (e) { /* private mode */ } }
   $("coachOk").onclick = dismissCoach;
@@ -2748,7 +2806,8 @@
       const b1 = document.querySelector('.spd[data-s="1"]'); if (b1) b1.click();
       setView("3d"); startWalk(); takeControl(); setCam("fp", true);
       const far = S.route.distance_m, rv = S.vehicle === "rover", n = S.stops.length;
-      guide(rv ? "You are at the wheel" : "You are outside", `${n} stop${n > 1 ? "s" : ""}, ${wKm(far)} by the planned route, about ${wDur(S.route.time_s)}. ${rv ? "Drive" : "Walk"} it yourself, or press Autopilot. The line on the ground shows the way. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.`, "#ff9a6b");
+      if (SWX.status === "watch" || SWX.status === "storm") setTimeout(() => guide(SWX.status === "storm" ? "Space weather: storm" : "Space weather: watch", SWX.summary, SWX.status === "storm" ? "#F0616B" : "#F5B85B"), 9000);
+      guide(rv ? "You are at the wheel" : "You are outside", `${S.science ? S.science.title + ". " : ""}${n} stop${n > 1 ? "s" : ""}, ${wKm(far)} by the planned route, about ${wDur(S.route.time_s)}. ${rv ? "Drive" : "Walk"} it yourself, or press Autopilot. The line on the ground shows the way. There is no GPS on Mars: watch how the habitat radio and the satellites keep track of you.`, "#ff9a6b");
       try { $("view3d").focus({ preventScroll: true }); } catch (e) { /* fine */ }
     };
   }

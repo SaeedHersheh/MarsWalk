@@ -132,6 +132,11 @@ def build(lat, lon, name=None, log=print):
     }
     json.dump(meta, open(os.path.join(ddir, "meta.json"), "w"), indent=1)
     log(f"site {sid} built in {time.time()-t0:.0f}s, elevation {z.min():.0f}..{z.max():.0f} m")
+    try:                                                    # rocky ground from THEMIS night IR (optional: the site works without it)
+        import build_rocks
+        build_rocks.build(sid, log)
+    except Exception as e:
+        log(f"rock layer skipped: {e}")
     return sid
 
 

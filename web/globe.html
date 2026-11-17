@@ -243,7 +243,7 @@ details.more[open] > summary::after { content: "–"; }
 
   <details class="more">
     <summary>About the data</summary>
-    <p class="credits">Radiation map: Curiosity measured 0.67 mSv/day at Gale; other places are scaled by the air above them (elevation and an assumed scale height). When you plan a walk, the planner builds that area from MOLA 463 m elevation and real orbiter passes. Jezero opens in full detail (20 m). Globe elevation: MOLA-based shape model MarsTopo719, referenced to the GMM-3 areoid (SHTOOLS). Color: Celestia Mars mosaic. Heights on the globe are exaggerated; readouts are true values.</p>
+    <p class="credits">Radiation map: Curiosity measured 0.67 mSv/day at Gale; other places are scaled by the air above them (elevation and an assumed scale height). When you plan a walk, the planner builds that area from MOLA 463 m elevation and real orbiter passes. Jezero and Gale open in full detail (20 m). Globe elevation: MOLA-based shape model MarsTopo719, referenced to the GMM-3 areoid (SHTOOLS). Color: Celestia Mars mosaic. Heights on the globe are exaggerated; readouts are true values.</p>
   </details>
 </aside>
 
@@ -773,7 +773,7 @@ details.more[open] > summary::after { content: "–"; }
     $("cName").textContent = p.name;
     const pe = elevAt(p.lat, p.lon);
     $("cLat").textContent = fmtLat(p.lat); $("cLon").textContent = fmtLon(p.lon); $("cEl").textContent = fmtEl(pe); $("cRad").textContent = pe == null ? "—" : `${radDose(pe).toFixed(2)} mSv/day`;
-    $("cBlurb").textContent = p.blurb || (p.kind === "site" ? `Terrain is already built for this area (${p.cell} m per pixel, ${p.size} km across), so the planner opens straight away.` : "The planner builds this area from NASA elevation data and real orbiter passes. It takes about a minute the first time.");
+    $("cBlurb").textContent = p.detail ? `${p.blurb || ""} Opens in full detail: 20 m terrain, sharper slopes, science goals.`.trim() : p.blurb || (p.kind === "site" ? `Terrain is already built for this area (${p.cell} m per pixel, ${p.size} km across), so the planner opens straight away.` : "The planner builds this area from NASA elevation data and real orbiter passes. It takes about a minute the first time.");
     $("cPlan").textContent = GMODE === "explore" ? "Step outside here" : GMODE === "plan" ? "Plan a trip here" : p.siteId ? "Open the planner" : "Plan a walk here";
     $("cSwitch").textContent = S.view === "globe" ? "Show on map" : "Show on globe";
   }
@@ -852,7 +852,7 @@ details.more[open] > summary::after { content: "–"; }
   fetch("/api/sites").then(r => r.json()).then(list => {
     list.forEach(s => {
       const near = PLACES.find(q => Math.abs(q.lat - s.lat) < 0.6 && Math.abs(wrapLon(q.lon - s.lon_e)) < 0.6);
-      if (near) { near.siteId = s.id; return; }                       // already a landing site or landmark: it just opens faster
+      if (near) { if (!near.siteId) { near.siteId = s.id; near.detail = s.kind === "detail"; } return; }   // detailed sites come first                       // already a landing site or landmark: it just opens faster
       const p = { name: s.label, kind: "site", lat: s.lat, lon: s.lon_e, siteId: s.id, cell: s.cell_m, size: s.size_km };
       PLACES.push(p); addMarker(p);
     });

@@ -37,7 +37,7 @@ st, raw = get("/api/sites")
 sites = json.loads(raw)
 ids = [s["id"] for s in (sites if isinstance(sites, list) else sites.get("sites", []))]
 print(f"  {len(ids)} sites")
-test_ids = ["jezero"] + [i for i in ids if i != "jezero"][:3] + (["n00p91_w112p77"] if "n00p91_w112p77" in ids and "n00p91_w112p77" not in ids[:3] else [])
+test_ids = ["jezero"] + (["gale"] if "gale" in ids else []) + [i for i in ids if i not in ("jezero", "gale")][:3] + (["n00p91_w112p77"] if "n00p91_w112p77" in ids and "n00p91_w112p77" not in ids[:3] else [])
 
 for sid in test_ids:
     meta = {}
@@ -50,9 +50,18 @@ for sid in test_ids:
     if not meta:
         continue
     for L in LAYERS:
-        if L == "heat" and meta.get("kind") == "region":
+        if L == "heat" and (meta.get("kind") == "region" or not meta.get("heat")):
             continue
         check(f"{sid} layer {L}", lambda L=L, sid=sid: (lambda s: None if s[1][:4] == b"\x89PNG" else (_ for _ in ()).throw(RuntimeError("not a PNG")))(get(f"/api/layer/{L}.png?site={sid}&t={int(time.time())}")))
+    for L, on in (meta.get("layers_extra") or {}).items():
+        if on:
+            check(f"{sid} layer {L}", lambda L=L, sid=sid: (lambda s: None if s[1][1:4] == b"PNG" else (_ for _ in ()).throw(RuntimeError("not a PNG")))(get(f"/api/layer/{L}.png?site={sid}")))
+    if sid in ("jezero", "gale"):
+        def sci(sid=sid):
+            j = json.loads(get(f"/api/science?site={sid}&vehicle=foot")[1])
+            assert j["objectives"] and all(o["stops"] for o in j["objectives"]), "no science goals"
+            return ", ".join(f"{o['id']} ({len(o['stops'])})" for o in j["objectives"])
+        check(f"{sid} science goals", sci)
     check(f"{sid} passes", lambda sid=sid: f"{len(json.loads(get(f'/api/passes?site={sid}&hours=48')[1]).get('passes', []))} passes")
     check(f"{sid} next", lambda sid=sid: (json.loads(get(f"/api/next?site={sid}&hours=24")[1]), None)[1])
     hab = meta.get("habitat") or [meta["width_m"] / 2, meta["height_m"] / 2]
@@ -64,6 +73,14 @@ for sid in test_ids:
             assert j["distance_m"] > 0 and len(j["x"]) > 2, "empty route"
             return f"{j['distance_m'] / 1000:.2f} km, {j['time_s'] / 3600:.1f} h, {len(j['contacts'])} passes"
         check(f"{sid} route {veh}", r)
+
+def load_test():
+    hab = json.loads(get("/api/meta?site=jezero")[1])["habitat"]; body = {"site": "jezero", "stops": [hab, [hab[0] + 1500, hab[1] + 1200]], "vehicle": "foot", "round_trip": True}
+    a = json.loads(get("/api/route", {**body, "load_kg": 0})[1]); b = json.loads(get("/api/route", {**body, "load_kg": 40})[1])
+    assert b["time_s"] > a["time_s"] * 1.2, "load does not slow the walk"
+    return f"{a['time_s'] / 3600:.2f} h -> {b['time_s'] / 3600:.2f} h with 40 kg"
+check("carried load slows the walk", load_test)
+check("space weather (NASA DONKI)", lambda: (lambda j: j["status"] + ": " + j["summary"][:70] if j["status"] in ("quiet", "watch", "storm", "unknown") else (_ for _ in ()).throw(RuntimeError("bad status")))(json.loads(get("/api/spaceweather")[1])))
 
 print("comms")
 check("comms config", lambda: f"{json.loads(get('/api/comms/config')[1])['effective_min']:.1f} light-min")

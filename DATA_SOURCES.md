@@ -15,7 +15,15 @@
 | Mars Odyssey THEMIS day IR mosaic 100 m | https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars_MO_THEMIS-IR-Day_mosaic_global_100m_v12.tif |
 | Mars Global Surveyor TES albedo mosaic | https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars_MGS_TES_Albedo_mosaic_global_7410m.tif |
 | Curiosity RAD surface radiation (Hassler et al. 2014) | https://doi.org/10.1126/science.1244797 |
+| NASA Mars Trek CTX global mosaic tiles (Murray Lab, Caltech; 3D ground near the camera) | https://trek.nasa.gov/tiles/Mars/EQ/CTX_beta01_uncontrolled_5m_Caltech/1.0.0/WMTSCapabilities.xml |
 | HiRISE DTM catalogue (University of Arizona, for NASA MRO) | https://www.uahirise.org/dtm/ |
+| MRO HiRISE merged DEM 1 m, Gale crater (USGS, MSL mission) | https://planetarymaps.usgs.gov/mosaic/Mars/MSL/MSL_Gale_DEM_Mosaic_1m_v3.tif |
+| MRO HiRISE orthophoto mosaic 25 cm, Gale crater (USGS, MSL mission) | https://planetarymaps.usgs.gov/mosaic/Mars/MSL/MSL_Gale_Orthophoto_Mosaic_25cm_v3.tif |
+| MRO CRISM mineral map of Jezero (spectral; built from CRISM observations HRL000040FF, FRT000047A3, FRT00005C5E, FRS00031442) | https://zenodo.org/records/5575824 |
+| Mars Odyssey THEMIS night IR controlled mosaic 100 m, as Mars Trek tiles (rocky ground) | https://trek.nasa.gov/tiles/Mars/EQ/THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018/1.0.0/WMTSCapabilities.xml |
+| NASA DONKI space weather: CME arrival forecasts at Mars (CCMC WSA-Enlil) and SEP events | https://api.nasa.gov/ (DONKI) · https://kauai.ccmc.gsfc.nasa.gov/DONKI/ |
+| NASA MSL (Curiosity) traverse, end-of-drive positions | https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json |
+| NASA Mars 2020 (Perseverance) traverse, end-of-drive positions | https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json |
 
 ### Space Agency Partner & Other Data
 | Link Text | Link Url |
@@ -82,6 +90,22 @@ All three are read straight from the USGS Astrogeology PDS mosaics:
 **Global CTX mosaic, 5 m** (Murray Lab, Caltech; from MRO's Context Camera): laid over the ground within about 500 m of you in 3D, so close up you see real craters, dunes and boulders.
 - About the mosaic: https://murray-lab.caltech.edu/CTX/
 - Tiles used (listed by NASA Mars Trek): https://astro.arcgis.com/arcgis/rest/services/OnMars/CTX/MapServer/tile/{z}/{row}/{col}
+
+## Minerals (spectral)
+**CRISM mineral map of Jezero**: Parente, Saranathan and Itoh (University of Massachusetts Amherst), from MRO CRISM data, co-registered to the USGS Mars 2020 CTX and HiRISE products, 36 m pixels, CC BY 4.0. Ten mineral classes (olivine, Mg-carbonate, smectite clays, pyroxenes, kaolinite and mixtures), each at high or medium confidence. `pipeline/build_minerals.py` puts it on the 20 m Jezero grid.
+- Record: https://zenodo.org/records/5575824
+
+## Rocky ground
+**THEMIS night infrared** (Mars Odyssey), controlled mosaics v2, 100 m, as NASA Mars Trek tiles. Rock and boulder fields stay warm at night; dust and sand cool fast. `pipeline/build_rocks.py` marks the warmer-than-typical part of each site as rocky (0 to 1). A proxy for rock-rich ground, not single boulders; 60°N to 60°S.
+
+## Space weather
+**NASA DONKI** (Space Weather Database Of Notifications, Knowledge, Information): CME arrival forecasts at Mars from CCMC's WSA-Enlil runs, and solar energetic particle events. Checked by the server every 3 hours; shown in the planner, added to route warnings and to the report.
+- API: https://api.nasa.gov/ · Database: https://kauai.ccmc.gsfc.nasa.gov/DONKI/
+
+## Rover traverses (science goals)
+**NASA MSL and Mars 2020 traverse files**: the end-of-drive positions of Curiosity and Perseverance. The Gale goal follows Curiosity's 2025 drive into the boxwork region of Mount Sharp; the Jezero goal follows Perseverance.
+- https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json
+- https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json
 
 ## 3D models
 

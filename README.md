@@ -71,9 +71,11 @@ Marswalk plans around all three before anyone leaves the airlock.
 
 | Capability | What the user gets |
 |---|---|
-| **Pick anywhere** | A 3D globe of Mars. Any point becomes a 178 km planning site, built on demand from NASA terrain. Jezero crater is a detailed site at 20 m. |
-| **Read the ground** | Eight layers: elevation, slope, radiation dose, relay-satellite blind spots, habitat radio coverage, sunlight and shadow, ground temperature, and the planner's own cost. |
-| **Plan the route** | The safest path between the stops, with three route styles (Safest, Balanced, Fastest) and a crew-rover option. |
+| **Pick anywhere** | A 3D globe of Mars. Any point becomes a 178 km planning site, built on demand from NASA terrain. Jezero crater and Gale crater (Mount Sharp) are detailed sites at 20 m. |
+| **Choose a science goal** | Carbonates, olivine or clays at Jezero, picked from the CRISM mineral map; Perseverance's route; Curiosity's 2025 boxwork drive on Mount Sharp. The planner sets the stops from the data. |
+| **Read the ground** | Ten layers: elevation, slope, radiation dose, relay-satellite blind spots, habitat radio coverage, sunlight and shadow, ground temperature, minerals (CRISM, spectral), rocky ground (THEMIS night infrared), and the planner's own cost. |
+| **Check space weather** | Live CME arrival forecasts at Mars and particle events from NASA DONKI, in the planner, the route warnings and the report. |
+| **Plan the route** | The safest path between the stops, with three route styles (Safest, Balanced, Fastest), steering round steep and rocky ground, a robotic-rover option, and the load the crew carries (tools, samples) slowing the walk. |
 | **Navigate without GPS** | A forecast of the position uncertainty along the route, from the suit's dead reckoning, the habitat's radio mast and real relay-satellite passes. |
 | **Talk home** | A radio to the habitat and to Earth mission control, with the real light delay. A separate mission-control station runs in the browser. |
 | **Rehearse it** | True-scale 3D, a first-person walk, a pressurised rover, and phone VR with gaze controls. |
@@ -122,6 +124,11 @@ Every number on the ground comes from a real dataset. Full list with direct file
 | [TES albedo](https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mars_MGS_TES_Albedo_mosaic_global_7410m.tif) | Mars Global Surveyor · USGS | Ground temperature model |
 | [NASA JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) | NASA JPL | Orbits of MRO, Odyssey, TGO, Mars Express; the Sun; the Earth light delay |
 | [Curiosity RAD](https://doi.org/10.1126/science.1244797) | Mars Science Laboratory | Measured surface radiation dose |
+| [CRISM mineral map of Jezero](https://zenodo.org/records/5575824) | Mars Reconnaissance Orbiter · UMass Amherst | Minerals layer and science goals (spectral) |
+| [THEMIS night IR controlled mosaic](https://trek.nasa.gov/tiles/Mars/EQ/THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018/1.0.0/WMTSCapabilities.xml) | Mars Odyssey · NASA Mars Trek | Rocky ground layer and route cost |
+| [HiRISE DEM 1 m, Gale](https://planetarymaps.usgs.gov/mosaic/Mars/MSL/MSL_Gale_DEM_Mosaic_1m_v3.tif) | Mars Reconnaissance Orbiter · USGS | The detailed Gale site |
+| [NASA DONKI](https://kauai.ccmc.gsfc.nasa.gov/DONKI/) | NASA CCMC | Space weather at Mars |
+| [MSL](https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_waypoints.json) and [Mars 2020](https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json) traverses | NASA JPL | Science goals that follow Curiosity and Perseverance |
 | [NASA Mars Trek](https://trek.nasa.gov/mars/) | NASA | Viking MDIM 2.1 colour mosaic |
 
 Partner and open-source resources: [ESA Mars Express](https://www.esa.int/Science_Exploration/Space_Science/Mars_Express) and [ExoMars TGO](https://www.esa.int/Science_Exploration/Human_and_Robotic_Exploration/Exploration/ExoMars) (relay orbiters), [USGS Astrogeology](https://astrogeology.usgs.gov), [QGIS](https://qgis.org), [rasterio](https://rasterio.readthedocs.io), [NumPy](https://numpy.org), [scikit-image](https://scikit-image.org), [FastAPI](https://fastapi.tiangolo.com), [PostgreSQL](https://www.postgresql.org), [Leaflet](https://leafletjs.com), [three.js](https://threejs.org), [Google Cloud Run](https://cloud.google.com/run).

@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Cairo:wght@400;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="style.css?v=1794863603">
+<link rel="stylesheet" href="style.css?v=1794943851">
 </head>
 <body>
 <div id="map"></div>
@@ -45,6 +45,14 @@
   <aside class="panel" id="mission" aria-label="Plan a traverse">
     <div class="grab" data-close aria-hidden="true"><i></i></div>
 
+    <div class="swx" id="swx" data-s="unknown"><i aria-hidden="true"></i><div><b id="swxT">Space weather at Mars</b><span id="swxS">Checking NASA's space weather database…</span></div></div>
+
+    <section class="sec" id="sciSec">
+      <h2>Science goal</h2>
+      <div class="goals" id="goals"></div>
+      <p class="hint" id="goalWhy">Pick what you want to study and the planner chooses the stops from NASA data. Or tap the map to set your own.</p>
+    </section>
+
     <section class="sec">
       <h2>Your stops <em id="planState"></em></h2>
       <div class="stops" id="stops"></div>
@@ -61,6 +69,7 @@
         <button type="button" class="veh" data-v="foot" aria-pressed="true">On foot</button>
         <button type="button" class="veh" data-v="rover" aria-pressed="false">Rover</button>
       </div>
+      <div class="loadrow" id="loadRow"><span>Carrying</span><div class="seg small" role="group" aria-label="What the astronauts carry"><button type="button" data-load="0" aria-pressed="true">Suit only</button><button type="button" data-load="20">Tools, 20 kg</button><button type="button" data-load="40">Samples, 40 kg</button></div></div>
       <p class="hint" id="vehHint"></p>
       <h2 class="sub">Kind of route</h2>
       <div class="styles" id="styles" role="group" aria-label="Route policy">
@@ -76,6 +85,7 @@
         <label class="slider">Radio coverage <output id="o-comms"></output><input type="range" id="w-comms" min="0" max="1" step="0.05" value="0.3"></label>
         <label class="slider">Solar illumination <output id="o-shadow"></output><input type="range" id="w-shadow" min="0" max="1" step="0.05" value="0.2"></label>
         <label class="slider">Ground temperature <output id="o-cold"></output><input type="range" id="w-cold" min="0" max="1" step="0.05" value="0.2"></label>
+        <label class="slider">Rocky ground <output id="o-rocks"></output><input type="range" id="w-rocks" min="0" max="1" step="0.05" value="0.5"></label>
         <label class="slider">Maximum slope <output id="o-maxslope"></output><input type="range" id="maxslope" min="12" max="35" step="1" value="18"></label>
       </details>
     </section>
@@ -137,6 +147,8 @@
         <button type="button" class="lay" data-l="sun" aria-pressed="false"><i class="sw g-sun"></i><span><b>Illumination</b><small>Sun and terrain shadow</small></span></button>
         <button type="button" class="lay" data-l="comms" aria-pressed="false"><i class="sw g-comms"></i><span><b>Relay obstruction</b><small>Line of sight to orbiters</small></span></button>
         <button type="button" class="lay" data-l="hab" aria-pressed="false"><i class="sw g-hab"></i><span><b>Habitat radio</b><small>Where the habitat link reaches</small></span></button>
+        <button type="button" class="lay" data-l="rocks" aria-pressed="false"><i class="sw g-rocks"></i><span><b>Rocky ground</b><small>Warm at night in THEMIS infrared: boulders and bare rock</small></span></button>
+        <button type="button" class="lay" data-l="minerals" aria-pressed="false"><i class="sw g-min"></i><span><b>Minerals</b><small>What CRISM sees from orbit: carbonate, olivine, clays</small></span></button>
         <button type="button" class="lay" data-l="cost" aria-pressed="false"><i class="sw g-cost"></i><span><b>Traversal cost</b><small>Planner cost surface</small></span></button>
       </div>
       <label class="slider">Opacity <output id="o-op"></output><input type="range" id="opacity" min="0.2" max="1" step="0.05" value="0.8"></label>
@@ -309,6 +321,6 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script src="relayfix.js?v=1794663000"></script>
-<script src="app.js?v=1794863603"></script>
+<script src="app.js?v=1794943851"></script>
 </body>
 </html>

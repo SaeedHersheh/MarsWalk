@@ -52,6 +52,31 @@ def shifted(z, drow, dcol):
     return out
 
 
+def horizon_grid(z, DX, DY, n_az=N_AZ, max_m=HORIZON_MAX_M):
+    """Horizon angle per azimuth (deg*2 in uint8). Used for: comms line of sight,
+    cast shadows, and sky-view factor for the radiation model. Shared by every detailed site."""
+    t = time.time()
+    H, W = z.shape
+    dists = np.unique(np.round(np.geomspace(DY, max_m, 44) / DY).astype(int)) * DY
+    hor = np.zeros((n_az, H, W), dtype="uint8")
+    for k in range(n_az):
+        az = np.radians(k * 360.0 / n_az)             # clockwise from north
+        best = np.zeros_like(z)
+        for d in dists:
+            dcol = int(round(d * np.sin(az) / DX))
+            drow = int(round(-d * np.cos(az) / DY))    # row 0 is north
+            if dcol == 0 and drow == 0:
+                continue
+            dist = np.hypot(dcol * DX, drow * DY)
+            dz = shifted(z, drow, dcol) - z - dist * dist / (2 * R_MARS)   # planet curvature
+            ang = np.degrees(np.arctan2(dz, dist))
+            np.fmax(best, ang, out=best)
+        hor[k] = np.clip(np.round(best * 2), 0, 180).astype("uint8")
+        print(f"  horizon az {k*360//n_az:3d} deg  max {best.max():.1f}", flush=True)
+    print("horizons in %.0fs" % (time.time() - t))
+    return hor
+
+
 def main():
     dtm = read_remote(DTM_URL, "raw_dtm.npy")
     z = dtm["a"].astype("float32")
@@ -71,27 +96,7 @@ def main():
     np.save(os.path.join(DATA, "elev.npy"), z)
     np.save(os.path.join(DATA, "valid.npy"), valid)
 
-    # horizon angle per azimuth (deg*2 in uint8). Used for: comms line of sight,
-    # cast shadows, and sky-view factor for the radiation model.
-    t = time.time()
-    dists = np.unique(np.round(np.geomspace(DY, HORIZON_MAX_M, 44) / DY).astype(int)) * DY
-    hor = np.zeros((N_AZ, H, W), dtype="uint8")
-    for k in range(N_AZ):
-        az = np.radians(k * 360.0 / N_AZ)             # clockwise from north
-        best = np.zeros_like(z)
-        for d in dists:
-            dcol = int(round(d * np.sin(az) / DX))
-            drow = int(round(-d * np.cos(az) / DY))    # row 0 is north
-            if dcol == 0 and drow == 0:
-                continue
-            dist = np.hypot(dcol * DX, drow * DY)
-            dz = shifted(z, drow, dcol) - z - dist * dist / (2 * R_MARS)   # planet curvature
-            ang = np.degrees(np.arctan2(dz, dist))
-            np.fmax(best, ang, out=best)
-        hor[k] = np.clip(np.round(best * 2), 0, 180).astype("uint8")
-        print(f"  horizon az {k*360//N_AZ:3d} deg  max {best.max():.1f}", flush=True)
-    np.save(os.path.join(DATA, "horizon.npy"), hor)
-    print("horizons in %.0fs" % (time.time() - t))
+    np.save(os.path.join(DATA, "horizon.npy"), horizon_grid(z, DX, DY))
 
     # elevation for the browser: int16 decimetres, row 0 = north
     (np.round(z * 10)).astype("<i2").tofile(os.path.join(WDATA, "elev_i16.bin"))
